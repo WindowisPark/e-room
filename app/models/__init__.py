@@ -1,0 +1,1 @@
+from app.models.user import User  # 이렇게 하면 app.models.User로 접근 가능

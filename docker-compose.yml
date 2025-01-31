@@ -1,0 +1,50 @@
+services:
+
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ai-agent-network
+
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - ai-agent-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+      - REDIS_HOST=redis  # 🔥 Redis 컨테이너 사용
+    depends_on:
+      - postgres
+      - redis  # 🔥 Redis 추가
+    networks:
+      - ai-agent-network
+
+networks:
+  ai-agent-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
