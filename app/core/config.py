@@ -1,5 +1,5 @@
 # app/core/config.py
-
+import os
 from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, validator
 from pydantic_settings import BaseSettings
@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 추가된 부분
     
     # OAuth2 설정
-    GOOGLE_CLIENT_ID: str = ""
-    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # CORS 설정
