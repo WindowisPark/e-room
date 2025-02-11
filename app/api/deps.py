@@ -3,6 +3,7 @@
 from typing import Generator, Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+
 from jose import JWTError, jwt
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -10,7 +11,10 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.core.security import redis_client
+from app.core.redis_helper import redis_client
+from app.core.security import ACCESS_SECRET_KEY  # 추가
+from app.models.user import User
+from app.api import deps
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
@@ -34,7 +38,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Token has been revoked")
 
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, ACCESS_SECRET_KEY, algorithms=["HS256"])
         token_data = schemas.TokenPayload(**payload)
     except (JWTError, ValidationError):
         raise HTTPException(status_code=403, detail="Could not validate credentials")
@@ -51,5 +55,17 @@ def get_current_active_user(
         raise HTTPException(
             status_code=400, 
             detail="Inactive user"
+        )
+    return current_user
+
+def get_admin_user(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(deps.get_db)
+) -> User:
+    """📌 관리자 권한 체크"""
+    if current_user.role != "admin":  # is_admin 대신 role 체크
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다."
         )
     return current_user

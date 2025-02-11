@@ -30,15 +30,11 @@ services:
       - .:/app
     ports:
       - "8000:8000"
-    environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
-      - POSTGRES_DB=agent_db
-      - REDIS_HOST=redis  # 🔥 Redis 컨테이너 사용
+    env_file:
+      - .env
     depends_on:
       - postgres
-      - redis  # 🔥 Redis 추가
+      - redis
     networks:
       - ai-agent-network
 

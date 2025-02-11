@@ -49,3 +49,24 @@ class UserProfileUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserResponse(BaseModel):
+    """📌 사용자 응답 모델"""
+    id: int
+    email: Optional[str]  # email이 nullable하므로 Optional로 변경
+    username: str
+    full_name: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    oauth_provider: Optional[str]
+    oauth_id: Optional[str]
+    is_verified: bool
+    is_admin: bool  # 이미 User 모델에 @property로 정의되어 있음
+
+    class Config:
+        from_attributes = True
+
+class ErrorResponse(BaseModel):
+    """📌 오류 응답 모델"""
+    detail: str

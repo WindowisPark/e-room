@@ -6,6 +6,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.models.user import Base  # User 모델을 포함한 Base import
+from app.db.base import Base
 
 import sys
 import os
