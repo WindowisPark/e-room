@@ -1,0 +1,1007 @@
+[1mdiff --git a/app/api/v1/auth.py b/app/api/v1/auth.py[m
+[1mindex ba60854..1567515 100644[m
+[1m--- a/app/api/v1/auth.py[m
+[1m+++ b/app/api/v1/auth.py[m
+[36m@@ -7,6 +7,7 @@[m [mfrom sqlalchemy.orm import Session[m
+ import httpx[m
+ import os[m
+ import logging[m
+[32m+[m[32mimport json[m
+ [m
+ from fastapi.security import OAuth2PasswordRequestForm[m
+ from app import crud, schemas[m
+[36m@@ -14,6 +15,7 @@[m [mfrom app.api import deps[m
+ from app.core import security[m
+ from app.core.config import settings[m
+ from app.models.user import User[m
+[32m+[m[32mfrom app.schemas.user import UserResponse[m[41m [m
+ from app.core.redis_helper import redis_client[m
+ import urllib.parse[m
+ [m
+[36m@@ -26,10 +28,19 @@[m [mdef create_user_folders(user_id: int):[m
+     """[m
+     새로 가입한 사용자의 기본 폴더 (study, exam) 생성[m
+     """[m
+[31m-    user_storage_path = f"storage/users/{user_id}"[m
+[31m-    os.makedirs(user_storage_path, exist_ok=True)[m
+[31m-    for category in ["study", "exam"]:[m
+[31m-        os.makedirs(os.path.join(user_storage_path, category), exist_ok=True)[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        user_storage_path = f"storage/users/{user_id}"[m
+[32m+[m[32m        os.makedirs(user_storage_path, exist_ok=True)[m
+[32m+[m[32m        logger.info(f"✅ 사용자 기본 디렉토리 생성 완료: {user_storage_path}")[m
+[32m+[m[41m        [m
+[32m+[m[32m        for category in ["study", "exam"]:[m
+[32m+[m[32m            category_path = os.path.join(user_storage_path, category)[m
+[32m+[m[32m            os.makedirs(category_path, exist_ok=True)[m
+[32m+[m[32m            logger.info(f"✅ 사용자 {category} 폴더 생성 완료: {category_path}")[m
+[32m+[m[41m            [m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        logger.error(f"사용자 폴더 생성 실패 - User ID: {user_id}, Error: {str(e)}")[m
+[32m+[m[32m        raise[m
+ [m
+ @router.post("/login", response_model=schemas.Token)[m
+ async def login([m
+[36m@@ -64,7 +75,16 @@[m [masync def refresh_token(refresh_token: str = Body(...)):[m
+         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")[m
+ [m
+     stored_refresh_token = redis_client.get(f"refresh:{user_id}")[m
+[31m-    if stored_refresh_token is None or stored_refresh_token.decode() != refresh_token:[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Redis에서 가져온 값 처리 수정[m
+[32m+[m[32m    if stored_refresh_token is None:[m
+[32m+[m[32m        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or invalid")[m
+[32m+[m[41m    [m
+[32m+[m[32m    # bytes인 경우 decode, 이미 str인 경우 그대로 사용[m
+[32m+[m[32m    if isinstance(stored_refresh_token, bytes):[m
+[32m+[m[32m        stored_refresh_token = stored_refresh_token.decode()[m
+[32m+[m[41m    [m
+[32m+[m[32m    if stored_refresh_token != refresh_token:[m
+         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or invalid")[m
+ [m
+     new_access_token = security.create_access_token(user_id)[m
+[36m@@ -100,66 +120,111 @@[m [masync def google_authorize():[m
+     """[m
+     Get Google OAuth2 authorization URL[m
+     """[m
+[31m-    encoded_redirect_uri = urllib.parse.quote(settings.GOOGLE_REDIRECT_URI, safe=':/')  # ✅ URL 인코딩 적용[m
+[32m+[m[32m    state = security.generate_state()  # 랜덤 state 생성[m
+[32m+[m[32m    redis_client.setex(f"oauth_state:{state}", 300, "1")  # state를 Redis에 5분간 저장[m
+[32m+[m[41m    [m
+[32m+[m[32m    encoded_redirect_uri = urllib.parse.quote(settings.GOOGLE_REDIRECT_URI, safe=':/')[m
+ [m
+     return {[m
+         "authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?"[m
+         f"response_type=code&client_id={settings.GOOGLE_CLIENT_ID}"[m
+         f"&redirect_uri={encoded_redirect_uri}"[m
+         f"&scope=openid email profile"[m
+[32m+[m[32m        f"&state={state}"  # state 파라미터 추가[m
+     }[m
+ [m
+ @router.get("/google/callback")[m
+ async def google_callback([m
+     code: str,[m
+[32m+[m[32m    state: str = None,[m
+     db: Session = Depends(deps.get_db)[m
+ ):[m
+     """[m
+     Process Google OAuth2 callback[m
+     """[m
+[31m-    token_url = "https://oauth2.googleapis.com/token"[m
+[31m-    token_data = {[m
+[31m-        "client_id": settings.GOOGLE_CLIENT_ID,[m
+[31m-        "client_secret": settings.GOOGLE_CLIENT_SECRET,[m
+[31m-        "code": code,[m
+[31m-        "grant_type": "authorization_code",[m
+[31m-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,[m
+[31m-    }[m
+[31m-[m
+[31m-    async with httpx.AsyncClient() as client:[m
+[31m-        token_response = await client.post(token_url, data=token_data)[m
+[31m-        token_response.raise_for_status()[m
+[31m-        token_info = token_response.json()[m
+[32m+[m[32m    # state 검증[m
+[32m+[m[32m    if state:[m
+[32m+[m[32m        stored_state = redis_client.get(f"oauth_state:{state}")[m
+[32m+[m[32m        logger.debug(f"Received state: {state}")[m
+[32m+[m[32m        logger.debug(f"Stored state: {stored_state}")[m
+[32m+[m[32m        if not stored_state:  # 올바른 들여쓰기[m
+[32m+[m[32m            logger.warning(f"No stored state found for: {state}")[m
+[32m+[m[32m            raise HTTPException([m
+[32m+[m[32m                status_code=400,[m
+[32m+[m[32m                detail="Invalid state parameter"[m
+[32m+[m[32m            )[m
+[32m+[m[32m        redis_client.delete(f"oauth_state:{state}")[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        token_url = "https://oauth2.googleapis.com/token"[m
+[32m+[m[32m        # URL 디코딩된 코드 사용[m
+[32m+[m[32m        decoded_code = urllib.parse.unquote(code)[m
+[32m+[m[41m        [m
+[32m+[m[32m        token_data = {[m
+[32m+[m[32m            "client_id": settings.GOOGLE_CLIENT_ID,[m
+[32m+[m[32m            "client_secret": settings.GOOGLE_CLIENT_SECRET,[m
+[32m+[m[32m            "code": decoded_code,[m
+[32m+[m[32m            "grant_type": "authorization_code",[m
+[32m+[m[32m            "redirect_uri": settings.GOOGLE_REDIRECT_URI,[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 디버깅을 위한 상세 로그 추가[m
+[32m+[m[32m        logger.info("===== Token Request Debug Info =====")[m
+[32m+[m[32m        logger.info(f"Raw code: {code}")[m
+[32m+[m[32m        logger.info(f"Decoded code: {decoded_code}")[m
+[32m+[m[32m        logger.info(f"Redirect URI: {settings.GOOGLE_REDIRECT_URI}")[m
+[32m+[m[32m        logger.info(f"Token data being sent: {json.dumps(token_data, indent=2)}")[m
+[32m+[m[41m        [m
+[32m+[m[32m        async with httpx.AsyncClient() as client:[m
+[32m+[m[32m            token_response = await client.post(token_url, data=token_data)[m
+[32m+[m[32m            token_response.raise_for_status()[m
+[32m+[m[32m            token_info = token_response.json()[m
+[32m+[m
+[32m+[m[32m            user_info_response = await client.get([m
+[32m+[m[32m                "https://www.googleapis.com/oauth2/v3/userinfo",[m
+[32m+[m[32m                headers={"Authorization": f"Bearer {token_info['access_token']}"},[m
+[32m+[m[32m            )[m
+[32m+[m[32m            user_info = user_info_response.json()[m
+ [m
+[31m-        user_info_response = await client.get([m
+[31m-            "https://www.googleapis.com/oauth2/v3/userinfo",[m
+[31m-            headers={"Authorization": f"Bearer {token_info['access_token']}"},[m
+[31m-        )[m
+[31m-        user_info = user_info_response.json()[m
+[32m+[m[32m        user = crud.user.get_by_oauth_id(db, "google", user_info["sub"])[m
+[32m+[m[32m        if not user:[m
+[32m+[m[32m            user_in = schemas.UserCreateOAuth([m
+[32m+[m[32m                email=user_info["email"],[m
+[32m+[m[32m                full_name=user_info.get("name"),[m
+[32m+[m[32m                oauth_provider="google",[m
+[32m+[m[32m                oauth_id=user_info["sub"],[m
+[32m+[m[32m                is_verified=True  #  Google OAuth는 기본적으로 이메일 인증된 상태이므로 True 설정[m
+[32m+[m[32m            )[m
+[32m+[m[32m            user = crud.user.create_oauth_user(db, obj_in=user_in)[m
+ [m
+[31m-    user = crud.user.get_by_oauth_id(db, "google", user_info["sub"])[m
+[31m-    if not user:[m
+[31m-        user_in = schemas.UserCreateOAuth([m
+[31m-            email=user_info["email"],[m
+[31m-            full_name=user_info.get("name"),[m
+[31m-            oauth_provider="google",[m
+[31m-            oauth_id=user_info["sub"],[m
+[31m-        )[m
+[31m-        user = crud.user.create_oauth_user(db, obj_in=user_in)[m
+[32m+[m[32m            # 새 사용자인 경우 폴더 생성[m
+[32m+[m[32m            create_user_folders(user.id)[m
+ [m
+[31m-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)[m
+[31m-    access_token = security.create_access_token(user.id, expires_delta=access_token_expires)[m
+[32m+[m[32m        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)[m
+[32m+[m[32m        access_token = security.create_access_token(user.id, expires_delta=access_token_expires)[m
+ [m
+[31m-    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)[m
+[31m-    refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)[m
+[32m+[m[32m        refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)[m
+[32m+[m[32m        refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)[m
+ [m
+[31m-    security.store_refresh_token(user.id, refresh_token, int(refresh_token_expires.total_seconds()))[m
+[32m+[m[32m        security.store_refresh_token(user.id, refresh_token, int(refresh_token_expires.total_seconds()))[m
+ [m
+[31m-    return {[m
+[31m-        "access_token": access_token,[m
+[31m-        "refresh_token": refresh_token,[m
+[31m-        "token_type": "bearer"[m
+[31m-    }[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "access_token": access_token,[m
+[32m+[m[32m            "refresh_token": refresh_token,[m
+[32m+[m[32m            "token_type": "bearer"[m
+[32m+[m[32m        }[m
+[32m+[m[32m    except httpx.HTTPStatusError as e:[m
+[32m+[m[32m        logger.error(f"HTTP error occurred: {str(e)}")[m
+[32m+[m[32m        logger.error(f"Response content: {e.response.text if hasattr(e, 'response') else 'No response content'}")[m
+[32m+[m[32m        raise HTTPException([m
+[32m+[m[32m            status_code=status.HTTP_400_BAD_REQUEST,[m
+[32m+[m[32m            detail=f"Failed to authenticate with Google: {str(e)}\nResponse: {e.response.text if hasattr(e, 'response') else 'No response content'}"[m
+[32m+[m[32m        )[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        logger.error(f"Unexpected error: {str(e)}")[m
+[32m+[m[32m        raise HTTPException([m
+[32m+[m[32m            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,[m
+[32m+[m[32m            detail="An unexpected error occurred"[m
+[32m+[m[32m        )[m
+ [m
+ @router.get("/me", response_model=schemas.User)[m
+ async def read_users_me([m
+[36m@@ -225,6 +290,8 @@[m [masync def naver_callback([m
+             if naver_account.get("email"):[m
+                 user_in.email = naver_account.get("email")[m
+             user = crud.user.create_oauth_user(db, obj_in=user_in)[m
+[32m+[m[32m            # 새 사용자인 경우 폴더 생성[m
+[32m+[m[32m            create_user_folders(user.id)[m
+ [m
+         # 액세스 토큰 생성[m
+         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)[m
+[36m@@ -293,6 +360,8 @@[m [masync def kakao_callback([m
+                 is_verified=False[m
+             )[m
+             user = crud.user.create_oauth_user(db, obj_in=user_in)[m
+[32m+[m[32m            # 새 사용자인 경우 폴더 생성[m
+[32m+[m[32m            create_user_folders(user.id)[m
+ [m
+         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)[m
+         access_token = security.create_access_token([m
+[36m@@ -337,4 +406,13 @@[m [masync def logout(current_user: schemas.User = Depends(deps.get_current_user)):[m
+         return {"msg": "Logout failed, but access revoked"}[m
+ [m
+     logger.info(f"🚪 로그아웃 - User ID: {current_user.id}")[m
+[31m-    return {"msg": "Successfully logged out"}[m
+\ No newline at end of file[m
+[32m+[m[32m    return {"msg": "Successfully logged out"}[m
+[32m+[m
+[32m+[m[32m@router.get("/me/storage", response_model=UserResponse)[m
+[32m+[m[32masync def get_my_storage_info([m
+[32m+[m[32m    current_user: User = Depends(deps.get_current_user)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """[m
+[32m+[m[32m    📌 현재 로그인한 사용자의 저장소 정보 조회[m
+[32m+[m[32m    """[m
+[32m+[m[32m    return current_user[m
+\ No newline at end of file[m
+[1mdiff --git a/app/api/v1/endpoints/__pycache__/files.cpython-311.pyc b/app/api/v1/endpoints/__pycache__/files.cpython-311.pyc[m
+[1mnew file mode 100644[m
+[1mindex 0000000..f88030b[m
+Binary files /dev/null and b/app/api/v1/endpoints/__pycache__/files.cpython-311.pyc differ
+[1mdiff --git a/app/api/v1/endpoints/files.py b/app/api/v1/endpoints/files.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..1207522[m
+[1m--- /dev/null[m
+[1m+++ b/app/api/v1/endpoints/files.py[m
+[36m@@ -0,0 +1,252 @@[m
+[32m+[m[32m# app/services/file_service.py[m
+[32m+[m[32mfrom uuid import uuid4[m
+[32m+[m[32mfrom fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body[m
+[32m+[m[32mfrom typing import List, Optional[m
+[32m+[m[32mfrom sqlalchemy.orm import Session[m
+[32m+[m[32mfrom pydantic import BaseModel[m
+[32m+[m[32mfrom app.core.config import settings[m
+[32m+[m[32mfrom app.core.security import get_current_user[m
+[32m+[m[32mfrom app.services.file_service import FileStorageManager, ChunkManager[m[41m [m
+[32m+[m[32mfrom app.schemas.user import User[m
+[32m+[m[32mfrom app.db.session import get_db[m
+[32m+[m[32mfrom app.core.redis_helper import get_cache, set_cache, build_cache_key, delete_cache[m
+[32m+[m
+[32m+[m[32mrouter = APIRouter()[m
+[32m+[m[32mfile_manager = FileStorageManager()[m
+[32m+[m[32mchunk_manager = ChunkManager()[m[41m [m
+[32m+[m
+[32m+[m[32mclass CompleteUploadRequest(BaseModel):[m
+[32m+[m[32m    file_id: str[m
+[32m+[m
+[32m+[m[32m@router.get("/{user_id}/folders")[m
+[32m+[m[32masync def list_user_folders([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    include_subfolders: bool = False,[m
+[32m+[m[32m    skip: int = 0,[m
+[32m+[m[32m    limit: int = 100,[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """[m
+[32m+[m[32m    사용자의 폴더 목록을 조회합니다.[m
+[32m+[m[32m    """[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 폴더만 조회할 수 있습니다")[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        # Redis 캐시 키 생성[m
+[32m+[m[32m        cache_key = build_cache_key("folders", user_id, include_subfolders)[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 캐시된 데이터 확인[m
+[32m+[m[32m        cached_folders = get_cache(cache_key)[m
+[32m+[m[32m        if cached_folders is not None:[m
+[32m+[m[32m            return {[m
+[32m+[m[32m                "status": "success",[m
+[32m+[m[32m                "data": cached_folders[skip:skip + limit],[m
+[32m+[m[32m                "cache_hit": True[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m        # DB에서 폴더 목록 조회[m
+[32m+[m[32m        folders = file_manager.list_folders([m
+[32m+[m[32m            user_id=user_id,[m
+[32m+[m[32m            include_subfolders=include_subfolders,[m
+[32m+[m[32m            skip=skip,[m
+[32m+[m[32m            limit=limit[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        # 캐시에 저장 (TTL: 5분)[m
+[32m+[m[32m        set_cache(cache_key, folders, settings.FOLDER_LIST_CACHE_TTL)[m
+[32m+[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "data": folders,[m
+[32m+[m[32m            "cache_hit": False[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+[32m+[m
+[32m+[m[32m@router.get("/{user_id}/folders/{folder_name}/files")[m
+[32m+[m[32masync def list_folder_files([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    folder_name: str,[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    limit: int = 100,[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """[m
+[32m+[m[32m    특정 폴더의 파일 목록을 조회합니다.[m
+[32m+[m[32m    """[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 파일만 조회할 수 있습니다")[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        # Redis 캐시 키 생성[m
+[32m+[m[32m        cache_key = build_cache_key("files", user_id, folder_name)[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 캐시된 데이터 확인[m
+[32m+[m[32m        cached_files = get_cache(cache_key)[m
+[32m+[m[32m        if cached_files is not None:[m
+[32m+[m[32m            return {[m
+[32m+[m[32m                "status": "success",[m
+[32m+[m[32m                "data": cached_files[:limit],[m
+[32m+[m[32m                "cache_hit": True[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m        # DB에서 파일 목록 조회[m
+[32m+[m[32m        files = file_manager.list_files([m
+[32m+[m[32m            user_id=user_id,[m
+[32m+[m[32m            folder_name=folder_name,[m
+[32m+[m[32m            limit=limit[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        # 캐시에 저장 (TTL: 5분)[m
+[32m+[m[32m        set_cache(cache_key, files, settings.FILE_LIST_CACHE_TTL)[m
+[32m+[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "data": files,[m
+[32m+[m[32m            "cache_hit": False[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+[32m+[m
+[32m+[m[32m@router.post("/{user_id}/folders/{folder_name}/upload")[m
+[32m+[m[32masync def upload_file([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    folder_name: str,[m
+[32m+[m[32m    file: UploadFile = File(...),[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """[m
+[32m+[m[32m    파일을 업로드합니다.[m
+[32m+[m[32m    """[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 폴더에만 업로드할 수 있습니다")[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        file_path = await file_manager.save_pdf(user_id, folder_name, file)[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 파일 업로드 후 캐시 갱신[m
+[32m+[m[32m        cache_key = build_cache_key("files", user_id, folder_name)[m
+[32m+[m[32m        cached_files = get_cache(cache_key)[m
+[32m+[m[32m        if cached_files:[m
+[32m+[m[32m            cached_files.append(file.filename)[m
+[32m+[m[32m            set_cache(cache_key, cached_files, settings.FILE_LIST_CACHE_TTL)[m
+[32m+[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "message": "파일 업로드 완료",[m
+[32m+[m[32m            "file_path": file_path[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+[32m+[m
+[32m+[m[32m@router.post("/{user_id}/folders")[m
+[32m+[m[32masync def create_folder([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    folder_name: str,[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """[m
+[32m+[m[32m    새 폴더를 생성합니다.[m
+[32m+[m[32m    """[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 폴더만 생성할 수 있습니다")[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        folder_path = file_manager.create_folder(user_id, folder_name)[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 폴더 생성 후 캐시 갱신[m
+[32m+[m[32m        for include_subfolders in [True, False]:[m
+[32m+[m[32m            cache_key = build_cache_key("folders", user_id, include_subfolders)[m
+[32m+[m[32m            delete_cache(cache_key)[m
+[32m+[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "message": "폴더 생성 완료",[m
+[32m+[m[32m            "folder_path": str(folder_path)[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+[32m+[m[41m    [m
+[32m+[m[32m@router.post("/{user_id}/folders/{folder_name}/upload/chunk")[m
+[32m+[m[32masync def upload_chunk([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    folder_name: str,[m
+[32m+[m[32m    chunk_number: int = Form(...),[m
+[32m+[m[32m    total_chunks: int = Form(...),[m
+[32m+[m[32m    file_id: str = Form(None),  # None이면 새로운 ID 생성[m
+[32m+[m[32m    original_filename: str = Form(...),[m
+[32m+[m[32m    chunk: UploadFile = File(...),[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """📌 대용량 파일의 청크를 업로드합니다."""[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 폴더에만 업로드할 수 있습니다")[m
+[32m+[m[41m        [m
+[32m+[m[32m    try:[m
+[32m+[m[32m        # 파일 ID가 없으면 새로 생성[m
+[32m+[m[32m        if not file_id:[m
+[32m+[m[32m            file_id = str(uuid4())[m
+[32m+[m[41m            [m
+[32m+[m[32m        # 메타데이터 설정[m
+[32m+[m[32m        metadata = {[m
+[32m+[m[32m            "user_id": str(user_id),[m
+[32m+[m[32m            "folder_name": folder_name,[m
+[32m+[m[32m            "original_filename": original_filename,[m
+[32m+[m[32m            "total_chunks": total_chunks[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m        # 청크 저장[m
+[32m+[m[32m        chunk_status = await chunk_manager.save_chunk([m
+[32m+[m[32m            file_id=file_id,[m
+[32m+[m[32m            chunk_number=chunk_number,[m
+[32m+[m[32m            total_chunks=total_chunks,  # 추가[m
+[32m+[m[32m            chunk=chunk,[m
+[32m+[m[32m            metadata={[m
+[32m+[m[32m                "user_id": str(user_id),[m
+[32m+[m[32m                "folder_name": folder_name,[m
+[32m+[m[32m                "original_filename": original_filename[m
+[32m+[m[32m            }[m
+[32m+[m[32m        )[m
+[32m+[m[41m        [m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "message": f"청크 {chunk_number + 1}/{total_chunks} 업로드 완료",[m
+[32m+[m[32m            "file_id": file_id,[m
+[32m+[m[32m            "chunk_status": chunk_status[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+[32m+[m
+[32m+[m[32m@router.post("/{user_id}/folders/{folder_name}/upload/complete")[m
+[32m+[m[32masync def complete_chunked_upload([m
+[32m+[m[32m    user_id: int,[m
+[32m+[m[32m    folder_name: str,[m
+[32m+[m[32m    request: CompleteUploadRequest,  # Pydantic 모델 사용[m
+[32m+[m[32m    current_user: User = Depends(get_current_user),[m
+[32m+[m[32m    db: Session = Depends(get_db)[m
+[32m+[m[32m):[m
+[32m+[m[32m    """📌 청크 업로드 완료 후 파일을 병합합니다."""[m
+[32m+[m[32m    if current_user.id != user_id:[m
+[32m+[m[32m        raise HTTPException(status_code=403, detail="자신의 폴더에만 업로드할 수 있습니다")[m
+[32m+[m[41m        [m
+[32m+[m[32m    try:[m
+[32m+[m[32m        final_path = await chunk_manager.merge_chunks(request.file_id)[m
+[32m+[m[41m        [m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "status": "success",[m
+[32m+[m[32m            "message": "파일 업로드 완료",[m
+[32m+[m[32m            "file_path": final_path[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m    except Exception as e:[m
+[32m+[m[32m        raise HTTPException(status_code=500, detail=str(e))[m
+\ No newline at end of file[m
+[1mdiff --git a/app/core/config.py b/app/core/config.py[m
+[1mindex 632930f..b334969 100644[m
+[1m--- a/app/core/config.py[m
+[1m+++ b/app/core/config.py[m
+[36m@@ -10,7 +10,7 @@[m [mclass Settings(BaseSettings):[m
+     PROJECT_NAME: str = "AI-Agent API"[m
+     API_V1_STR: str = "/api/v1"[m
+     [m
+[31m-    # ✅ PostgreSQL 설정[m
+[32m+[m[32m    # PostgreSQL 설정[m
+     POSTGRES_SERVER: str[m
+     POSTGRES_USER: str[m
+     POSTGRES_PASSWORD: str[m
+[36m@@ -19,18 +19,34 @@[m [mclass Settings(BaseSettings):[m
+ [m
+     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-default-secret-key")[m
+     [m
+[31m-    # ✅ JWT 관련 설정 (Access / Refresh Token 분리)[m
+[32m+[m[32m    # JWT 관련 설정[m
+     ACCESS_SECRET_KEY: str[m
+     REFRESH_SECRET_KEY: str[m
+     ACCESS_TOKEN_EXPIRE_MINUTES: int[m
+     REFRESH_TOKEN_EXPIRE_DAYS: int[m
+ [m
+[31m-    # ✅ Redis 설정 (Refresh Token 저장용)[m
+[32m+[m[32m    # Redis 설정[m
+     REDIS_HOST: str[m
+     REDIS_PORT: int[m
+     REDIS_DB: int[m
+[32m+[m[32m    REDIS_PASSWORD: Optional[str] = None[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Redis 캐시 설정[m
+[32m+[m[32m    REDIS_CACHE_HOST: str = os.getenv("REDIS_CACHE_HOST", "redis")[m
+[32m+[m[32m    REDIS_CACHE_PORT: int = int(os.getenv("REDIS_CACHE_PORT", "6379"))[m
+[32m+[m[32m    REDIS_CACHE_DB: int = int(os.getenv("REDIS_CACHE_DB", "1"))  # DB 1은 캐시용[m
+[32m+[m[32m    REDIS_CACHE_PASSWORD: Optional[str] = None[m
+[32m+[m[41m    [m
+[32m+[m[32m    # 캐시 TTL 설정 (초 단위)[m
+[32m+[m[32m    CACHE_TTL_SHORT: int = 300  # 5분[m
+[32m+[m[32m    CACHE_TTL_MEDIUM: int = 1800  # 30분[m
+[32m+[m[32m    CACHE_TTL_LONG: int = 86400  # 24시간[m
+[32m+[m[41m    [m
+[32m+[m[32m    # 파일/폴더 목록 캐시 설정[m
+[32m+[m[32m    FILE_LIST_CACHE_TTL: int = 300  # 5분[m
+[32m+[m[32m    FOLDER_LIST_CACHE_TTL: int = 300  # 5분[m
+ [m
+[31m-    # ✅ OAuth2 설정 (Google, Naver, Kakao)[m
+[32m+[m[32m    # OAuth2 설정[m
+     GOOGLE_CLIENT_ID: str[m
+     GOOGLE_CLIENT_SECRET: str[m
+     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"[m
+[36m@@ -43,20 +59,18 @@[m [mclass Settings(BaseSettings):[m
+     KAKAO_CLIENT_SECRET: str[m
+     KAKAO_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/kakao/callback"[m
+ [m
+[31m-    # ✅ CORS 설정[m
+[32m+[m[32m    # CORS 설정[m
+     BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"][m
+ [m
+[31m-    # ✅ OAuth Refresh Token 만료일 추가[m
+[32m+[m[32m    # OAuth Refresh Token 만료일[m
+     OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int[m
+ [m
+[31m-    # ✅ DB 연결 문자열 자동 생성[m
+     @validator("DATABASE_URI", pre=True)[m
+     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:[m
+         if isinstance(v, str):[m
+             return v[m
+         return f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_SERVER')}/{values.get('POSTGRES_DB')}"[m
+ [m
+[31m-    # ✅ CORS 설정 검증[m
+     @validator("BACKEND_CORS_ORIGINS", pre=True)[m
+     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:[m
+         if isinstance(v, str) and not v.startswith("["):[m
+[36m@@ -65,8 +79,21 @@[m [mclass Settings(BaseSettings):[m
+             return v[m
+         raise ValueError(v)[m
+ [m
+[31m-    # ✅ 환경 변수에서 숫자 값이 문자열로 인식되는 문제 해결[m
+[31m-    @validator("ACCESS_TOKEN_EXPIRE_MINUTES", "REFRESH_TOKEN_EXPIRE_DAYS", "OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "REDIS_PORT", "REDIS_DB", pre=True)[m
+[32m+[m[32m    @validator([m
+[32m+[m[32m        "ACCESS_TOKEN_EXPIRE_MINUTES",[m
+[32m+[m[32m        "REFRESH_TOKEN_EXPIRE_DAYS",[m
+[32m+[m[32m        "OAUTH_REFRESH_TOKEN_EXPIRE_DAYS",[m
+[32m+[m[32m        "REDIS_PORT",[m
+[32m+[m[32m        "REDIS_DB",[m
+[32m+[m[32m        "REDIS_CACHE_PORT",[m
+[32m+[m[32m        "REDIS_CACHE_DB",[m
+[32m+[m[32m        "CACHE_TTL_SHORT",[m
+[32m+[m[32m        "CACHE_TTL_MEDIUM",[m
+[32m+[m[32m        "CACHE_TTL_LONG",[m
+[32m+[m[32m        "FILE_LIST_CACHE_TTL",[m
+[32m+[m[32m        "FOLDER_LIST_CACHE_TTL",[m
+[32m+[m[32m        pre=True[m
+[32m+[m[32m    )[m
+     def parse_int_values(cls, v: Union[str, int]) -> int:[m
+         return int(v) if isinstance(v, str) else v[m
+ [m
+[36m@@ -76,11 +103,11 @@[m [mclass Settings(BaseSettings):[m
+ [m
+ settings = Settings()[m
+ [m
+[31m-# ✅ 환경 변수 확인 (테스트용)[m
+[31m-print(f"Loaded API_V1_STR: {settings.API_V1_STR}")[m
+[31m-print(f"Loaded DATABASE_URI: {settings.DATABASE_URI}")[m
+[31m-print(f"Loaded CORS Origins: {settings.BACKEND_CORS_ORIGINS}")[m
+[31m-print(f"Loaded Redis Host: {settings.REDIS_HOST}")[m
+[31m-print(f"Loaded Redis Port: {settings.REDIS_PORT}")[m
+[31m-print(f"Loaded Access Token Expiry: {settings.ACCESS_TOKEN_EXPIRE_MINUTES}")[m
+[31m-print(f"Loaded Refresh Token Expiry: {settings.REFRESH_TOKEN_EXPIRE_DAYS}")[m
+\ No newline at end of file[m
+[32m+[m[32m# 환경 변수 확인 (개발용)[m
+[32m+[m[32mif os.getenv("DEBUG", "false").lower() == "true":[m
+[32m+[m[32m    print(f"Loaded API_V1_STR: {settings.API_V1_STR}")[m
+[32m+[m[32m    print(f"Loaded DATABASE_URI: {settings.DATABASE_URI}")[m
+[32m+[m[32m    print(f"Loaded CORS Origins: {settings.BACKEND_CORS_ORIGINS}")[m
+[32m+[m[32m    print(f"Loaded Redis Cache Host: {settings.REDIS_CACHE_HOST}")[m
+[32m+[m[32m    print(f"Loaded Redis Cache Port: {settings.REDIS_CACHE_PORT}")[m
+[32m+[m[32m    print(f"Loaded Cache TTLs: {settings.CACHE_TTL_SHORT}, {settings.CACHE_TTL_MEDIUM}, {settings.CACHE_TTL_LONG}")[m
+\ No newline at end of file[m
+[1mdiff --git a/app/core/hashing.py b/app/core/hashing.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..be5303c[m
+[1m--- /dev/null[m
+[1m+++ b/app/core/hashing.py[m
+[36m@@ -0,0 +1,9 @@[m
+[32m+[m[32mfrom passlib.context import CryptContext[m
+[32m+[m
+[32m+[m[32mpwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")[m
+[32m+[m
+[32m+[m[32mdef verify_password(plain_password: str, hashed_password: str) -> bool:[m
+[32m+[m[32m    return pwd_context.verify(plain_password, hashed_password)[m
+[32m+[m
+[32m+[m[32mdef get_password_hash(password: str) -> str:[m
+[32m+[m[32m    return pwd_context.hash(password)[m
+\ No newline at end of file[m
+[1mdiff --git a/app/core/security.py b/app/core/security.py[m
+[1mindex 933e1c4..106cae5 100644[m
+[1m--- a/app/core/security.py[m
+[1m+++ b/app/core/security.py[m
+[36m@@ -4,93 +4,199 @@[m [mfrom jose import jwt, JWTError[m
+ from passlib.context import CryptContext[m
+ from redis import Redis[m
+ from redis.exceptions import RedisError[m
+[31m-from app.core.config import settings[m
+[32m+[m[32mfrom fastapi.security import OAuth2PasswordBearer[m
+[32m+[m[32mfrom fastapi import Depends, HTTPException, status[m
+[32m+[m[32mfrom sqlalchemy.orm import Session[m
+ import os[m
+ import logging[m
+[31m-from app.core.redis_helper import redis_client [m
+[32m+[m[32mimport secrets[m
+[32m+[m[32mfrom app.core.config import settings[m
+[32m+[m[32mfrom app.db.session import get_db[m
+[32m+[m[32mfrom app.schemas.token import TokenPayload[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m[32m# 비밀번호 해싱[m
+[32m+[m[32mpwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")[m
+[32m+[m
+[32m+[m[32m# OAuth2 설정[m
+[32m+[m[32moauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")[m
+ [m
+ # 로깅 설정[m
+ logger = logging.getLogger(__name__)[m
+[31m-logger.setLevel(logging.INFO)  # 기본 로그 레벨 설정 (INFO 이상)[m
+[32m+[m[32mlogger.setLevel(logging.INFO)[m
+ [m
+[31m-# Access & Refresh Token 각각의 시크릿 키 사용[m
+[32m+[m[32m# 토큰 시크릿 키[m
+ ACCESS_SECRET_KEY = settings.ACCESS_SECRET_KEY[m
+ REFRESH_SECRET_KEY = settings.REFRESH_SECRET_KEY[m
+ [m
+[31m-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")[m
+[31m-[m
+[31m-# 환경 변수에서 REDIS_HOST 가져오기 (Docker Compose에서 설정됨)[m
+[32m+[m[32m# Redis 설정[m
+ REDIS_HOST = os.getenv("REDIS_HOST", "redis")[m
+[31m-[m
+[31m-# Redis 연결 (예외 처리 추가)[m
+ try:[m
+[31m-    redis_client = Redis(host=REDIS_HOST, port=6379, db=0)[m
+[31m-    redis_client.ping()  # 연결 확인[m
+[31m-    logger.info("✅ Redis 연결 성공")[m
+[32m+[m[32m   redis_client = Redis(host=REDIS_HOST, port=6379, db=0)[m
+[32m+[m[32m   redis_client.ping()[m
+[32m+[m[32m   logger.info("Redis connection successful")[m
+ except Exception as e:[m
+[31m-    logger.error(f"⚠️ Redis 연결 실패: {str(e)}")[m
+[31m-    redis_client = None[m
+[32m+[m[32m   logger.error(f"Redis connection failed: {str(e)}")[m
+[32m+[m[32m   redis_client = None[m
+ [m
+[31m-def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:[m
+[31m-    """[m
+[31m-    Access Token 생성 (일반 API 인증용)[m
+[31m-    """[m
+[31m-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))[m
+[31m-    to_encode = {"exp": expire, "sub": str(subject)}[m
+[31m-    return jwt.encode(to_encode, ACCESS_SECRET_KEY, algorithm="HS256")[m
+[32m+[m[32mdef verify_password(plain_password: str, hashed_password: str) -> bool:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Plain text 비밀번호와 해시된 비밀번호를 비교하여 검증[m
+[32m+[m[32m   """[m
+[32m+[m[32m   return pwd_context.verify(plain_password, hashed_password)[m
+[32m+[m
+[32m+[m[32mdef get_password_hash(password: str) -> str:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   비밀번호를 해시화[m
+[32m+[m[32m   """[m
+[32m+[m[32m   return pwd_context.hash(password)[m
+[32m+[m
+[32m+[m[32mdef create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Access Token 생성[m
+[32m+[m[32m   """[m
+[32m+[m[32m   if expires_delta:[m
+[32m+[m[32m       expire = datetime.utcnow() + expires_delta[m
+[32m+[m[32m   else:[m
+[32m+[m[32m       expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)[m
+[32m+[m[41m   [m
+[32m+[m[32m   to_encode = {"exp": expire, "sub": str(subject)}[m
+[32m+[m[32m   return jwt.encode(to_encode, ACCESS_SECRET_KEY, algorithm="HS256")[m
+ [m
+ def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:[m
+[31m-    """[m
+[31m-    Refresh Token 생성 (Redis에 저장됨)[m
+[31m-    """[m
+[31m-    expire = datetime.utcnow() + (expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))[m
+[31m-    to_encode = {"exp": expire, "sub": str(subject)}[m
+[31m-    return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm="HS256")[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Refresh Token 생성[m
+[32m+[m[32m   """[m
+[32m+[m[32m   expire = datetime.utcnow() + (expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))[m
+[32m+[m[32m   to_encode = {"exp": expire, "sub": str(subject)}[m
+[32m+[m[32m   return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm="HS256")[m
+ [m
+ def verify_refresh_token(token: str) -> Optional[int]:[m
+[31m-    """[m
+[31m-    Refresh Token 검증 및 Redis에서 체크[m
+[31m-    """[m
+[31m-    try:[m
+[31m-        payload = jwt.decode(token, REFRESH_SECRET_KEY, algorithms=["HS256"])[m
+[31m-        user_id = int(payload.get("sub"))[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Refresh Token 검증 및 Redis에서 확인[m
+[32m+[m[32m   """[m
+[32m+[m[32m   try:[m
+[32m+[m[32m       payload = jwt.decode(token, REFRESH_SECRET_KEY, algorithms=["HS256"])[m
+[32m+[m[32m       user_id = int(payload.get("sub"))[m
+[32m+[m[41m       [m
+[32m+[m[32m       if redis_client:[m
+[32m+[m[32m           stored_token = redis_client.get(f"refresh:{user_id}")[m
+[32m+[m[32m           if not stored_token or stored_token.decode() != token:[m
+[32m+[m[32m               logger.warning(f"Refresh token mismatch or not found for user {user_id}")[m
+[32m+[m[32m               return None[m
+[32m+[m[32m       return user_id[m
+[32m+[m[32m   except JWTError as e:[m
+[32m+[m[32m       logger.error(f"Failed to verify refresh token: {str(e)}")[m
+[32m+[m[32m       return None[m
+ [m
+[31m-        # Redis에서 해당 Refresh Token이 유효한지 확인[m
+[31m-        stored_refresh_token = redis_client.get(f"refresh:{user_id}") if redis_client else None[m
+[31m-        if stored_refresh_token is None or stored_refresh_token.decode() != token:[m
+[31m-            logger.warning(f"🚨 Refresh Token이 Redis에 없음 또는 불일치 (User ID: {user_id})")[m
+[31m-            return None[m
+[32m+[m[32mdef store_refresh_token(user_id: int, refresh_token: str, expires_in: int):[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Redis에 Refresh Token 저장[m
+[32m+[m[32m   """[m
+[32m+[m[32m   if redis_client:[m
+[32m+[m[32m       try:[m
+[32m+[m[32m           redis_client.setex(f"refresh:{user_id}", expires_in, refresh_token)[m
+[32m+[m[32m       except RedisError as e:[m
+[32m+[m[32m           logger.error(f"Failed to store refresh token: {str(e)}")[m
+[32m+[m[32m   else:[m
+[32m+[m[32m       logger.warning(f"Redis is disabled. Refresh token not stored for user {user_id}")[m
+ [m
+[31m-        return user_id[m
+[32m+[m[32mdef delete_refresh_token(user_id: int):[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Redis에서 Refresh Token 삭제[m
+[32m+[m[32m   """[m
+[32m+[m[32m   if redis_client:[m
+[32m+[m[32m       try:[m
+[32m+[m[32m           redis_client.delete(f"refresh:{user_id}")[m
+[32m+[m[32m       except RedisError as e:[m
+[32m+[m[32m           logger.error(f"Failed to delete refresh token: {str(e)}")[m
+ [m
+[31m-    except JWTError as e:[m
+[31m-        logger.error(f"🚨 Refresh Token 검증 실패: {str(e)}")[m
+[31m-        return None[m
+[32m+[m[32mdef verify_access_token(token: str) -> Optional[int]:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Access Token 검증[m
+[32m+[m[32m   """[m
+[32m+[m[32m   try:[m
+[32m+[m[32m       payload = jwt.decode(token, ACCESS_SECRET_KEY, algorithms=["HS256"])[m
+[32m+[m[32m       user_id = int(payload.get("sub"))[m
+[32m+[m[32m       expire = datetime.fromtimestamp(payload.get("exp"))[m
+[32m+[m[41m       [m
+[32m+[m[32m       if expire < datetime.utcnow():[m
+[32m+[m[32m           logger.warning(f"Access token expired for user {user_id}")[m
+[32m+[m[32m           return None[m
+[32m+[m[41m           [m
+[32m+[m[32m       return user_id[m
+[32m+[m[32m   except JWTError as e:[m
+[32m+[m[32m       logger.error(f"Failed to verify access token: {str(e)}")[m
+[32m+[m[32m       return None[m
+ [m
+[31m-def store_refresh_token(user_id: int, refresh_token: str, expires_in: int):[m
+[31m-    """[m
+[31m-    Redis에 Refresh Token 저장 (연결 실패 시 로깅만 하고 무시)[m
+[31m-    """[m
+[31m-    if redis_client:[m
+[31m-        try:[m
+[31m-            redis_client.setex(f"refresh:{user_id}", expires_in, refresh_token)[m
+[31m-        except RedisError as e:[m
+[31m-            logger.error(f"⚠️ Redis 저장 실패: {str(e)}")[m
+[31m-    else:[m
+[31m-        logger.warning(f"⚠️ Redis가 비활성화된 상태입니다. Refresh Token이 저장되지 않음 (User ID: {user_id})")[m
+[32m+[m[32masync def get_current_user([m
+[32m+[m[32m   db: Session = Depends(get_db),[m
+[32m+[m[32m   token: str = Depends(oauth2_scheme)[m
+[32m+[m[32m):[m
+[32m+[m[32m   """[m
+[32m+[m[32m   현재 인증된 사용자 정보 조회[m
+[32m+[m[32m   """[m
+[32m+[m[32m   credentials_exception = HTTPException([m
+[32m+[m[32m       status_code=status.HTTP_401_UNAUTHORIZED,[m
+[32m+[m[32m       detail="Could not validate credentials",[m
+[32m+[m[32m       headers={"WWW-Authenticate": "Bearer"},[m
+[32m+[m[32m   )[m
+[32m+[m[41m   [m
+[32m+[m[32m   try:[m
+[32m+[m[32m       user_id = verify_access_token(token)[m
+[32m+[m[32m       if user_id is None:[m
+[32m+[m[32m           raise credentials_exception[m
+[32m+[m[41m           [m
+[32m+[m[32m   except JWTError:[m
+[32m+[m[32m       raise credentials_exception[m
+ [m
+[31m-def delete_refresh_token(user_id: int):[m
+[31m-    """[m
+[31m-    Redis에서 Refresh Token 삭제[m
+[31m-    """[m
+[31m-    if redis_client:[m
+[31m-        try:[m
+[31m-            redis_client.delete(f"refresh:{user_id}")[m
+[31m-        except RedisError as e:[m
+[31m-            logger.error(f"⚠️ Redis 삭제 실패: {str(e)}")[m
+[32m+[m[32m   # 순환 참조 방지를 위해 여기서 import[m
+[32m+[m[32m   from app.crud.crud_user import user[m[41m    [m
+[32m+[m[32m   current_user = user.get(db, id=user_id)[m
+[32m+[m[41m   [m
+[32m+[m[32m   if not current_user:[m
+[32m+[m[32m       raise credentials_exception[m
+[32m+[m[41m       [m
+[32m+[m[32m   return current_user[m
+ [m
+[31m-def verify_password(plain_password: str, hashed_password: str) -> bool:[m
+[31m-    return pwd_context.verify(plain_password, hashed_password)[m
+[32m+[m[32masync def validate_token_pair([m
+[32m+[m[32m   access_token: str,[m
+[32m+[m[32m   refresh_token: str[m
+[32m+[m[32m) -> tuple[bool, bool]:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Access Token과 Refresh Token 쌍의 유효성 검증[m
+[32m+[m[41m   [m
+[32m+[m[32m   Returns:[m
+[32m+[m[32m       tuple[bool, bool]: (access_token_valid, refresh_token_valid)[m
+[32m+[m[32m   """[m
+[32m+[m[32m   access_token_valid = verify_access_token(access_token) is not None[m
+[32m+[m[32m   refresh_token_valid = verify_refresh_token(refresh_token) is not None[m
+[32m+[m[41m   [m
+[32m+[m[32m   return access_token_valid, refresh_token_valid[m
+ [m
+[31m-def get_password_hash(password: str) -> str:[m
+[31m-    return pwd_context.hash(password)[m
+[32m+[m[32mdef revoke_all_tokens(user_id: int):[m
+[32m+[m[32m   """[m
+[32m+[m[32m   사용자의 모든 토큰 폐기 (로그아웃 등에 사용)[m
+[32m+[m[32m   """[m
+[32m+[m[32m   delete_refresh_token(user_id)[m
+[32m+[m[32m   # Access Token은 저장하지 않으므로 자동 만료되기를 기다림[m
+[32m+[m[32m   logger.info(f"All tokens revoked for user {user_id}")[m
+[32m+[m
+[32m+[m[32mdef get_token_expiry() -> tuple[int, int]:[m
+[32m+[m[32m   """[m
+[32m+[m[32m   Access Token과 Refresh Token의 만료 시간 반환[m
+[32m+[m[41m   [m
+[32m+[m[32m   Returns:[m
+[32m+[m[32m       tuple[int, int]: (access_token_expires_in, refresh_token_expires_in) in seconds[m
+[32m+[m[32m   """[m
+[32m+[m[32m   access_expires = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60[m
+[32m+[m[32m   refresh_expires = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60[m
+[32m+[m[41m   [m
+[32m+[m[32m   return access_expires, refresh_expires[m
+[32m+[m
+[32m+[m[32mdef generate_state() -> str:[m
+[32m+[m[32m    """[m
+[32m+[m[32m    OAuth 2.0 state 파라미터 생성을 위한 랜덤 문자열 생성[m
+[32m+[m[32m    """[m
+[32m+[m[32m    return secrets.token_urlsafe(32)[m
+\ No newline at end of file[m
+[1mdiff --git a/app/crud/crud_user.py b/app/crud/crud_user.py[m
+[1mindex 43f91f6..3a9692c 100644[m
+[1m--- a/app/crud/crud_user.py[m
+[1m+++ b/app/crud/crud_user.py[m
+[36m@@ -1,7 +1,7 @@[m
+ # app/crud/crud_user.py[m
+ from typing import Optional, List[m
+ from sqlalchemy.orm import Session[m
+[31m-from app.core.security import get_password_hash, verify_password[m
+[32m+[m[32mfrom app.core.hashing import get_password_hash, verify_password[m
+ from app.models.user import User[m
+ from app.schemas.user import UserCreate, UserCreateOAuth, UserUpdate[m
+ from fastapi import HTTPException, status[m
+[1mdiff --git a/app/models/user.py b/app/models/user.py[m
+[1mindex a02471a..1af8088 100644[m
+[1m--- a/app/models/user.py[m
+[1m+++ b/app/models/user.py[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-from sqlalchemy import Boolean, Column, Integer, String, DateTime[m
+[32m+[m[32mfrom sqlalchemy import Boolean, Column, Integer, String, DateTime, Float[m
+ from sqlalchemy.sql import func[m
+ from app.db.base import Base[m
+ [m
+[36m@@ -13,6 +13,8 @@[m [mclass User(Base):[m
+     role = Column(String, default="user")[m
+     is_active = Column(Boolean, default=True)  # disabled 대신 is_active 사용[m
+     created_at = Column(DateTime(timezone=True), server_default=func.now())[m
+[32m+[m[32m    storage_usage = Column(Float, default=0.0)[m
+[32m+[m[32m    storage_limit = Column(Float, default=300.0)  # 기본 300MB 제한[m
+     [m
+     # OAuth2 관련 필드[m
+     oauth_provider = Column(String, nullable=True)[m
+[36m@@ -21,4 +23,8 @@[m [mclass User(Base):[m
+ [m
+     @property[m
+     def is_admin(self):  # role 기반으로 is_admin 속성 제공[m
+[31m-        return self.role == "admin"[m
+\ No newline at end of file[m
+[32m+[m[32m        return self.role == "admin"[m
+[32m+[m[41m    [m
+[32m+[m[32m    @property[m
+[32m+[m[32m    def storage_percentage(self):  # 저장 공간 사용률을 반환하는 속성 추가[m
+[32m+[m[32m        return (self.storage_usage / self.storage_limit * 100) if self.storage_limit > 0 else 0[m
+\ No newline at end of file[m
+[1mdiff --git a/app/schemas/token.py b/app/schemas/token.py[m
+[1mindex b10adb2..07e23ab 100644[m
+[1m--- a/app/schemas/token.py[m
+[1m+++ b/app/schemas/token.py[m
+[36m@@ -1,10 +1,13 @@[m
+ # app/schemas/token.py[m
+[32m+[m
+ from typing import Optional[m
+ from pydantic import BaseModel[m
+ [m
+ class Token(BaseModel):[m
+     access_token: str[m
+     token_type: str[m
+[32m+[m[32m    refresh_token: Optional[str] = None[m
+ [m
+ class TokenPayload(BaseModel):[m
+[31m-    sub: Optional[int] = None[m
+\ No newline at end of file[m
+[32m+[m[32m    sub: str[m
+[32m+[m[32m    exp: int[m
+\ No newline at end of file[m
+[1mdiff --git a/app/schemas/user.py b/app/schemas/user.py[m
+[1mindex 02e237d..e301ed7 100644[m
+[1m--- a/app/schemas/user.py[m
+[1m+++ b/app/schemas/user.py[m
+[36m@@ -53,7 +53,7 @@[m [mclass UserProfileUpdate(BaseModel):[m
+ class UserResponse(BaseModel):[m
+     """📌 사용자 응답 모델"""[m
+     id: int[m
+[31m-    email: Optional[str]  # email이 nullable하므로 Optional로 변경[m
+[32m+[m[32m    email: Optional[str][m
+     username: str[m
+     full_name: str[m
+     role: str[m
+[36m@@ -62,7 +62,10 @@[m [mclass UserResponse(BaseModel):[m
+     oauth_provider: Optional[str][m
+     oauth_id: Optional[str][m
+     is_verified: bool[m
+[31m-    is_admin: bool  # 이미 User 모델에 @property로 정의되어 있음[m
+[32m+[m[32m    is_admin: bool[m
+[32m+[m[32m    storage_usage: float[m
+[32m+[m[32m    storage_limit: float[m
+[32m+[m[32m    storage_percentage: float[m[41m  [m
+ [m
+     class Config:[m
+         from_attributes = True[m
