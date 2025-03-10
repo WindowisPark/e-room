@@ -2,7 +2,7 @@
     
 import os
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, validator
+from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -25,10 +25,17 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int
 
-    # ✅ Redis 설정 (Refresh Token 저장용)
-    REDIS_HOST: str
-    REDIS_PORT: int
-    REDIS_DB: int
+    # Redis 캐시 관련 설정 - 타입을 int로 수정
+    REDIS_CACHE_HOST: str = "redis"
+    REDIS_CACHE_PORT: int = 6379
+    REDIS_CACHE_DB: int = 1
+    FILE_LIST_CACHE_TTL: int = 300
+    FOLDER_LIST_CACHE_TTL: int = 300
+    
+    # Redis 접속 설정 (기존 redis_helper.py와 호환성 유지)
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
 
     # ✅ OAuth2 설정 (Google, Naver, Kakao)
     GOOGLE_CLIENT_ID: str
@@ -48,16 +55,34 @@ class Settings(BaseSettings):
 
     # ✅ OAuth Refresh Token 만료일 추가
     OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int
+    
+    # ✅ iamport Webhook 관련 설정
+    IAMPORT_WEBHOOK_SECRET: str = ""
+    
+    # Pydantic v2 설정
+    model_config = {
+        "case_sensitive": True,
+        "env_file": ".env",
+        "extra": "allow"  # 추가 필드 허용
+    }
 
-    # ✅ DB 연결 문자열 자동 생성
-    @validator("DATABASE_URI", pre=True)
-    def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
-        if isinstance(v, str):
-            return v
-        return f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_SERVER')}/{values.get('POSTGRES_DB')}"
+    # ✅ DB 연결 문자열 자동 생성 (Pydantic v2 방식)
+    @model_validator(mode='before')
+    def assemble_db_connection(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if isinstance(values, dict):
+            if values.get('DATABASE_URI') is None:
+                postgres_user = values.get('POSTGRES_USER')
+                postgres_password = values.get('POSTGRES_PASSWORD')
+                postgres_server = values.get('POSTGRES_SERVER')
+                postgres_db = values.get('POSTGRES_DB')
+                
+                if all([postgres_user, postgres_password, postgres_server, postgres_db]):
+                    values['DATABASE_URI'] = f"postgresql://{postgres_user}:{postgres_password}@{postgres_server}/{postgres_db}"
+        return values
 
-    # ✅ CORS 설정 검증
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    # ✅ CORS 설정 검증 (Pydantic v2 방식)
+    @field_validator("BACKEND_CORS_ORIGINS", mode='before')
+    @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
@@ -65,14 +90,11 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
-    # ✅ 환경 변수에서 숫자 값이 문자열로 인식되는 문제 해결
-    @validator("ACCESS_TOKEN_EXPIRE_MINUTES", "REFRESH_TOKEN_EXPIRE_DAYS", "OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "REDIS_PORT", "REDIS_DB", pre=True)
+    # ✅ 환경 변수에서 숫자 값이 문자열로 인식되는 문제 해결 (Pydantic v2 방식)
+    @field_validator("ACCESS_TOKEN_EXPIRE_MINUTES", "REFRESH_TOKEN_EXPIRE_DAYS", "OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "REDIS_PORT", "REDIS_DB", "REDIS_CACHE_PORT", "REDIS_CACHE_DB", "FILE_LIST_CACHE_TTL", "FOLDER_LIST_CACHE_TTL", mode='before')
+    @classmethod
     def parse_int_values(cls, v: Union[str, int]) -> int:
         return int(v) if isinstance(v, str) else v
-
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
 
 settings = Settings()
 
