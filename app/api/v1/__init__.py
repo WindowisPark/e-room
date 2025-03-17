@@ -1,31 +1,68 @@
 # app/api/v1/__init__.py
+
 from fastapi import APIRouter
 
-# 기존 라우터들
-from app.api.v1.endpoints.attendance import router as attendance_router
-from app.api.v1.endpoints.payments import router as payments_router
-from app.api.v1.endpoints.question import router as question_router
-from app.api.v1.endpoints.teams import router as teams_router
-from app.api.v1 import auth, admin
-
-# 문제 해결을 위한 임시 라우터 생성
-tags_router = APIRouter()
-notifications_router = APIRouter()
-
-@tags_router.get("/test")
-def test_tags():
-    return {"message": "Tags test"}
-
-@notifications_router.get("/test")
-def test_notifications():
-    return {"message": "Notifications test"}
+from app.api.v1 import auth
+from app.api.v1.endpoints import (
+    attendance,
+    notifications,
+    payments,
+    question,
+    tags,
+    teams
+    # phone_verification 임포트 부분 제거
+)
 
 api_router = APIRouter()
-api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
-api_router.include_router(attendance_router, prefix="/attendance", tags=["attendance"])
-api_router.include_router(payments_router, prefix="/payments", tags=["payments"])
-api_router.include_router(question_router, prefix="/questions", tags=["questions"])
-api_router.include_router(teams_router, prefix="/teams", tags=["teams"])
-api_router.include_router(tags_router, prefix="/tags", tags=["tags"])
-api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
+
+# 인증 관련 라우터
+api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
+
+# 전화번호 인증 라우터 제거
+# api_router.include_router(
+#     phone_verification.router, 
+#     prefix="/phone-verification", 
+#     tags=["전화번호 인증"]
+# )
+
+# 팀 관련 라우터
+api_router.include_router(
+    teams.router,
+    prefix="/teams",
+    tags=["팀 관리"]
+)
+
+# 알림 관련 라우터
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["알림"]
+)
+
+# 출석 관련 라우터
+api_router.include_router(
+    attendance.router,
+    prefix="/attendance",
+    tags=["출석"]
+)
+
+# 질문 관련 라우터
+api_router.include_router(
+    question.router,
+    prefix="/questions",
+    tags=["질문"]
+)
+
+# 태그 관련 라우터
+api_router.include_router(
+    tags.router,
+    prefix="/tags",
+    tags=["태그"]
+)
+
+# 결제 관련 라우터
+api_router.include_router(
+    payments.router,
+    prefix="/payments",
+    tags=["결제"]
+)

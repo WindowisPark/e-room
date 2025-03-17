@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int
 
-    # Redis 캐시 관련 설정 - 타입을 int로 수정
+    # Redis 캐시 관련 설정
     REDIS_CACHE_HOST: str = "redis"
     REDIS_CACHE_PORT: int = 6379
     REDIS_CACHE_DB: int = 1
@@ -37,15 +37,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
-    # ✅ OAuth2 설정 (Google, Naver, Kakao)
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
-
-    NAVER_CLIENT_ID: str
-    NAVER_CLIENT_SECRET: str
-    NAVER_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/naver/callback"
-
+    # ✅ Kakao OAuth2 설정
     KAKAO_CLIENT_ID: str
     KAKAO_CLIENT_SECRET: str
     KAKAO_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/kakao/callback"
@@ -53,11 +45,16 @@ class Settings(BaseSettings):
     # ✅ CORS 설정
     BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"]
 
-    # ✅ OAuth Refresh Token 만료일 추가
+    # ✅ OAuth Refresh Token 만료일
     OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int
     
     # ✅ iamport Webhook 관련 설정
     IAMPORT_WEBHOOK_SECRET: str = ""
+    
+    # ✅ SMS 인증 관련 설정 (필요한 경우 추가)
+    SMS_API_KEY: Optional[str] = None
+    SMS_API_SECRET: Optional[str] = None
+    SMS_SENDER_NUMBER: Optional[str] = None
     
     # Pydantic v2 설정
     model_config = {

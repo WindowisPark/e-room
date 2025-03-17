@@ -13,10 +13,14 @@ class User(Base):
     hashed_password = Column(String, nullable=True)
     full_name = Column(String)
     role = Column(String, default="user")
-    is_active = Column(Boolean, default=True)  # disabled 대신 is_active 사용
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
-     # 출석 관련 관계 추가
+    # 전화번호 필드 추가 (계정 복구 및 인증용)
+    phone_number = Column(String, nullable=True)
+    is_phone_verified = Column(Boolean, default=False)
+    
+    # 출석 관련 관계 추가
     attendances = relationship("Attendance", back_populates="user", cascade="all, delete-orphan")
     
     # OAuth2 관련 필드
