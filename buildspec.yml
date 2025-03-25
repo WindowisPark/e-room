@@ -9,7 +9,7 @@ phases:
     commands:
       - echo Build started on `date`
       - echo Building the Docker image...
-      - docker build -t eroom-backend .
+      - docker build -t eroom-backend ./docker/backend 
       - docker tag eroom-backend:latest 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:latest
   post_build:
     commands:
