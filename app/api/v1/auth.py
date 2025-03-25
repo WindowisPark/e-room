@@ -8,7 +8,6 @@ import httpx
 import os
 import logging
 
-from fastapi.security import OAuth2PasswordRequestForm
 from app import crud, schemas
 from app.api import deps
 from app.core import security
@@ -31,29 +30,6 @@ def create_user_folders(user_id: int):
     for category in ["study", "exam"]:
         os.makedirs(os.path.join(user_storage_path, category), exist_ok=True)
 
-@router.post("/login", response_model=schemas.Token)
-async def login(
-    db: Session = Depends(deps.get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
-):
-    """
-    로그인 API - Access Token & Refresh Token 발급
-    """
-    user = crud.user.authenticate(db, email=form_data.username, password=form_data.password)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-
-    access_token = security.create_access_token(user.id, expires_delta=access_token_expires)
-    refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
-
-    security.store_refresh_token(user.id, refresh_token, int(refresh_token_expires.total_seconds()))
-
-    logger.info(f"✅ 로그인 성공 - User ID: {user.id}")
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
-
 @router.post("/refresh-token")
 async def refresh_token(refresh_token: str = Body(...)):
     """
@@ -72,178 +48,12 @@ async def refresh_token(refresh_token: str = Body(...)):
 
     return {"access_token": new_access_token, "token_type": "bearer"}
 
-@router.post("/signup", response_model=schemas.User)
-def signup(
-    *,
-    db: Session = Depends(deps.get_db),
-    user_in: schemas.UserCreate,
-) -> Any:
-    """
-    일반 회원가입 API
-    회원가입 후 기본 폴더 (study, exam) 생성
-    """
-    user = crud.user.get_by_email(db, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system.",
-        )
-    # 유저 생성
-    user = crud.user.create(db, obj_in=user_in)
-
-    # 기본 폴더 생성
-    create_user_folders(user.id)
-    return user
-
-@router.get("/google/authorize")
-async def google_authorize():
-    """
-    Get Google OAuth2 authorization URL
-    """
-    encoded_redirect_uri = urllib.parse.quote(settings.GOOGLE_REDIRECT_URI, safe=':/')  # ✅ URL 인코딩 적용
-
-    return {
-        "authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"response_type=code&client_id={settings.GOOGLE_CLIENT_ID}"
-        f"&redirect_uri={encoded_redirect_uri}"
-        f"&scope=openid email profile"
-    }
-
-@router.get("/google/callback")
-async def google_callback(
-    code: str,
-    db: Session = Depends(deps.get_db)
-):
-    """
-    Process Google OAuth2 callback
-    """
-    token_url = "https://oauth2.googleapis.com/token"
-    token_data = {
-        "client_id": settings.GOOGLE_CLIENT_ID,
-        "client_secret": settings.GOOGLE_CLIENT_SECRET,
-        "code": code,
-        "grant_type": "authorization_code",
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-    }
-
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(token_url, data=token_data)
-        token_response.raise_for_status()
-        token_info = token_response.json()
-
-        user_info_response = await client.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {token_info['access_token']}"},
-        )
-        user_info = user_info_response.json()
-
-    user = crud.user.get_by_oauth_id(db, "google", user_info["sub"])
-    if not user:
-        user_in = schemas.UserCreateOAuth(
-            email=user_info["email"],
-            full_name=user_info.get("name"),
-            oauth_provider="google",
-            oauth_id=user_info["sub"],
-        )
-        user = crud.user.create_oauth_user(db, obj_in=user_in)
-
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(user.id, expires_delta=access_token_expires)
-
-    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
-
-    security.store_refresh_token(user.id, refresh_token, int(refresh_token_expires.total_seconds()))
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
-
-@router.get("/me", response_model=schemas.User)
-async def read_users_me(
-    current_user: schemas.User = Depends(deps.get_current_user)
-):
-    """
-    Get current user information
-    """
-    return current_user
-
-@router.get("/naver/authorize")
-async def naver_authorize():
-    encoded_redirect_uri = urllib.parse.quote(settings.NAVER_REDIRECT_URI, safe=':/')  # ✅ URL 인코딩 적용
-
-    return {
-        "authorization_url": (
-            "https://nid.naver.com/oauth2.0/authorize?"
-            f"response_type=code&client_id={settings.NAVER_CLIENT_ID}"
-            f"&redirect_uri={encoded_redirect_uri}"
-            f"&state=RANDOM_STATE"
-            f"&scope=email"
-        )
-    }
-
-
-@router.get("/naver/callback")
-async def naver_callback(
-    code: str,
-    state: str,
-    db: Session = Depends(deps.get_db)
-):
-    # 네이버 토큰 엔드포인트로 인증 코드 교환
-    token_url = "https://nid.naver.com/oauth2.0/token"
-    token_data = {
-        "grant_type": "authorization_code",
-        "client_id": settings.NAVER_CLIENT_ID,
-        "client_secret": settings.NAVER_CLIENT_SECRET,
-        "code": code,
-        "state": state
-    }
-
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(token_url, data=token_data)
-        token_info = token_response.json()
-
-        # 네이버 사용자 정보 가져오기
-        user_info_response = await client.get(
-            "https://openapi.naver.com/v1/nid/me",
-            headers={"Authorization": f"Bearer {token_info['access_token']}"},
-        )
-        user_info = user_info_response.json()
-        naver_account = user_info.get("response", {})
-
-        # 기존 OAuth 사용자 확인
-        user = crud.user.get_by_oauth_id(db, "naver", naver_account.get("id"))
-        if not user:
-            user_in = schemas.UserCreateOAuth(
-                oauth_provider="naver",
-                oauth_id=naver_account.get("id"),
-                full_name=naver_account.get("name"),
-                is_verified=False
-            )
-            if naver_account.get("email"):
-                user_in.email = naver_account.get("email")
-            user = crud.user.create_oauth_user(db, obj_in=user_in)
-
-        # 액세스 토큰 생성
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = security.create_access_token(
-            user.id, expires_delta=access_token_expires
-        )
-
-        return {
-            "access_token": access_token,
-            "token_type": "bearer"
-        }
-
 @router.get("/kakao/authorize")
 async def kakao_authorize():
     """
-    Get Kakao OAuth2 authorization URL
+    카카오 OAuth2 인증 URL 생성
     """
-
-    encoded_redirect_uri = urllib.parse.quote(settings.KAKAO_REDIRECT_URI, safe=':/')  # ✅ URL 인코딩 적용
+    encoded_redirect_uri = urllib.parse.quote(settings.KAKAO_REDIRECT_URI, safe=':/')
 
     return {
         "authorization_url": (
@@ -259,6 +69,9 @@ async def kakao_callback(
     code: str,
     db: Session = Depends(deps.get_db)
 ):
+    """
+    카카오 OAuth2 콜백 처리 및 사용자 로그인/회원가입 관리
+    """
     token_url = "https://kauth.kakao.com/oauth/token"
     token_data = {
         "grant_type": "authorization_code",
@@ -269,61 +82,102 @@ async def kakao_callback(
     }
 
     async with httpx.AsyncClient() as client:
-        token_response = await client.post(token_url, data=token_data)
-        token_info = token_response.json()
+        try:
+            # 카카오 토큰 요청
+            token_response = await client.post(token_url, data=token_data)
+            token_response.raise_for_status()
+            token_info = token_response.json()
 
-        # 카카오 사용자 정보 가져오기
-        user_info_response = await client.get(
-            "https://kapi.kakao.com/v2/user/me",
-            headers={"Authorization": f"Bearer {token_info['access_token']}"},
-        )
-        user_info = user_info_response.json()
-        
-        # 사용자 정보 처리
-        kakao_account = user_info.get("kakao_account", {})
-        profile = kakao_account.get("profile", {})
-
-        user = crud.user.get_by_oauth_id(db, "kakao", str(user_info.get("id")))
-        if not user:
-            user_in = schemas.UserCreateOAuth(
-                oauth_provider="kakao",
-                oauth_id=str(user_info.get("id")),
-                email=kakao_account.get("email"),
-                full_name=profile.get("nickname"),
-                is_verified=False
+            # 카카오 사용자 정보 가져오기
+            user_info_response = await client.get(
+                "https://kapi.kakao.com/v2/user/me",
+                headers={"Authorization": f"Bearer {token_info['access_token']}"},
             )
-            user = crud.user.create_oauth_user(db, obj_in=user_in)
+            user_info_response.raise_for_status()
+            user_info = user_info_response.json()
+            
+            # 사용자 정보 처리
+            kakao_account = user_info.get("kakao_account", {})
+            profile = kakao_account.get("profile", {})
+            kakao_id = str(user_info.get("id"))
+            
+            if not kakao_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="카카오 사용자 ID를 가져올 수 없습니다"
+                )
 
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = security.create_access_token(
-            user.id, expires_delta=access_token_expires
-        )
+            # 기존 사용자인지 확인
+            user = crud.user.get_by_oauth_id(db, "kakao", kakao_id)
+            
+            # 새 사용자라면 등록
+            if not user:
+                email = kakao_account.get("email")
+                name = profile.get("nickname", "Kakao User")
+                
+                # 필수 정보 확인
+                if not email:
+                    email = f"kakao_{kakao_id}@example.com"  # 이메일 없는 경우 대체값
+                
+                user_in = schemas.UserCreateOAuth(
+                    oauth_provider="kakao",
+                    oauth_id=kakao_id,
+                    email=email,
+                    full_name=name,
+                    # 카카오에서 제공하는 기본 정보로 verified 상태로 설정
+                    is_verified=True
+                )
+                
+                user = crud.user.create_oauth_user(db, obj_in=user_in)
+                
+                # 새 사용자인 경우 기본 폴더 생성
+                create_user_folders(user.id)
+                
+                logger.info(f"✅ 카카오 회원가입 성공 - User ID: {user.id}")
+            else:
+                logger.info(f"✅ 카카오 로그인 성공 - User ID: {user.id}")
 
-        return {
-            "access_token": access_token,
-            "token_type": "bearer"
-        }
-    
-@router.post("/complete-profile", response_model=schemas.User)
-async def complete_profile(
-    *,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user),
-    user_update: schemas.UserProfileUpdate
+            # 토큰 생성
+            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+            
+            access_token = security.create_access_token(user.id, expires_delta=access_token_expires)
+            refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
+            
+            # Refresh 토큰 저장
+            security.store_refresh_token(
+                user.id, 
+                refresh_token, 
+                int(refresh_token_expires.total_seconds())
+            )
+
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer"
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"🚨 카카오 인증 오류: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"카카오 인증 실패: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"🚨 카카오 로그인/회원가입 오류: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="인증 중 오류가 발생했습니다"
+            )
+
+@router.get("/me", response_model=schemas.User)
+async def read_users_me(
+    current_user: schemas.User = Depends(deps.get_current_user)
 ):
     """
-    OAuth 로그인 후 필요한 추가 정보를 입력받습니다.
+    현재 사용자 정보 조회
     """
-    if current_user.is_verified:
-        raise HTTPException(
-            status_code=400,
-            detail="Profile is already complete"
-        )
-        
-    user_data = user_update.dict(exclude_unset=True)
-    user_data["is_verified"] = True
-    updated_user = crud.user.update(db, db_obj=current_user, obj_in=user_data)
-    return updated_user
+    return current_user
 
 @router.post("/logout")
 async def logout(current_user: schemas.User = Depends(deps.get_current_user)):
@@ -334,7 +188,7 @@ async def logout(current_user: schemas.User = Depends(deps.get_current_user)):
         security.delete_refresh_token(current_user.id)
     except Exception as e:
         logger.error(f"🚨 로그아웃 시 Refresh Token 삭제 실패 - User ID: {current_user.id}, Error: {str(e)}")
-        return {"msg": "Logout failed, but access revoked"}
+        return {"msg": "로그아웃 실패, 그러나 액세스는 취소됨"}
 
     logger.info(f"🚪 로그아웃 - User ID: {current_user.id}")
-    return {"msg": "Successfully logged out"}
+    return {"msg": "성공적으로 로그아웃되었습니다"}

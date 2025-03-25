@@ -1,11 +1,13 @@
-# ai-agent/app/main.py
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import auth
 from app.core.config import settings
 from app.api.v1.pdf_manager import router as pdf_router
 from app.api.v1.admin import router as admin_router
+from app.db.base import Base  # noqa
+
+# 메인 API 라우터 추가
+from app.api.v1 import api_router  # 이 부분 추가
 
 # FastAPI 앱 초기화
 app = FastAPI(
@@ -47,6 +49,9 @@ app.include_router(
     prefix=f"{settings.API_V1_STR}/admin",
     tags=["Admin"]
 )
+
+# 메인 API 라우터 포함 (endpoints 폴더의 모든 API)
+app.include_router(api_router, prefix=settings.API_V1_STR)  # 이 부분 추가
 
 # 헬스 체크 엔드포인트
 @app.get("/health", tags=["Health Check"])
