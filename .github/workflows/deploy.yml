@@ -26,8 +26,9 @@ jobs:
       - name: Build, tag, and push Docker image to ECR
         run: |
           IMAGE_TAG=latest
-          docker build -t 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:$IMAGE_TAG .
+          docker build -t 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:$IMAGE_TAG -f docker/backend/Dockerfile .
           docker push 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:$IMAGE_TAG
+      
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
