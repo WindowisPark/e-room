@@ -1,0 +1,67 @@
+{
+    "family": "eroom-backend",
+    "containerDefinitions": [
+        {
+            "name": "eroom-backend",
+            "image": "545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:latest",
+            "cpu": 1024,
+            "memoryReservation": 2048,
+            "memory": 4096,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DATABASE_URI",
+                    "value": "postgresql://postgres:password123@eroom-db.c5musscuevqp.ap-northeast-2.rds.amazonaws.com:5432/agent_db"
+                },
+                {
+                    "name": "REDIS_HOST",
+                    "value": "eroom-redis.ef3ltm.0001.apn2.cache.amazonaws.com"
+                },
+                {
+                    "name": "AI_SERVER_URL",
+                    "value": "http://10.0.1.125:8000"
+                },
+                {
+                    "name": "REDIS_PORT",
+                    "value": "6379"
+                },
+                {
+                    "name": "BACKEND_CORS_ORIGINS",
+                    "value": "[\"*\"]"
+                  }                  
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/eroom-backend",
+                    "awslogs-region": "ap-northeast-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -f http://localhost:8000/api/health || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 5,
+                "startPeriod": 180
+            }
+        }
+    ],
+    "taskRoleArn": "arn:aws:iam::545009830461:role/ecsTaskRole",
+    "executionRoleArn": "arn:aws:iam::545009830461:role/ecsTaskExecutionRole",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "1024",
+    "memory": "4096"
+}
