@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     python3-dev \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
@@ -26,7 +27,7 @@ RUN pip install -e .
 # Create entrypoint script
 RUN echo '#!/bin/sh\n\
 echo "Waiting for PostgreSQL..."\n\
-while ! nc -z postgres 5432; do\n\
+while ! nc -z eroom-db.c5musscuevqp.ap-northeast-2.rds.amazonaws.com 5432; do\n\
     sleep 0.1\n\
 done\n\
 echo "PostgreSQL is ready!"\n\
@@ -35,7 +36,7 @@ echo "Running migrations..."\n\
 alembic upgrade head\n\
 \n\
 echo "Starting FastAPI application..."\n\
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload\n\
+uvicorn app.main:app --host 0.0.0.0 --port 8000\n\
 \n\
 exec "$@"' > /entrypoint.sh
 

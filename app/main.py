@@ -54,7 +54,7 @@ app.include_router(
 app.include_router(api_router, prefix=settings.API_V1_STR)  # 이 부분 추가
 
 # 헬스 체크 엔드포인트
-@app.get("/health", tags=["Health Check"])
+@app.get("/api/health", tags=["Health Check"])
 def health_check():
     return {"status": "healthy"}
 
