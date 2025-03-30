@@ -1,39 +1,56 @@
 # app/api/v1/endpoints/attendance.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from datetime import date
+
 from app import crud, schemas
 from app.api import deps
 from app.core.redis_helper import is_attendance_checked, mark_attendance
+from app.services.notification_service import send_notification  # ✅ 알림 서비스 import
 
 router = APIRouter()
 
-@router.post("/attendance", response_model=schemas.Attendance)
-def check_attendance(
+@router.post("/attendance", response_model=schemas.AttendanceResponse)
+async def check_attendance(
     db: Session = Depends(deps.get_db),
     current_user: schemas.User = Depends(deps.get_current_user)
 ):
+    """
+    출석 체크 API
+    - 하루에 한 번만 가능 (Redis 중복 방지)
+    - 성공 시 DB 기록 + Redis 마킹 + 시스템 알림 전송
+    """
     user_id = current_user.id
 
-    # Step 1: Redis에서 출석 여부 확인
+    # 이미 출석한 경우
     if is_attendance_checked(user_id):
-        return {"msg": "이미 출석 체크를 완료했습니다."}
+        return schemas.AttendanceResponse(
+            success=False,
+            message="이미 출석했습니다.",
+            current_streak=crud.crud_attendance.get_current_streak(db, user_id),
+            today_checked=True,
+            today=date.today()
+        )
 
-    try:
-        # Step 2: 출석 정보 DB에 UPSERT
-        crud.crud_attendance.upsert_attendance(db, user_id=user_id)
-        db.commit()
+    # 출석 처리 (DB + Redis)
+    crud.crud_attendance.upsert_attendance(db, user_id)
+    mark_attendance(user_id)
 
-        # Step 3: Redis에 출석 정보 기록
-        mark_attendance(user_id)
+    # ✅ 알림 전송
+    await send_notification(
+        db=db,
+        user_id=user_id,
+        type="system",
+        message="오늘 출석이 완료되었습니다!",
+        link="/attendance/history"
+    )
 
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Concurrent request detected")
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
-    return {"msg": "출석 체크가 성공적으로 완료되었습니다."}
+    # 응답 반환
+    return schemas.AttendanceResponse(
+        success=True,
+        message="출석이 완료되었습니다.",
+        current_streak=crud.crud_attendance.get_current_streak(db, user_id),
+        today_checked=True,
+        today=date.today()
+    )

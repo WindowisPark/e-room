@@ -1,4 +1,5 @@
 # app/models/user.py
+
 from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -15,39 +16,40 @@ class User(Base):
     role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # 전화번호 필드 추가 (계정 복구 및 인증용)
+
+    # 📱 전화번호 필드
     phone_number = Column(String, nullable=True)
     is_phone_verified = Column(Boolean, default=False)
-    
-    # 출석 관련 관계 추가
+
+    # ✅ 멘션 알림 수신 여부 설정 (feat)
+    allow_mention_notifications = Column(Boolean, default=True)
+
+    # 📅 출석
     attendances = relationship("Attendance", back_populates="user", cascade="all, delete-orphan")
-    
-    # OAuth2 관련 필드
+
+    # 🔐 OAuth2
     oauth_provider = Column(String, nullable=True)
     oauth_id = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
 
-    # 팀 관련 관계
+    # 👥 팀
     owned_teams = relationship("Team", back_populates="owner", foreign_keys="Team.owner_id")
     team_memberships = relationship("TeamMember", back_populates="user")
 
-    # PDF 관련 관계
+    # 📄 PDF
     pdf_files = relationship("PDFFile", back_populates="owner")
     pdf_tags = relationship("PDFTag", back_populates="user")
     pdf_mentions = relationship("PDFTagMention", back_populates="user")
 
-
-    # 알림 관련 관계
+    # 🔔 알림
     notifications = relationship("Notification", back_populates="user")
 
-    # Question 관련 관계
+    # ❓ 질문
     questions = relationship("Question", back_populates="user", cascade="all, delete-orphan")
 
-    # 결제 관련 정의 추가
+    # 💳 결제
     payments = relationship("Payment", back_populates="user")
 
-
     @property
-    def is_admin(self):  # role 기반으로 is_admin 속성 제공
+    def is_admin(self):
         return self.role == "admin"
