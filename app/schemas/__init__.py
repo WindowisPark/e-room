@@ -10,7 +10,7 @@ from .user import (
 )
 
 # 출석 스키마 추가
-from .attendance import Attendance, AttendanceCreate
+from .attendance import Attendance, AttendanceCreate,AttendanceResponse
 
 # 협업 기능을 위한 스키마 추가
 from .team import TeamCreate, TeamUpdate, TeamResponse, TeamMemberCreate, TeamMemberResponse
