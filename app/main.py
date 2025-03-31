@@ -4,7 +4,7 @@ from app.api.v1 import auth
 from app.core.config import settings
 from app.api.v1.pdf_manager import router as pdf_router
 from app.api.v1.admin import router as admin_router
-from app.db.base import Base  # noqa
+from app.db.base_models import Base
 
 # 메인 API 라우터 추가
 from app.api.v1 import api_router  # 이 부분 추가

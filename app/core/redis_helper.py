@@ -66,10 +66,16 @@ def mark_attendance(user_id: int):
     key = f"attendance:{today}"
 
     try:
-        redis_client.sadd(key, user_id)  # 사용자 출석 추가
+        # 사용자 출석 추가
+        redis_client.sadd(key, user_id)
+        
         # 자정까지 만료 설정
         expire_at = datetime.combine(datetime.now().date() + timedelta(days=1), datetime.min.time())
-        redis_client.expireat(key, int(expire_at.timestamp()))
+        seconds_until_expire = int(expire_at.timestamp()) - int(datetime.now().timestamp())
+        
+        # expireat 대신 expire 사용 (만료 시간을 초 단위로 설정)
+        redis_client.expire(key, seconds_until_expire)
+        
         logger.info(f"출석 체크됨 - User ID: {user_id}")
     except RedisError as e:
         logger.error(f"출석 체크 실패 - User ID: {user_id}, Error: {str(e)}")

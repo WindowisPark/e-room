@@ -1,7 +1,8 @@
 # app/models/attendance.py
 
 from sqlalchemy import Column, Integer, Date, DateTime, func, ForeignKey
-from app.db.base import Base
+from sqlalchemy.orm import relationship
+from app.db.base_class import Base
 
 class Attendance(Base):
     """
@@ -16,3 +17,6 @@ class Attendance(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     attendance_date = Column(Date, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # ✅ User 관계 설정 추가 (필수!)
+    user = relationship("User", back_populates="attendances")

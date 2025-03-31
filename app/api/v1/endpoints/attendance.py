@@ -11,7 +11,7 @@ from app.services.notification_service import send_notification  # ✅ 알림 �
 
 router = APIRouter()
 
-@router.post("/attendance", response_model=schemas.AttendanceResponse)
+@router.post("/", response_model=schemas.AttendanceResponse)
 async def check_attendance(
     db: Session = Depends(deps.get_db),
     current_user: schemas.User = Depends(deps.get_current_user)
