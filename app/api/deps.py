@@ -39,8 +39,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    # 블랙리스트된 토큰 거부
-    if redis_client.exists(token):
+    if redis_client is not None and redis_client.exists(token):  # redis_client가 None이 아닐 때만 체크
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="토큰이 취소되었습니다"

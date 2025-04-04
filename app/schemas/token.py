@@ -1,5 +1,5 @@
 # app/schemas/token.py
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel
 
 class Token(BaseModel):
@@ -7,4 +7,5 @@ class Token(BaseModel):
     token_type: str
 
 class TokenPayload(BaseModel):
-    sub: Optional[int] = None
+    sub: Optional[Union[int, str]] = None
+    exp: Optional[int] = None

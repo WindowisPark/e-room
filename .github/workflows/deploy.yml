@@ -1,39 +1,26 @@
 # .github/workflows/deploy.yml
-name: Deploy to ECS Fargate
+name: Local Test Workflow
 
 on:
   push:
-    branches: [main]  # main 브랜치에 push 될 때 실행됨
+    branches: [main]  # main 브랜치에 push될 때 실행
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-2
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build, tag, and push Docker image to ECR
+      - name: Print Commit Info
         run: |
-          IMAGE_TAG=latest
-          docker build -t 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:$IMAGE_TAG -f docker/backend/Dockerfile .
-          docker push 545009830461.dkr.ecr.ap-northeast-2.amazonaws.com/eroom-backend:$IMAGE_TAG
-      
+          echo "✅ 커밋이 push되었습니다!"
+          echo "📦 커밋 SHA: ${{ github.sha }}"
+          echo "👤 사용자: ${{ github.actor }}"
+          echo "📄 브랜치: ${{ github.ref }}"
 
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: .github/ecs/task-definition.json
-          service: eroom-backend-service
-          cluster: eroom-cluster
-          wait-for-service-stability: true
+      # 👉 필요한 경우 테스트 실행 스텝 추가 가능
+      # - name: Run tests
+      #   run: |
+      #     echo "Running local tests..."

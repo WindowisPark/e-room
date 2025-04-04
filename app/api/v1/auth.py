@@ -87,6 +87,8 @@ async def kakao_callback(
             token_response = await client.post(token_url, data=token_data)
             token_response.raise_for_status()
             token_info = token_response.json()
+            # 로그 추가
+            logger.info(f"토큰 정보: {token_info}")
 
             # 카카오 사용자 정보 가져오기
             user_info_response = await client.get(
@@ -158,10 +160,17 @@ async def kakao_callback(
             }
             
         except httpx.HTTPStatusError as e:
-            logger.error(f"🚨 카카오 인증 오류: {str(e)}")
+            # 응답 내용 로깅 추가
+            error_detail = ""
+            try:
+                error_detail = e.response.json()
+            except:
+                error_detail = e.response.text
+                
+            logger.error(f"🚨 카카오 인증 오류: {str(e)}, 상세: {error_detail}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"카카오 인증 실패: {str(e)}"
+                detail=f"카카오 인증 실패: {str(e)}, 상세: {error_detail}"
             )
         except Exception as e:
             logger.error(f"🚨 카카오 로그인/회원가입 오류: {str(e)}")

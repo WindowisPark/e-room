@@ -149,3 +149,12 @@ def get_pdf_files_by_team(db: Session, team_id: int) -> List[PDFFile]:
 def get_pdf_files_by_user(db: Session, user_id: int) -> List[PDFFile]:
     """사용자가 소유한 모든 PDF 파일 조회"""
     return db.query(PDFFile).filter(PDFFile.owner_id == user_id).all()
+
+def rename_pdf_file(db: Session, pdf_id: int, new_name: str, new_path: str) -> bool:
+    pdf = db.query(PDFFile).filter(PDFFile.id == pdf_id).first()
+    if not pdf:
+        return False
+    pdf.filename = new_name
+    pdf.file_path = new_path
+    db.commit()
+    return True

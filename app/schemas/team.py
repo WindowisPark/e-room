@@ -1,5 +1,5 @@
 # app/schemas/team.py
-from typing import Optional, List
+from typing import Optional, Literal, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -40,3 +40,7 @@ class TeamMemberResponse(TeamMemberBase):
     
     class Config:
         orm_mode = True
+
+class TeamOwnerLeaveRequest(BaseModel):
+    action: Literal["transfer", "delete"]
+    new_owner_id: Optional[int] = Field(None, description="위임할 새로운 방장의 사용자 ID")

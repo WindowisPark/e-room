@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
+from app.models.question import Question
 
 class User(Base):
     __tablename__ = "users"
@@ -53,3 +54,10 @@ class User(Base):
     @property
     def is_admin(self):
         return self.role == "admin"
+    
+    # 🔥 팀 활동 로그 (역참조)
+    team_activities = relationship(
+        "TeamActivity",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )

@@ -9,8 +9,10 @@ from app.api.v1.endpoints import (
     payments,
     question,
     tags,
-    teams
-    # phone_verification 임포트 부분 제거
+    teams,
+    phone_verification,
+    team_pdf,  # 팀 PDF 엔드포인트
+    team_activity  # ✅ 새로 추가한 팀 활동 로그 엔드포인트
 )
 
 api_router = APIRouter()
@@ -18,18 +20,32 @@ api_router = APIRouter()
 # 인증 관련 라우터
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 
-# 전화번호 인증 라우터 제거
-# api_router.include_router(
-#     phone_verification.router, 
-#     prefix="/phone-verification", 
-#     tags=["전화번호 인증"]
-# )
+# 전화번호 인증 라우터
+api_router.include_router(
+    phone_verification.router, 
+    prefix="/phone-verification", 
+    tags=["전화번호 인증"]
+)
 
 # 팀 관련 라우터
 api_router.include_router(
     teams.router,
     prefix="/teams",
     tags=["팀 관리"]
+)
+
+# 팀 PDF 관련 라우터
+api_router.include_router(
+    team_pdf.router,
+    prefix="/teams",
+    tags=["팀 PDF 관리"]
+)
+
+# ✅ 팀 활동 로그 관련 라우터 추가
+api_router.include_router(
+    team_activity.router,
+    prefix="/teams",
+    tags=["팀 활동 로그"]
 )
 
 # 알림 관련 라우터

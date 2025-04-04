@@ -26,14 +26,14 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int
 
     # Redis 캐시 관련 설정
-    REDIS_CACHE_HOST: str = "redis"
+    REDIS_CACHE_HOST: str = "localhost"
     REDIS_CACHE_PORT: int = 6379
     REDIS_CACHE_DB: int = 1
     FILE_LIST_CACHE_TTL: int = 300
     FOLDER_LIST_CACHE_TTL: int = 300
     
     # Redis 접속 설정 (기존 redis_helper.py와 호환성 유지)
-    REDIS_HOST: str = "redis"
+    REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 

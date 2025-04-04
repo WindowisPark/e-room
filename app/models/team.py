@@ -20,6 +20,13 @@ class Team(Base):
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     pdf_files = relationship("PDFFile", back_populates="team")
 
+    # 🔥 팀 활동 로그 (역참조)
+    activities = relationship(
+        "TeamActivity",
+        back_populates="team",
+        cascade="all, delete-orphan"
+    )
+
 class TeamMember(Base):
     """
     팀 멤버십 모델

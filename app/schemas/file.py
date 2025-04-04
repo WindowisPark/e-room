@@ -39,3 +39,4 @@ class FolderResponse(BaseModel):
     relative_path: str
     created_at: datetime
     subfolders: List[str]
+

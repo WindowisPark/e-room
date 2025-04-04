@@ -136,3 +136,47 @@ async def check_team_permission(db: Session, team_id: int, user_id: int, require
     user_level = role_hierarchy.get(member_role, 0)
     
     return user_level >= required_level
+
+async def get_team_by_id_and_user(db: Session, team_id: int, user_id: int) -> Optional[dict]:
+    """팀 ID와 사용자 ID를 기준으로 사용자가 속한 팀 단건 조회"""
+    teams = await get_user_teams(db=db, user_id=user_id)
+    return next((t for t in teams if t["id"] == team_id), None)
+
+async def owner_leave_team(
+    db: Session,
+    team_id: int,
+    owner_id: int,
+    action: str,
+    new_owner_id: Optional[int] = None
+) -> bool:
+    from app.models.team import Team, TeamMember
+
+    team: Team = db.query(Team).filter(Team.id == team_id, Team.owner_id == owner_id).first()
+    if not team:
+        return False  # owner가 아니거나 팀 없음
+
+    if action == "delete":
+        db.delete(team)
+        db.query(TeamMember).filter(TeamMember.team_id == team_id).delete()
+        db.commit()
+        return True
+
+    elif action == "transfer":
+        # 위임 대상자가 멤버인지 확인
+        member = db.query(TeamMember).filter(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == new_owner_id
+        ).first()
+        if not member:
+            return False
+
+        # owner 위임
+        team.owner_id = new_owner_id
+        db.query(TeamMember).filter(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == owner_id
+        ).delete()
+        db.commit()
+        return True
+
+    return False

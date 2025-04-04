@@ -16,9 +16,16 @@ import redis.asyncio as aioredis
 logger = logging.getLogger(__name__)
 
 # 환경 변수에서 Redis 설정 로드
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
+
+
+# ✅ datetime 직렬화 함수 추가
+def json_serializer(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 # 동기식 Redis 클라이언트 초기화
 try:
@@ -157,7 +164,7 @@ def get_redis_client() -> aioredis.Redis:
     WebSocket 연결 관리에 사용됨
     """
     return aioredis.Redis(
-        host=REDIS_HOST,
+        host="localhost", #TODO: 하드코딩한 것 바꿔야됨!!!
         port=REDIS_PORT,
         db=REDIS_DB,
         decode_responses=True  # 응답을 자동으로 디코딩
@@ -176,8 +183,7 @@ async def publish_message(channel: str, message: Dict[str, Any]) -> int:
     """
     redis_client = get_redis_client()
     try:
-        # 딕셔너리를 JSON 문자열로 변환
-        message_str = json.dumps(message)
+        message_str = json.dumps(message, default=json_serializer)
         return await redis_client.publish(channel, message_str)
     except Exception as e:
         logger.error(f"Redis 메시지 발행 실패 - 채널: {channel}, 오류: {str(e)}")

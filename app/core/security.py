@@ -2,9 +2,14 @@ from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from app.schemas.token import TokenPayload
 from redis import Redis
 from redis.exceptions import RedisError
 from app.core.config import settings
+from app.models.user import User
+from app.db.session import get_db
+from sqlalchemy.orm import Session
+
 import os
 import logging
 import hmac
@@ -23,7 +28,7 @@ REFRESH_SECRET_KEY = settings.REFRESH_SECRET_KEY
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 환경 변수에서 REDIS_HOST 가져오기 (Docker Compose에서 설정됨)
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 
 # Redis 연결 (예외 처리 추가)
 try:
@@ -108,57 +113,51 @@ async def verify_iamport_webhook(request: Request):
     if not hmac.compare_digest(signature, generated_signature):
         raise HTTPException(status_code=403, detail="Invalid Webhook Signature")
 
-async def get_current_user_ws(websocket: WebSocket):
+async def get_current_user_ws(websocket: WebSocket) -> User | None:
     """
-    WebSocket 연결에서 토큰 검증 및 사용자 정보 가져오기
-    
-    참고: 순환 참조 문제를 해결하기 위해 필요한 모듈은 함수 내부에서 가져옵니다.
+    WebSocket 요청에서 토큰을 추출하여 유효한 사용자인지 확인하고 반환
     """
-    # 쿼리 파라미터에서 토큰 추출
     token = websocket.query_params.get("token")
     if not token:
-        # 토큰이 없으면 연결 거부
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.warning("⚠️ WebSocket: 인증 토큰이 없습니다.")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="인증 필요")
         return None
-    
+
     try:
-        # 토큰 검증 및 사용자 정보 조회 (ACCESS_SECRET_KEY 사용)
-        payload = jwt.decode(
-            token, ACCESS_SECRET_KEY, algorithms=["HS256"]
-        )
-        user_id = int(payload.get("sub"))
-        
-        # 토큰 만료 검증
-        if "exp" not in payload or datetime.fromtimestamp(payload["exp"]) < datetime.utcnow():
-            logger.warning(f"🚨 만료된 토큰으로 WebSocket 연결 시도")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        # JWT 디코드
+        payload = jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=["HS256"])
+        token_data = TokenPayload(**payload)
+
+        # 만료 확인
+        if token_data.exp and datetime.fromtimestamp(token_data.exp) < datetime.utcnow():
+            logger.warning("⚠️ WebSocket: 만료된 토큰")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="토큰 만료")
             return None
-            
+
     except (JWTError, ValueError) as e:
-        # 토큰 검증 실패 시 연결 거부
-        logger.error(f"🚨 WebSocket 토큰 검증 실패: {str(e)}")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.error(f"❌ WebSocket: 토큰 검증 실패 - {str(e)}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="토큰 오류")
         return None
-    
+
     try:
-        # 순환 참조 방지를 위해 함수 내부에서 필요한 모듈 임포트
-        from app.api.deps import get_db
-        from app.crud.crud_user import get_user
-        from pydantic import ValidationError
-        
-        # 데이터베이스에서 사용자 정보 조회
-        db = next(get_db())
-        user = get_user(db, id=user_id)
-        
-        if not user or not user.is_active:
-            # 사용자가 없거나 비활성화 상태면 연결 거부
-            logger.warning(f"🚨 비활성화된 사용자 또는 없는 사용자 ID: {user_id}")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        user_id = int(token_data.sub) if token_data.sub else None
+        if not user_id:
+            logger.warning("⚠️ WebSocket: 토큰에 사용자 정보 없음")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="잘못된 토큰")
             return None
-        
+
+        db: Session = next(get_db())
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user or not user.is_active:
+            logger.warning(f"⚠️ WebSocket: 유효하지 않거나 비활성화된 사용자 (ID: {token_data.sub})")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="사용자 인증 실패")
+            return None
+
         return user
-        
+
     except Exception as e:
-        logger.error(f"🚨 WebSocket 사용자 정보 조회 실패: {str(e)}")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.error(f"❌ WebSocket 사용자 조회 실패: {str(e)}")
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="서버 오류")
         return None
+   
