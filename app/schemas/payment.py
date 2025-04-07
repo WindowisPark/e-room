@@ -1,3 +1,5 @@
+from dataclasses import Field
+from app.models.user import PlanType
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -24,3 +26,11 @@ class PaymentOut(PaymentBase):
 
     class Config:
         orm_mode = True
+
+class SubscriptionPurchase(BaseModel):
+    """구독 결제 요청 스키마"""
+    plan_type: PlanType
+    duration_months: int = 1  # 1-12개월
+    payment_method: str
+
+    

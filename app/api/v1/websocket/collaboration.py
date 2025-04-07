@@ -25,6 +25,12 @@ from app.schemas.collaboration import (
     CollaborationMessageBase
 )
 from app.services.team_activity_service import log_team_activity
+from app.services.tag_service import (
+    create_pdf_annotation,
+    update_pdf_annotation,
+    delete_pdf_annotation,
+)
+
 
 message_type_map = {
     "cursor_update": CursorUpdateMessage,
@@ -119,7 +125,7 @@ async def handle_redis_messages(pubsub, websocket: WebSocket, user_id: int):
 
 
 async def process_client_message(data: str, team_id: int, user: User):
-    """WebSocket 메시지를 받아 파싱, Redis 브로드캐스트, 활동 로그 저장"""
+    """WebSocket 메시지를 받아 파싱, DB 저장, Redis 브로드캐스트, 활동 로그 저장"""
     try:
         json_data = json.loads(data)
         msg_type = json_data.get("type")
@@ -138,9 +144,19 @@ async def process_client_message(data: str, team_id: int, user: User):
 
         # 메시지 파싱
         message_obj = schema_cls(**json_data)
-
-        # 특정 메시지의 부가 처리
-        if isinstance(message_obj, CursorUpdateMessage):
+        
+        # DB 작업 결과 저장용 변수
+        result = None
+        db = next(get_db())
+        
+        # 메시지 타입에 따른 DB 처리
+        if msg_type == "annotation_create":
+            result = await handle_annotation_create(db, message_obj.data, user.id)
+        elif msg_type == "annotation_update":
+            result = await handle_annotation_update(db, message_obj.data, user.id)
+        elif msg_type == "annotation_delete":
+            result = await handle_annotation_delete(db, message_obj.data, user.id)
+        elif msg_type == "cursor_update":
             cursor = message_obj.data
             await store_cursor_position(
                 str(team_id),
@@ -149,6 +165,12 @@ async def process_client_message(data: str, team_id: int, user: User):
                 cursor.page,
                 {"x": cursor.x, "y": cursor.y}
             )
+        
+        # 오류 발생 시 처리
+        if result and "error" in result:
+            logger.error(f"DB 작업 오류: {result['error']}")
+            # TODO: 오류 메시지를 클라이언트에 전송하는 부분 구현
+            return
 
         # ✅ 활동 로그 기록 (필요한 타입만)
         if isinstance(message_obj, (AnnotationCreateMessage, AnnotationUpdateMessage, AnnotationDeleteMessage)):
@@ -157,15 +179,30 @@ async def process_client_message(data: str, team_id: int, user: User):
                 "annotation_update": "update",
                 "annotation_delete": "delete"
             }
+            
+            # DB 저장 결과에서 리소스 ID 가져오기
+            resource_id = None
+            if result and "id" in result:
+                resource_id = result["id"]
+            elif "tag_id" in message_obj.data:
+                resource_id = message_obj.data["tag_id"]
+            
             await log_team_activity(
                 db=next(get_db()),
                 team_id=team_id,
                 user_id=user.id,
                 action=action_map.get(message_obj.type, "update"),
                 resource_type="annotation",
-                resource_id=None,  # 추후 주석 ID 연동 시 확장
+                resource_id=resource_id,
                 details=message_obj.data
             )
+
+        # DB 작업 결과를 메시지에 반영
+        if result:
+            # 원본 메시지 객체에 DB 저장 결과 추가
+            updated_data = {**message_obj.data, **result}
+            # 업데이트된 데이터로 message_obj 갱신
+            message_obj.data = updated_data
 
         # 메시지 브로드캐스트
         await publish_message(f"team:{team_id}", message_obj.dict())
@@ -174,6 +211,7 @@ async def process_client_message(data: str, team_id: int, user: User):
         logger.error(f"[WebSocket] 잘못된 JSON 형식: {data}")
     except Exception as e:
         logger.error(f"[WebSocket] 메시지 처리 오류: {str(e)}")
+        # 여기서 클라이언트에 오류 메시지를 보낼 수도 있음
 
 
 async def handle_cursor_move(message: Dict[str, Any], team_id: int, user: User):
@@ -206,3 +244,73 @@ async def handle_comment(message: Dict[str, Any], team_id: int, user: User):
     if not all(k in message for k in required):
         logger.warning("댓글 필드 누락")
         return
+
+# 각 메시지 타입별 처리 함수 구현
+async def handle_annotation_create(
+    db: Session, message_data: Dict[str, Any], user_id: int
+) -> Dict[str, Any]:
+    """주석 생성 처리 및 DB 저장"""
+    pdf_id = message_data.get("pdf_id")
+    page = message_data.get("page")
+    content = message_data.get("content")
+    position = message_data.get("position")
+    annotation_type = message_data.get("annotation_type", "highlight")
+    
+    if not all([pdf_id, page is not None, content, position]):
+        logger.warning(f"주석 생성 메시지 필드 누락: {message_data}")
+        return {"error": "필수 필드가 누락되었습니다"}
+    
+    # 주석 생성 서비스 호출
+    result = await create_pdf_annotation(
+        db=db,
+        pdf_id=int(pdf_id),
+        user_id=user_id,
+        page=page,
+        content=content,
+        position=position,
+        annotation_type=annotation_type
+    )
+    
+    return result
+
+async def handle_annotation_update(
+    db: Session, message_data: Dict[str, Any], user_id: int
+) -> Dict[str, Any]:
+    """주석 업데이트 처리 및 DB 저장"""
+    tag_id = message_data.get("tag_id")
+    content = message_data.get("content")
+    position = message_data.get("position")
+    
+    if not tag_id or (content is None and position is None):
+        logger.warning(f"주석 업데이트 메시지 필드 누락: {message_data}")
+        return {"error": "필수 필드가 누락되었습니다"}
+    
+    # 주석 업데이트 서비스 호출
+    result = await update_pdf_annotation(
+        db=db,
+        tag_id=int(tag_id),
+        user_id=user_id,
+        content=content,
+        position=position
+    )
+    
+    return result
+
+async def handle_annotation_delete(
+    db: Session, message_data: Dict[str, Any], user_id: int
+) -> Dict[str, Any]:
+    """주석 삭제 처리 및 DB 저장"""
+    tag_id = message_data.get("tag_id")
+    
+    if not tag_id:
+        logger.warning(f"주석 삭제 메시지 필드 누락: {message_data}")
+        return {"error": "tag_id가 누락되었습니다"}
+    
+    # 주석 삭제 서비스 호출
+    result = await delete_pdf_annotation(
+        db=db,
+        tag_id=int(tag_id),
+        user_id=user_id
+    )
+    
+    return result

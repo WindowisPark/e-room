@@ -36,3 +36,27 @@ def verify_payment(db: Session, imp_uid: str, merchant_uid: str) -> bool:
         return True
     else:
         return False
+
+def calculate_subscription_amount(plan_type, duration_months: int) -> float:
+    """
+    구독 요금제와 기간에 따른 결제 금액 계산
+    
+    Args:
+        plan_type: 요금제 타입 (PlanType)
+        duration_months: 구독 기간(월)
+        
+    Returns:
+        결제 금액
+    """
+    # 월별 요금 (실제 가격으로 조정 필요)
+    if plan_type.value == "premium":
+        monthly_fee = 15900
+    elif plan_type.value == "vip":
+        monthly_fee = 29900
+    else:  # free
+        monthly_fee = 0
+    
+    # 할인 적용된 총 금액 계산
+    total_amount = monthly_fee * duration_months
+    
+    return total_amount

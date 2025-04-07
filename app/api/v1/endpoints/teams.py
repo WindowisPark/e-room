@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
+from app.services.subscription_service import check_team_creation_permission
 from app.schemas.team import TeamCreate, TeamOwnerLeaveRequest, TeamUpdate, TeamResponse, TeamMemberCreate, TeamMemberResponse
 from app.services.team_service import (
     create_new_team,
@@ -35,7 +36,17 @@ async def create_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """팀스페이스 생성"""
+    """팀스페이스 생성 (구독 권한 확인)"""
+    
+    # 팀 생성 권한 확인
+    has_permission = await check_team_creation_permission(db, current_user.id)
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="팀스페이스 생성 권한이 없습니다. 구독 요금제를 확인해주세요."
+        )
+    
+    # 기존 로직 유지
     result = await create_new_team(db=db, team_data=team_data, owner_id=current_user.id)
     return result
 

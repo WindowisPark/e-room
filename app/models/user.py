@@ -1,10 +1,19 @@
 # app/models/user.py
 
-from sqlalchemy import Boolean, Column, Integer, String, DateTime
+from datetime import datetime
+import enum
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 from app.models.question import Question
+
+class PlanType(str, enum.Enum):
+    free = "free"
+    premium = "premium"  
+    vip = "vip"
+
+
 
 class User(Base):
     __tablename__ = "users"
@@ -61,3 +70,36 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+
+    # User 클래스 내부에 추가
+    plan_type = Column(Enum(PlanType), default=PlanType.free, nullable=False)
+    plan_started_at = Column(DateTime, nullable=True)
+    plan_expires_at = Column(DateTime, nullable=True)
+
+    @property
+    def max_team_spaces(self):
+        """현재 요금제에 따른 최대 팀스페이스 수 반환"""
+        # 요금제 만료 확인
+        if self.plan_expires_at and self.plan_expires_at < datetime.now():
+            return 0  # 만료된 경우 free 플랜과 동일하게 처리
+            
+        if self.plan_type == PlanType.premium:
+            return 1
+        elif self.plan_type == PlanType.vip:
+            return 5
+        return 0  # free 플랜
+
+    @property
+    def is_plan_active(self):
+        """현재 요금제가 활성 상태인지 확인"""
+        if not self.plan_expires_at:
+            return self.plan_type != PlanType.free
+        return self.plan_expires_at > datetime.now()
+
+    @property
+    def days_until_expiry(self):
+        """요금제 만료까지 남은 일수"""
+        if not self.plan_expires_at:
+            return 0
+        delta = self.plan_expires_at - datetime.now()
+        return max(0, delta.days)
