@@ -50,7 +50,11 @@ class Settings(BaseSettings):
     
     # ✅ iamport Webhook 관련 설정
     IAMPORT_WEBHOOK_SECRET: str = ""
-    
+    IAMPORT_API_KEY: str = os.getenv("IAMPORT_API_KEY", "")
+    IAMPORT_API_SECRET: str = os.getenv("IAMPORT_API_SECRET", "")
+    IAMPORT_MERCHANT_ID: str = os.getenv("IAMPORT_MERCHANT_ID", "")
+    IAMPORT_CHANNEL_KEY: str = os.getenv("IAMPORT_CHANNEL_KEY", "")    
+
     # ✅ SMS 인증 관련 설정 (필요한 경우 추가)
     SMS_API_KEY: Optional[str] = None
     SMS_API_SECRET: Optional[str] = None

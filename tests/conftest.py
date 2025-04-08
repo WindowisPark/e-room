@@ -1,116 +1,189 @@
+# tests/conftest.py
+
 import pytest
-import datetime
-from datetime import datetime as dt, date
+import asyncio
+from unittest.mock import MagicMock, patch
+from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from unittest.mock import MagicMock, AsyncMock, patch
-from urllib.parse import quote_plus
+from datetime import datetime
 
 from app.main import app
-from app.db.base import Base
-from app.models.user import User
-from app.api.deps import get_db, get_current_user
-from app.core.security import get_password_hash
-
-# PostgreSQL 테스트 DB 연결 정보
-password = quote_plus("password123")
-TEST_SQLALCHEMY_DATABASE_URL = f"postgresql+psycopg2://postgres:{password}@localhost:5432/test_db"
-
-engine = create_engine(TEST_SQLALCHEMY_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# 모든 Redis 관련 모듈 모킹하기
-@pytest.fixture(scope="module", autouse=True)
-def mock_redis_modules():
-    # 일반 Redis 클라이언트 모킹 추가
-    with patch("app.core.redis_helper.redis_client") as mock_sync_redis:
-        # 동기식 클라이언트 메서드 설정
-        mock_sync_redis.sismember.return_value = False
-        mock_sync_redis.sadd.return_value = True
-        mock_sync_redis.expireat.return_value = True
-        
-        # 비동기 Redis 클라이언트 설정
-        with patch("redis.asyncio.Redis") as mock_redis_class:
-            mock_async_client = AsyncMock()
-            mock_async_client.publish.return_value = None
-            mock_redis_class.return_value = mock_async_client
-
-            with patch("app.services.notification_service.get_redis_client", return_value=mock_async_client), \
-                patch("app.core.redis_helper.get_redis_client", return_value=mock_async_client):
-                # 둘 다 반환
-                yield (mock_sync_redis, mock_async_client)
+from app.models.user import User, PlanType
+from app.models.payment import Payment, PaymentStatus
+from app.core.security import create_access_token
 
 
-# DB Fixture
-@pytest.fixture(scope="module")
+# 테스트 클라이언트
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+# Mock DB 세션
+@pytest.fixture
+def db_session():
+    """Mock SQLAlchemy 세션"""
+    mock_session = MagicMock(spec=Session)
+    return mock_session
+
+
+# 테스트용 DB - 호환성을 위해 db라는 이름으로도 제공
+@pytest.fixture
 def db():
-    Base.metadata.create_all(bind=engine)
-    session = TestingSessionLocal()
+    """Mock SQLAlchemy 세션 (db_session과 동일)"""
+    mock_session = MagicMock(spec=Session)
+    return mock_session
 
-    # ✅ DB에 직접 사용자 추가 시에는 모델(User)을 사용해야 합니다.
-    test_user = User(
+
+# 테스트 사용자
+@pytest.fixture
+def test_user():
+    """테스트 사용자 객체"""
+    return User(
         id=1,
         email="test@example.com",
         username="testuser",
-        full_name="Test User",
-        hashed_password=get_password_hash("fakepassword"),
+        full_name="테스트 사용자",
+        plan_type=PlanType.free,
+        is_active=True,
         role="user",
-        created_at=dt.now(datetime.timezone.utc)
+        created_at=datetime.utcnow()
     )
 
-    session.add(test_user)
-    session.commit()
-    session.refresh(test_user)
 
-    try:
-        yield session
-    finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
-
-# Redis 클라이언트 Fixture - mock_redis_modules와 연결
-@pytest.fixture(scope="module")
-def redis_client(mock_redis_modules):
-    # 동기식 Redis 클라이언트만 반환 (첫 번째 요소)
-    return mock_redis_modules[0]
-
-# 사용자 인증 Mock Fixture
-@pytest.fixture(scope="module")
-def mock_user():
-    return User(
-        id=1,
-        username="testuser",
-        email="testuser@example.com",
-        role="user",
-        created_at=dt.now(datetime.timezone.utc)
-    )
-
-@pytest.fixture(scope="module")
-def mock_auth_headers():
-    return {"Authorization": "Bearer faketoken"}
-
-# 클라이언트 Fixture
-@pytest.fixture(scope="module")
-def client(db, mock_user):
-    # 의존성 오버라이드
-    def override_get_db():
-        return db
-    
-    def override_get_current_user():
-        return mock_user
-    
-    # 의존성 주입
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    
-    with TestClient(app) as test_client:
-        yield test_client
-    
-    # 테스트 후 정리
-    app.dependency_overrides.clear()
-
-# 출석 테스트에 필요한 URL 픽스처 추가
-@pytest.fixture(scope="module")
+# 출석 API URL
+@pytest.fixture
 def attendance_url():
+    """출석 API 엔드포인트"""
     return "/api/v1/attendance"
+
+
+# 인증 관련 Mock 헤더
+@pytest.fixture
+def mock_auth_headers():
+    """인증 헤더 모킹"""
+    return {"Authorization": "Bearer test_token"}
+
+
+# Redis 클라이언트 모킹
+@pytest.fixture
+def redis_client():
+    """Redis 클라이언트 모킹"""
+    mock_redis = MagicMock()
+    # 추가적인 Redis 메서드 모킹
+    mock_redis.get.return_value = None  # 기본적으로 키가 없음
+    mock_redis.setex.return_value = True
+    mock_redis.sismember.return_value = False  # 기본적으로 멤버가 없음
+    mock_redis.sadd.return_value = 1
+    mock_redis.expire.return_value = True
+    mock_redis.delete.return_value = 1
+    return mock_redis
+
+
+# 테스트 토큰
+@pytest.fixture
+def test_token(test_user):
+    """테스트 사용자의 JWT 토큰"""
+    return create_access_token(test_user.id)
+
+
+# 인증 헤더
+@pytest.fixture
+def auth_headers(test_token):
+    """인증 헤더"""
+    return {"Authorization": f"Bearer {test_token}"}
+
+
+# Mock IamportClient
+@pytest.fixture
+def mock_iamport_client():
+    """Mock 포트원 클라이언트"""
+    with patch("app.core.iamport_client.IamportClient") as mock:
+        mock_client = MagicMock()
+        
+        # _get_token 메소드 모킹
+        mock_client._get_token.return_value = "mock_token"
+        
+        # get_headers 메소드 모킹
+        mock_client.get_headers.return_value = {
+            "Authorization": "Bearer mock_token"
+        }
+        
+        # find_payment_by_imp_uid 메소드 모킹
+        mock_client.find_payment_by_imp_uid.return_value = {
+            "code": 0,
+            "message": "성공",
+            "response": {
+                "imp_uid": "imp_test_uid",
+                "merchant_uid": "merchant_test_uid",
+                "amount": 15900,
+                "status": "paid",
+                "paid_at": int(datetime.now().timestamp())
+            }
+        }
+        
+        # cancel_payment 메소드 모킹
+        mock_client.cancel_payment.return_value = {
+            "code": 0,
+            "message": "취소 성공",
+            "response": {
+                "imp_uid": "imp_test_uid",
+                "merchant_uid": "merchant_test_uid",
+                "amount": 15900,
+                "status": "cancelled"
+            }
+        }
+        
+        mock.return_value = mock_client
+        yield mock_client
+
+
+# 테스트 결제 객체
+@pytest.fixture
+def test_payment():
+    """테스트 결제 객체"""
+    return Payment(
+        id=1,
+        imp_uid=None,
+        merchant_uid="merchant_test_uid",
+        user_id=1,
+        amount=15900,
+        status=PaymentStatus.ready,
+        created_at=datetime.utcnow()
+    )
+
+
+# 테스트용 결제 데이터
+@pytest.fixture
+def payment_data():
+    """테스트용 결제 데이터"""
+    return {
+        "merchant_uid": "merchant_test_uid",
+        "amount": 15900,
+        "user_id": 1
+    }
+
+
+# 테스트용 포트원 응답
+@pytest.fixture
+def mock_iamport_response():
+    """Mock 포트원 API 응답"""
+    return {
+        "code": 0,
+        "message": "성공",
+        "response": {
+            "imp_uid": "imp_test_uid",
+            "merchant_uid": "merchant_test_uid",
+            "amount": 15900,
+            "status": "paid",
+            "paid_at": 1617961617
+        }
+    }
+
+
+# asyncio 이벤트 루프 (비동기 테스트용)
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
