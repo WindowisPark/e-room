@@ -48,7 +48,17 @@ async def create_team(
     
     # 기존 로직 유지
     result = await create_new_team(db=db, team_data=team_data, owner_id=current_user.id)
-    return result
+    
+    # 포인트 적립
+    from app.services.point_service import add_points, PointActionType
+    
+    await add_points(
+        db=db,
+        user_id=current_user.id,
+        action_type=PointActionType.TEAM_CREATE,
+        description=f"팀스페이스 생성: {team_data.name}",
+        reference_id=result.get("id")
+    )
 
 @router.get("/", response_model=List[TeamResponse])
 async def get_teams(

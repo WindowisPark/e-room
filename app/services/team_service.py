@@ -67,6 +67,17 @@ async def invite_team_member(db: Session, team_id: int, user_id: int, role: str,
         invitee_id=user_id
     )
     
+    # 팀 가입 포인트 지급 
+    from app.services.point_service import add_points, PointActionType
+    
+    await add_points(
+        db=db,
+        user_id=user_id,
+        action_type=PointActionType.TEAM_JOIN,
+        description=f"팀스페이스 가입: {team.name}",
+        reference_id=team_id
+    )
+    
     return {
         "team_id": team_id,
         "user_id": user_id,

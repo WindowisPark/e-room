@@ -60,6 +60,15 @@ class User(Base):
     # 💳 결제
     payments = relationship("Payment", back_populates="user")
 
+    # 게이미피케이션을 위한 필드 추가
+    points = Column(Integer, default=0)  # 누적 포인트
+    level = Column(Integer, default=1)   # 사용자 레벨
+    exp = Column(Integer, default=0)     # 경험치
+    streak_days = Column(Integer, default=0)  # 연속 출석일
+
+    point_history = relationship("PointHistory", back_populates="user", cascade="all, delete-orphan")
+    badges = relationship("UserBadge", back_populates="user", cascade="all, delete-orphan")
+
     @property
     def is_admin(self):
         return self.role == "admin"

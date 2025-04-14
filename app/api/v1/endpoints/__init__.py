@@ -10,7 +10,9 @@ from app.api.v1.endpoints import (
     question,
     tags,
     teams,
-    phone_verification  # 추가: 전화번호 인증 라우터
+    phone_verification,  # 전화번호 인증 라우터
+    gamification,        # 게이미피케이션 라우터
+    badges               # 배지 라우터
 )
 
 api_router = APIRouter()
@@ -65,4 +67,18 @@ api_router.include_router(
     payments.router,
     prefix="/payments",
     tags=["결제"]
+)
+
+# 게이미피케이션 관련 라우터
+api_router.include_router(
+    gamification.router,
+    prefix="/gamification",
+    tags=["게이미피케이션"]
+)
+
+# 배지 관련 라우터
+api_router.include_router(
+    badges.router,
+    prefix="/gamification",
+    tags=["배지"]
 )

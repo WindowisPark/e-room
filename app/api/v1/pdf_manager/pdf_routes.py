@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Path, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Path, Query, Body
 from typing import List
+from sqlalchemy.orm import Session
 from app.services.file_service import FileStorageManager, FileOperationError
 from app.schemas.file import (
     MultiUploadResult,
@@ -8,6 +9,8 @@ from app.schemas.file import (
     FolderResponse,
     FileInfo
 )
+from app.api import deps
+from app.models.user import User
 
 router = APIRouter(tags=["PDF Manager"])
 
@@ -24,14 +27,32 @@ async def upload_pdf(
     user_id: int,
     folder_name: str = Path(..., min_length=1),
     files: List[UploadFile] = File(...),
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage: FileStorageManager = Depends(get_storage_manager),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
 ):
     try:
+        # 현재 사용자와 URL의 user_id가 일치하는지 확인
+        if current_user.id != user_id and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="다른 사용자의 폴더에 파일을 업로드할 수 없습니다.")
+            
         results = await storage.save_multiple_pdfs(user_id, folder_name, files)
 
         # ✅ 모든 업로드 실패 시 예외 반환
         if len(results["success"]) == 0:
             raise HTTPException(status_code=400, detail="업로드에 실패한 파일이 존재합니다.")
+            
+        # ✅ 포인트 적립
+        from app.services.point_service import add_points, PointActionType
+        
+        # 성공한 각 파일마다 포인트 적립
+        for file_info in results["success"]:
+            await add_points(
+                db=db,
+                user_id=user_id,
+                action_type=PointActionType.PDF_UPLOAD,
+                description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
+            )
 
         return MultiUploadResult(**results)
 
