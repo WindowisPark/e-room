@@ -8,6 +8,8 @@ from app.models.user import User
 from app.models.tag import PDFTagMention  # ✅ 멘션 중복 확인용
 from app.core.redis_helper import get_redis_client
 
+import json
+
 # ✅ 공통 알림 생성 및 실시간 발송 함수
 async def send_notification(
     db: Session,
@@ -38,7 +40,9 @@ async def send_notification(
         payload.update(extra_payload)
 
     redis_client = get_redis_client()
-    await redis_client.publish(f"user:{user_id}", payload)
+    
+    # 딕셔너리를 JSON 문자열로 변환하여 전송
+    await redis_client.publish(f"user:{user_id}", json.dumps(payload))
 
     return notification.id
 

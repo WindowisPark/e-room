@@ -14,6 +14,7 @@ from app.crud.crud_team import check_user_in_team
 from app.services.notification_service import create_mention_notifications
 from app.core.pdf_processor import PDFProcessor
 
+# PDF 주석 생성 함수에 포인트 적립 로직 추가
 async def create_pdf_annotation(
     db: Session,
     pdf_id: int,
@@ -58,6 +59,18 @@ async def create_pdf_annotation(
             mentioned_usernames=mentions,
             mentioner_id=user_id
         )
+    
+    # 포인트 적립 추가
+    from app.services.point_service import add_points, PointActionType
+    
+    # 주석 작성에 대한 포인트 적립
+    await add_points(
+        db=db,
+        user_id=user_id,
+        action_type=PointActionType.ANNOTATION,
+        description="PDF 주석 작성",
+        reference_id=tag.id
+    )
     
     # 응답 데이터 구성
     return {

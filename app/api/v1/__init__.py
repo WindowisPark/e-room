@@ -12,7 +12,9 @@ from app.api.v1.endpoints import (
     teams,
     phone_verification,
     team_pdf,  # 팀 PDF 엔드포인트
-    team_activity  # ✅ 새로 추가한 팀 활동 로그 엔드포인트
+    team_activity,
+    gamification,
+    badges
 )
 
 api_router = APIRouter()
@@ -60,6 +62,18 @@ api_router.include_router(
     attendance.router,
     prefix="/attendance",
     tags=["출석"]
+)
+
+api_router.include_router(
+    gamification.router,
+    prefix="/gamification",
+    tags=["게이미피케이션"]
+)
+
+api_router.include_router(
+    badges.router,
+    prefix="/gamification",
+    tags=["배지"]
 )
 
 # 질문 관련 라우터
