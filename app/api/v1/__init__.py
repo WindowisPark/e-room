@@ -3,19 +3,19 @@
 from fastapi import APIRouter
 
 from app.api.v1 import auth
-from app.api.v1.endpoints import (
-    attendance,
-    notifications,
-    payments,
-    question,
-    tags,
-    teams,
-    phone_verification,
-    team_pdf,  # 팀 PDF 엔드포인트
-    team_activity,
-    gamification,
-    badges
-)
+# 개별 모듈 직접 임포트 (순환 참조 방지)
+from app.api.v1.endpoints import attendance
+from app.api.v1.endpoints import notifications
+from app.api.v1.endpoints import payments
+from app.api.v1.endpoints import question
+from app.api.v1.endpoints import tags
+from app.api.v1.endpoints import teams
+from app.api.v1.endpoints import phone_verification
+from app.api.v1.endpoints import team_pdf
+from app.api.v1.endpoints import team_activity
+from app.api.v1.endpoints import gamification
+from app.api.v1.endpoints import badges
+from app.api.v1.endpoints import pdf_agent  # 추가
 
 api_router = APIRouter()
 
@@ -27,6 +27,13 @@ api_router.include_router(
     phone_verification.router, 
     prefix="/phone-verification", 
     tags=["전화번호 인증"]
+)
+
+# PDF Agent 라우터 추가
+api_router.include_router(
+    pdf_agent.router,
+    prefix="/pdf-agent",
+    tags=["PDF Agent"]
 )
 
 # 팀 관련 라우터

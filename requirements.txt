@@ -1,19 +1,40 @@
-﻿fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy==2.0.23
-alembic==1.12.1
-psycopg2-binary==2.9.10
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6 
-pydantic==2.4.2
-pydantic-settings==2.0.3
-httpx==0.25.1
-python-dotenv==1.0.0
-email-validator==2.1.0.post1
-aiofiles==23.2.1 
-PyMuPDF==1.22.3 
-redis==5.2.1
-bcrypt==4.0.1
-requests==2.31.0
-cryptography==42.0.2
+﻿# FastAPI 기본 요구사항
+fastapi>=0.103.1,<0.104.0
+uvicorn>=0.23.2,<0.24.0
+pydantic>=2.3.0,<2.4.0
+pydantic-settings>=2.0.3,<2.1.0
+python-multipart>=0.0.6,<0.1.0
+python-dotenv>=1.0.0,<1.1.0
+
+# 데이터베이스 & ORM
+sqlalchemy>=2.0.20,<2.1.0
+alembic>=1.12.0,<1.13.0
+psycopg2-binary>=2.9.7,<2.10.0
+
+# 인증 & 보안
+python-jose[cryptography]>=3.3.0,<3.4.0
+passlib[bcrypt]>=1.7.4,<1.8.0
+
+# Redis
+redis>=5.0.0,<5.1.0
+redis-om>=0.2.1,<0.3.0
+
+# 비동기 HTTP 클라이언트
+httpx>=0.24.1,<0.25.0
+aiofiles>=23.1.0,<23.2.0
+
+# 결제 관련 (포트원)
+requests>=2.31.0,<2.32.0
+
+# 로깅
+loguru>=0.7.0,<0.8.0
+
+# 개발 도구
+black>=23.7.0,<23.8.0
+isort>=5.12.0,<5.13.0
+pytest>=7.4.0,<7.5.0
+pytest-cov>=4.1.0,<4.2.0
+pytest-asyncio>=0.21.1,<0.22.0
+
+# 선택적 요구사항
+gunicorn>=21.2.0,<21.3.0  # 프로덕션 서버

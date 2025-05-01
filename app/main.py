@@ -21,7 +21,7 @@ app = FastAPI(
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=None
+    redoc_url=f"{settings.API_V1_STR}/redoc"
 )
 
 # CORS 미들웨어 설정
