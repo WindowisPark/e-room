@@ -1,13 +1,17 @@
+# app/workers/task_manager.py
 import uuid
 import json
 import logging
-from typing import Dict, Any, Optional, Callable, List
-from datetime import datetime
+from typing import Dict, Any, Optional, Callable, List, Union
+from datetime import datetime, timedelta
 import redis
 import rq
-from rq.job import Job
+from rq.job import Job, JobStatus
+from rq.exceptions import NoSuchJobError
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.crud.crud_task import create_task_record, update_task_status
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,7 @@ class TaskManager:
     비동기 작업 관리 클래스
     - Redis 기반 작업 큐 관리
     - 작업 상태 조회 및 업데이트
+    - 예약 작업 관리
     """
     _instance = None
     
@@ -43,6 +48,9 @@ class TaskManager:
                 "default": rq.Queue("default", connection=self.redis_conn)
             }
             
+            # 스케줄러 초기화
+            self.scheduler = rq.Scheduler(connection=self.redis_conn)
+            
             logger.info("TaskManager 초기화 완료")
         except redis.RedisError as e:
             logger.error(f"Redis 연결 실패: {str(e)}")
@@ -53,6 +61,7 @@ class TaskManager:
                 "ai": DummyQueue(),
                 "default": DummyQueue()
             }
+            self.scheduler = DummyScheduler()
     
     def enqueue_task(
         self, 
@@ -61,6 +70,10 @@ class TaskManager:
         queue_name: str = "default", 
         job_id: Optional[str] = None, 
         job_timeout: int = 3600,
+        user_id: Optional[int] = None,
+        db: Optional[Session] = None,
+        task_type: Optional[str] = None,
+        document_id: Optional[int] = None,
         **kwargs
     ) -> str:
         """
@@ -72,6 +85,10 @@ class TaskManager:
             queue_name: 큐 이름 (default, pdf, ai)
             job_id: 작업 ID (None인 경우 자동 생성)
             job_timeout: 작업 타임아웃 (초)
+            user_id: 작업 소유자 ID (선택)
+            db: DB 세션 (선택 - 작업 기록용)
+            task_type: 작업 유형 (선택 - 작업 기록용)
+            document_id: 문서 ID (선택 - 작업 기록용)
             kwargs: 함수 키워드 인자
             
         Returns:
@@ -85,14 +102,31 @@ class TaskManager:
             # Redis 연결이 없는 경우 (개발/테스트 환경)
             if self.redis_conn is None:
                 logger.warning(f"Redis 연결 없음: 작업 {job_id}가 큐에 추가되었다고 가정")
+                
+                # DB에 작업 기록 (선택)
+                if db and user_id and task_type:
+                    create_task_record(
+                        db=db,
+                        user_id=user_id,
+                        task_type=task_type,
+                        document_id=document_id or 0,
+                        job_id=job_id
+                    )
+                    
                 return job_id
             
             # 작업 메타데이터 설정
             meta = {
                 "created_at": datetime.utcnow().isoformat(),
                 "progress": 0,
-                "status": "queued"
+                "status": "queued",
+                "user_id": user_id
             }
+            
+            # 작업 설명 생성
+            description = f"{func.__name__} 작업"
+            if document_id:
+                description += f" (문서 ID: {document_id})"
             
             # 작업 등록
             job = queue.enqueue(
@@ -102,8 +136,19 @@ class TaskManager:
                 job_id=job_id,
                 timeout=job_timeout,
                 result_ttl=86400,  # 결과 24시간 유지
-                meta=meta
+                meta=meta,
+                description=description
             )
+            
+            # DB에 작업 기록 (선택)
+            if db and user_id and task_type:
+                create_task_record(
+                    db=db,
+                    user_id=user_id,
+                    task_type=task_type,
+                    document_id=document_id or 0,
+                    job_id=job_id
+                )
             
             logger.info(f"작업 등록 성공: {job_id} (큐: {queue_name})")
             return job_id
@@ -111,6 +156,90 @@ class TaskManager:
         except Exception as e:
             logger.error(f"작업 등록 실패: {str(e)}")
             return job_id  # 실패해도 ID 반환 (클라이언트 처리 일관성)
+    
+    def schedule_task(
+        self, 
+        func: Callable, 
+        scheduled_time: datetime,
+        *args, 
+        queue_name: str = "default", 
+        job_id: Optional[str] = None, 
+        job_timeout: int = 3600,
+        interval: Optional[int] = None,
+        repeat: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        작업 예약 (미래 실행 또는 반복 실행)
+        
+        Args:
+            func: 실행할 함수
+            scheduled_time: 예약 시간
+            args: 함수 인자
+            queue_name: 큐 이름
+            job_id: 작업 ID (None인 경우 자동 생성)
+            job_timeout: 작업 타임아웃 (초)
+            interval: 반복 간격 (초, None이면 일회성)
+            repeat: 반복 횟수 (None이면 무한 반복)
+            kwargs: 함수 키워드 인자
+            
+        Returns:
+            작업 ID
+        """
+        job_id = job_id or f"scheduled_{uuid.uuid4()}"
+        
+        try:
+            # Redis 연결이 없는 경우
+            if self.redis_conn is None or self.scheduler is None:
+                logger.warning(f"Redis 연결 없음: 예약 작업 {job_id}가 등록되었다고 가정")
+                return job_id
+                
+            # 메타데이터 설정
+            meta = {
+                "created_at": datetime.utcnow().isoformat(),
+                "scheduled_at": scheduled_time.isoformat(),
+                "status": "scheduled",
+                "interval": interval,
+                "repeat": repeat,
+                "current_repeat": 0
+            }
+            
+            # 큐 선택
+            queue = self.queues.get(queue_name, self.queues["default"])
+            
+            # 작업 예약
+            if interval is None:
+                # 일회성 예약
+                self.scheduler.enqueue_at(
+                    scheduled_time,
+                    func,
+                    *args,
+                    **kwargs,
+                    job_id=job_id,
+                    timeout=job_timeout,
+                    meta=meta
+                )
+                logger.info(f"일회성 작업 예약 성공: {job_id}, 시간: {scheduled_time}")
+            else:
+                # 반복 예약
+                self.scheduler.schedule(
+                    scheduled_time=scheduled_time,
+                    func=func,
+                    args=args,
+                    kwargs=kwargs,
+                    interval=interval,
+                    repeat=repeat,
+                    job_id=job_id,
+                    timeout=job_timeout,
+                    meta=meta
+                )
+                logger.info(f"반복 작업 예약 성공: {job_id}, 시간: {scheduled_time}, 간격: {interval}초")
+            
+            return job_id
+            
+        except Exception as e:
+            logger.error(f"작업 예약 실패: {str(e)}")
+            return job_id
     
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """
@@ -139,6 +268,13 @@ class TaskManager:
                 if job:
                     break
             
+            # 스케줄러에서 작업 찾기
+            if not job and self.scheduler:
+                for scheduled_job in self.scheduler.get_jobs():
+                    if scheduled_job.id == job_id:
+                        job = scheduled_job
+                        break
+            
             if not job:
                 return {"status": "not_found"}
                 
@@ -148,7 +284,9 @@ class TaskManager:
                 "result": job.result if job.is_finished else None,
                 "error": job.exc_info if job.is_failed else None,
                 "created_at": job.meta.get("created_at"),
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.utcnow().isoformat(),
+                "message": job.meta.get("message", "작업 진행 중"),
+                "scheduled_at": job.meta.get("scheduled_at")
             }
             
         except Exception as e:
@@ -195,6 +333,61 @@ class TaskManager:
             
         except Exception as e:
             logger.error(f"작업 진행 상태 업데이트 실패: {str(e)}")
+            return False
+    
+    def cancel_job(self, job_id: str) -> bool:
+        """
+        작업 취소
+        
+        Args:
+            job_id: 작업 ID
+            
+        Returns:
+            성공 여부
+        """
+        try:
+            # Redis 연결이 없는 경우 (개발/테스트 환경)
+            if self.redis_conn is None:
+                logger.warning(f"Redis 연결 없음: 작업 {job_id} 취소 불가")
+                return False
+            
+            # 모든 큐에서 작업 찾기
+            job = None
+            for queue_name, queue in self.queues.items():
+                job = queue.fetch_job(job_id)
+                if job:
+                    # 작업 상태 확인
+                    if job.is_queued or job.is_started:
+                        # 작업 취소
+                        if job.is_queued:
+                            # 큐에서 제거
+                            queue.remove(job)
+                        
+                        # 작업 실패로 표시
+                        job.cancel()
+                        job.meta["status"] = "cancelled"
+                        job.meta["cancelled_at"] = datetime.utcnow().isoformat()
+                        job.save_meta()
+                        
+                        logger.info(f"작업 취소 성공: {job_id}")
+                        return True
+                    else:
+                        logger.warning(f"작업을 취소할 수 없음: {job_id}, 상태: {job.get_status()}")
+                        return False
+            
+            # 스케줄러에서 작업 찾기
+            if self.scheduler:
+                for scheduled_job in self.scheduler.get_jobs():
+                    if scheduled_job.id == job_id:
+                        self.scheduler.cancel(scheduled_job)
+                        logger.info(f"예약 작업 취소 성공: {job_id}")
+                        return True
+            
+            logger.warning(f"취소할 작업을 찾을 수 없음: {job_id}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"작업 취소 실패: {str(e)}")
             return False
     
     def fetch_jobs(self, queue_name: str = "default", status: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -246,7 +439,8 @@ class TaskManager:
                         "status": job.get_status(),
                         "progress": job.meta.get("progress", 0),
                         "created_at": job.meta.get("created_at"),
-                        "updated_at": job.meta.get("updated_at")
+                        "updated_at": job.meta.get("updated_at"),
+                        "description": job.description
                     })
             
             return result
@@ -256,7 +450,7 @@ class TaskManager:
             return []
 
 
-# 개발/테스트용 더미 큐 클래스
+# 개발/테스트용 더미 클래스들
 class DummyQueue:
     """Redis 없이 개발할 때 사용하는 더미 큐"""
     
@@ -271,10 +465,10 @@ class DummyQueue:
             "args": args,
             "kwargs": kwargs,
             "status": "queued",
-            "meta": {
+            "meta": kwargs.get("meta", {
                 "progress": 0,
                 "created_at": datetime.utcnow().isoformat()
-            }
+            })
         }
         return DummyJob(job_id)
     
@@ -288,9 +482,14 @@ class DummyQueue:
                 meta=job_data["meta"]
             )
         return None
+    
+    def remove(self, job):
+        """작업 제거 (더미)"""
+        if job.id in self.jobs:
+            del self.jobs[job.id]
+        return True
 
 
-# 개발/테스트용 더미 작업 클래스
 class DummyJob:
     """Redis 없이 개발할 때 사용하는 더미 작업"""
     
@@ -300,19 +499,102 @@ class DummyJob:
         self.meta = meta or {"progress": 0}
         self.result = result
         self.exc_info = exc_info
+        self.description = f"Dummy Job {id}"
     
     def get_status(self):
         """상태 조회 (더미)"""
         return self._status
     
+    @property
     def is_finished(self):
         """완료 여부 조회 (더미)"""
         return self._status == "finished"
     
+    @property
     def is_failed(self):
         """실패 여부 조회 (더미)"""
         return self._status == "failed"
     
+    @property
+    def is_queued(self):
+        """대기 여부 조회 (더미)"""
+        return self._status == "queued"
+    
+    @property
+    def is_started(self):
+        """시작 여부 조회 (더미)"""
+        return self._status == "started"
+    
     def save_meta(self):
         """메타데이터 저장 (더미)"""
         pass
+    
+    def cancel(self):
+        """작업 취소 (더미)"""
+        self._status = "cancelled"
+
+
+class DummyScheduler:
+    """Redis 없이 개발할 때 사용하는 더미 스케줄러"""
+    
+    def __init__(self):
+        self.jobs = {}
+    
+    def enqueue_at(self, scheduled_time, func, *args, job_id=None, **kwargs):
+        """작업 예약 (일회성)"""
+        job_id = job_id or f"scheduled_{uuid.uuid4()}"
+        self.jobs[job_id] = {
+            "func": func.__name__,
+            "args": args,
+            "kwargs": kwargs,
+            "scheduled_time": scheduled_time,
+            "interval": None,
+            "repeat": None,
+            "status": "scheduled",
+            "meta": kwargs.get("meta", {
+                "progress": 0,
+                "created_at": datetime.utcnow().isoformat(),
+                "scheduled_at": scheduled_time.isoformat()
+            })
+        }
+        logger.info(f"더미 스케줄러: 작업 {job_id} 예약됨 (시간: {scheduled_time})")
+        return DummyJob(job_id, status="scheduled")
+    
+    def schedule(self, scheduled_time, func, args=None, kwargs=None, interval=60, repeat=None, job_id=None, **job_kwargs):
+        """작업 예약 (반복)"""
+        job_id = job_id or f"scheduled_{uuid.uuid4()}"
+        self.jobs[job_id] = {
+            "func": func.__name__,
+            "args": args or (),
+            "kwargs": kwargs or {},
+            "scheduled_time": scheduled_time,
+            "interval": interval,
+            "repeat": repeat,
+            "status": "scheduled",
+            "meta": job_kwargs.get("meta", {
+                "progress": 0,
+                "created_at": datetime.utcnow().isoformat(),
+                "scheduled_at": scheduled_time.isoformat(),
+                "interval": interval,
+                "repeat": repeat
+            })
+        }
+        logger.info(f"더미 스케줄러: 반복 작업 {job_id} 예약됨 (시간: {scheduled_time}, 간격: {interval}초)")
+        return DummyJob(job_id, status="scheduled")
+    
+    def cancel(self, job):
+        """예약 작업 취소"""
+        if isinstance(job, str) and job in self.jobs:
+            del self.jobs[job]
+            logger.info(f"더미 스케줄러: 작업 {job} 취소됨")
+            return True
+        elif hasattr(job, 'id') and job.id in self.jobs:
+            del self.jobs[job.id]
+            logger.info(f"더미 스케줄러: 작업 {job.id} 취소됨")
+            return True
+        return False
+    
+    def get_jobs(self):
+        """예약된 작업 목록 조회"""
+        return [DummyJob(job_id, status="scheduled", meta=job_data.get("meta")) 
+                for job_id, job_data in self.jobs.items()]
