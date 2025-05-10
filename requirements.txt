@@ -49,3 +49,14 @@ pytest-asyncio>=0.21.1,<0.22.0
 
 # 선택적 요구사항
 gunicorn>=21.2.0,<21.3.0  # 프로덕션 서버
+
+# 기존 의존성에 추가
+pymupdf
+langchain
+langchain_community
+langchain_core
+langchain_chroma
+langchain_openai
+langgraph
+langchain_text_splitters
+langchain-upstage

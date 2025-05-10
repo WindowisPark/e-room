@@ -84,7 +84,8 @@ class User(Base):
     plan_type = Column(Enum(PlanType), default=PlanType.free, nullable=False)
     plan_started_at = Column(DateTime, nullable=True)
     plan_expires_at = Column(DateTime, nullable=True)
-
+    tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
+    
     @property
     def max_team_spaces(self):
         """현재 요금제에 따른 최대 팀스페이스 수 반환"""

@@ -336,3 +336,50 @@ async def list_user_tasks(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"작업 목록 조회 중 오류 발생: {str(e)}")
+    
+
+@router.get("/get-id-by-path", response_model=Dict[str, Any])
+async def get_document_id_by_path(
+    file_path: str = Query(..., description="PDF 파일 경로"),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """파일 경로로 문서 ID 조회"""
+    try:
+        from app.models.tag import PDFFile
+        
+        # 전체 경로로 찾기
+        pdf_file = db.query(PDFFile).filter(PDFFile.file_path == file_path).first()
+        
+        if pdf_file:
+            return {
+                "success": True,
+                "document_id": pdf_file.id,
+                "file_path": pdf_file.file_path,
+                "file_name": pdf_file.filename
+            }
+        
+        # 파일명만으로 찾기
+        file_name = os.path.basename(file_path)
+        pdf_file = db.query(PDFFile).filter(PDFFile.filename == file_name).first()
+        
+        if pdf_file:
+            return {
+                "success": True,
+                "document_id": pdf_file.id,
+                "file_path": pdf_file.file_path,
+                "file_name": pdf_file.filename
+            }
+        
+        return {
+            "success": False,
+            "message": "파일을 찾을 수 없습니다",
+            "file_path": file_path
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file_path": file_path
+        }

@@ -21,6 +21,7 @@ class PDFFile(Base):
     team = relationship("Team", back_populates="pdf_files")
     owner = relationship("User", back_populates="pdf_files")
     tags = relationship("PDFTag", back_populates="pdf_file", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="document", cascade="all, delete-orphan")
 
 class PDFTag(Base):
     """

@@ -9,7 +9,7 @@ import rq
 from rq.job import Job, JobStatus
 from rq.exceptions import NoSuchJobError
 from sqlalchemy.orm import Session
-
+from rq_scheduler import Scheduler
 from app.core.config import settings
 from app.crud.crud_task import create_task_record, update_task_status
 
@@ -49,7 +49,7 @@ class TaskManager:
             }
             
             # 스케줄러 초기화
-            self.scheduler = rq.Scheduler(connection=self.redis_conn)
+            self.scheduler = Scheduler(connection=self.redis_conn)
             
             logger.info("TaskManager 초기화 완료")
         except redis.RedisError as e:

@@ -21,3 +21,4 @@ class Task(Base):
     # 관계 설정
     user = relationship("User", back_populates="tasks")
     document = relationship("PDFFile", back_populates="tasks")
+    

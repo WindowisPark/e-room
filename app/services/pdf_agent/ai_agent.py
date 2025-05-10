@@ -1,17 +1,24 @@
-# app/services/pdf_agent/ai_agent.py 개선사항
+# app/services/pdf_agent/ai_agent.py
 
 from typing import Dict, List, Any, Optional
 import logging
 from datetime import datetime
+import os
+import tempfile
 from sqlalchemy.orm import Session
-import json
 
 from app.models.tag import PDFFile
 from app.services.pdf_agent.processor import PDFProcessor
 from app.services.pdf_agent.embedding_service import EmbeddingService
 from app.core.config import settings
 
+# AI 서비스 통합
+from app.services.pdf_agent.ai_service import PDFAIService
+
 logger = logging.getLogger(__name__)
+
+# 싱글톤 패턴으로 AI 서비스 초기화
+pdf_ai_service = PDFAIService()
 
 class PDFAgent:
     """
@@ -32,9 +39,9 @@ class PDFAgent:
             생성된 답변
         """
         try:
+            # 기존 OpenAI API 기반 코드 유지
             from openai import AsyncOpenAI
             
-            # OpenAI 클라이언트 초기화
             client = AsyncOpenAI(api_key=settings.AI_API_KEY)
             
             # 컨텍스트 결합
@@ -75,7 +82,7 @@ class PDFAgent:
     @staticmethod
     async def summarize(db: Session, document_id: int, level: str = "default") -> Dict[str, Any]:
         """
-        문서 요약 생성
+        문서 요약 생성 - LangGraph 기반 처리
         
         Args:
             db: 데이터베이스 세션
@@ -94,130 +101,27 @@ class PDFAgent:
             if not pdf_file:
                 return {"success": False, "error": "문서를 찾을 수 없습니다"}
             
-            # DB에서 문서 청크 목록 조회
-            query = """
-                SELECT 
-                    text,
-                    chunk_index,
-                    start_char,
-                    end_char
-                FROM document_chunks
-                WHERE document_id = :document_id
-                ORDER BY chunk_index
-            """
+            # 파일 경로 확인
+            file_path = pdf_file.file_path
+            if not os.path.exists(file_path):
+                return {"success": False, "error": "파일을 찾을 수 없습니다"}
             
-            chunks = db.execute(query, {"document_id": document_id}).fetchall()
+            # LangGraph 워크플로우 실행
+            logger.info(f"문서 요약 시작: {document_id}, 파일: {file_path}")
+            result = pdf_ai_service.process_pdf(file_path)
             
-            if not chunks:
-                # 청크가 없으면 문서 처리 수행
-                process_result = await PDFProcessor.process_and_embed_document(db, document_id)
-                if not process_result.get("success"):
-                    return process_result
-                
-                # 다시 청크 조회
-                chunks = db.execute(query, {"document_id": document_id}).fetchall()
-                
-                if not chunks:
-                    return {"success": False, "error": "문서 처리는 성공했지만 청크를 찾을 수 없습니다"}
+            if not result.get("success", False):
+                error_msg = result.get("error", "알 수 없는 오류")
+                logger.error(f"문서 요약 실패: {error_msg}")
+                return result
             
-            # 청크 텍스트 추출
-            chunk_texts = [chunk.text for chunk in chunks]
-            
-            # OpenAI 클라이언트 초기화
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=settings.AI_API_KEY)
-            
-            # 요약 수준에 따른 지시사항 조정
-            length_instruction = ""
-            if level == "short":
-                length_instruction = "간결하게 1-2문단으로 요약하세요."
-            elif level == "detailed":
-                length_instruction = "주요 내용을 포함하여 3-4문단으로 상세히 요약하세요."
-            else:
-                length_instruction = "적절한 길이로 주요 내용을 요약하세요."
-            
-            # 청크를 섹션으로 나누어 처리
-            summaries = []
-            
-            # 청크 수에 따라 전략 결정
-            if len(chunk_texts) <= 3:
-                # 청크가 적으면 한 번에 처리
-                combined_text = "\n\n".join([f"섹션 {i+1}:\n{text}" for i, text in enumerate(chunk_texts)])
-                
-                prompt = f"""
-                다음 문서 내용을 요약해주세요. {length_instruction}
-                
-                문서:
-                {combined_text}
-                """
-                
-                response = await client.chat.completions.create(
-                    model=settings.AI_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": "당신은 전문적인 문서 요약 AI 어시스턴트입니다. 주어진 내용을 정확하고 응집력 있게 요약하세요."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=1000
-                )
-                
-                summaries.append(response.choices[0].message.content.strip())
-            else:
-                # 청크가 많으면 섹션별로 나누어 처리
-                section_size = min(5, max(1, len(chunk_texts) // 3))
-                sections = [chunk_texts[i:i+section_size] for i in range(0, len(chunk_texts), section_size)]
-                
-                for i, section in enumerate(sections):
-                    section_text = "\n\n".join([f"텍스트 {j+1}:\n{text}" for j, text in enumerate(section)])
-                    
-                    prompt = f"""
-                    다음 문서 섹션을 요약해주세요. 섹션의 핵심 내용을 간략하게 요약하세요.
-                    
-                    섹션 {i+1}:
-                    {section_text}
-                    """
-                    
-                    response = await client.chat.completions.create(
-                        model=settings.AI_MODEL_NAME,
-                        messages=[
-                            {"role": "system", "content": "당신은 전문적인 문서 요약 AI 어시스턴트입니다. 주어진 섹션을 정확하고 응집력 있게 요약하세요."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.3,
-                        max_tokens=300
-                    )
-                    
-                    section_summary = response.choices[0].message.content.strip()
-                    summaries.append(section_summary)
-                
-                # 섹션별 요약을 통합
-                combined_summary = "\n\n".join([f"섹션 {i+1} 요약:\n{summary}" for i, summary in enumerate(summaries)])
-                
-                prompt = f"""
-                다음은 문서의 섹션별 요약입니다. 이를 통합하여 하나의 응집력 있는 요약을 만들어주세요. {length_instruction}
-                
-                {combined_summary}
-                """
-                
-                response = await client.chat.completions.create(
-                    model=settings.AI_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": "당신은 전문적인 문서 요약 AI 어시스턴트입니다. 섹션별 요약을 통합하여 하나의 응집력 있는 최종 요약을 작성하세요."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=1000
-                )
-                
-                # 최종 통합 요약으로 교체
-                summaries = [response.choices[0].message.content.strip()]
-            
-            # 결과 반환
+            # 요약 결과 반환
+            logger.info(f"문서 요약 완료: {document_id}")
             return {
                 "success": True,
                 "document_id": document_id,
                 "document_name": pdf_file.filename,
-                "summary": summaries[0],
+                "summary": result["result"],
                 "summary_level": level,
                 "generated_at": datetime.utcnow().isoformat()
             }
@@ -225,3 +129,74 @@ class PDFAgent:
         except Exception as e:
             logger.error(f"요약 생성 실패: {str(e)}", exc_info=True)
             return {"success": False, "error": f"요약 생성 중 오류 발생: {str(e)}"}
+    
+    @staticmethod
+    async def generate_questions(db: Session, document_id: int, count: int = 5) -> Dict[str, Any]:
+        """
+        문서 기반 문제 생성
+        
+        Args:
+            db: 데이터베이스 세션
+            document_id: 문서 ID
+            count: 생성할 문제 수
+            
+        Returns:
+            생성된 문제
+        """
+        try:
+            # 문서 조회
+            pdf_file = db.query(PDFFile).filter(PDFFile.id == document_id).first()
+            if not pdf_file:
+                return {"success": False, "error": "문서를 찾을 수 없습니다"}
+            
+            # 파일 경로 확인
+            file_path = pdf_file.file_path
+            if not os.path.exists(file_path):
+                return {"success": False, "error": "파일을 찾을 수 없습니다"}
+            
+            # 문제 생성 실행
+            logger.info(f"문제 생성 시작: {document_id}, 파일: {file_path}")
+            result = pdf_ai_service.generate_exam(file_path, count)
+            
+            if not result.get("success", False):
+                error_msg = result.get("error", "알 수 없는 오류")
+                logger.error(f"문제 생성 실패: {error_msg}")
+                return result
+            
+            # 문제 생성 결과 반환
+            logger.info(f"문제 생성 완료: {document_id}")
+            return {
+                "success": True,
+                "document_id": document_id,
+                "document_name": pdf_file.filename,
+                "questions": result["questions"],
+                "count": count,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"문제 생성 실패: {str(e)}", exc_info=True)
+            return {"success": False, "error": f"문제 생성 중 오류 발생: {str(e)}"}
+            
+    @staticmethod
+    async def process_and_embed_document(db: Session, document_id: int) -> Dict[str, Any]:
+        """
+        문서 처리 및 임베딩 생성 - PDF 처리 워크플로우 통합
+        
+        Args:
+            db: 데이터베이스 세션
+            document_id: 문서 ID
+            
+        Returns:
+            처리 결과
+        """
+        try:
+            # 기존 PDFProcessor 로직 유지 (청킹과 임베딩은 기존 방식으로)
+            result = await PDFProcessor.process_and_embed_document(db, document_id)
+            
+            # 이미 정의된 프로세서가 있으므로, 기존 로직을 유지하고 LangGraph 통합은 별도 기능으로 제공
+            return result
+        
+        except Exception as e:
+            logger.error(f"문서 처리 및 임베딩 실패: {str(e)}", exc_info=True)
+            return {"success": False, "error": f"문서 처리 및 임베딩 중 오류 발생: {str(e)}"}

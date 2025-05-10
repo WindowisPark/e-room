@@ -113,7 +113,7 @@ async def verify_iamport_webhook(request: Request):
     if not hmac.compare_digest(signature, generated_signature):
         raise HTTPException(status_code=403, detail="Invalid Webhook Signature")
 
-async def get_current_user_ws(websocket: WebSocket) -> User | None:
+async def get_current_user_ws(websocket: WebSocket) -> Optional[User]:
     """
     WebSocket 요청에서 토큰을 추출하여 유효한 사용자인지 확인하고 반환
     """
