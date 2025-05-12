@@ -310,9 +310,12 @@ async def list_user_tasks(
             db=db,
             user_id=current_user.id,
             skip=skip,
-            limit=limit,
-            status=status
+            limit=limit
         )
+
+        # status로 필터링 (서비스 레벨에서 처리)
+        if status:
+            tasks = [task for task in tasks if task.status == status]
         
         # 작업 상세 정보 추가
         result = []
@@ -347,6 +350,7 @@ async def get_document_id_by_path(
     """파일 경로로 문서 ID 조회"""
     try:
         from app.models.tag import PDFFile
+        import os
         
         # 전체 경로로 찾기
         pdf_file = db.query(PDFFile).filter(PDFFile.file_path == file_path).first()

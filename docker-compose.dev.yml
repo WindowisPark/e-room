@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./
+      dockerfile: docker/backend/Dockerfile.dev
+    container_name: ai_agent_api_dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./storage:/app/storage
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  worker:
+    build:
+      context: ./
+      dockerfile: docker/backend/Dockerfile.dev
+    container_name: ai_agent_worker_dev
+    command: python -m app.workers.worker
+    volumes:
+      - ./app:/app/app
+      - ./storage:/app/storage
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - db
+    restart: always
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ai_agent_postgres
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/10-init.sql
+      - ./migrations/init_pgvector.sql:/docker-entrypoint-initdb.d/20-init_pgvector.sql
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: ai_agent_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ai_agent_redis_ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:

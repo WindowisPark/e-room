@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    poppler-utils \
+    libpq-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/base.txt ./requirements/
+COPY requirements/prod.txt ./requirements/
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements/base.txt \
+    && pip install --no-cache-dir -r requirements/prod.txt
+
+COPY . .
+
+CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
