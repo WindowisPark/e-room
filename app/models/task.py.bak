@@ -4,8 +4,9 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKe
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
+# TYPE_CHECKING으로 실제 임포트는 하지 않고 타입 힌트만 가져옴
 if TYPE_CHECKING:
     from app.models.tag import PDFFile
     from app.models.user import User
@@ -27,5 +28,4 @@ class Task(Base):
     
     # 관계 설정
     user = relationship("User", back_populates="tasks")
-    # 단순하게 문자열 참조로만 변경
-    document = relationship("PDFFile", back_populates="tasks")
+    document = relationship("app.models.tag.PDFFile", back_populates="tasks", foreign_keys=[document_id])

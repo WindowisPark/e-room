@@ -1,12 +1,10 @@
 # app/workers/task_manager.py
-
 import uuid
 import json
-import pickle
 import logging
 from typing import Dict, Any, Optional, Callable, List, Union
 from datetime import datetime, timedelta
-from redis import Redis
+import redis
 import rq
 from rq.job import Job, JobStatus
 from rq.exceptions import NoSuchJobError
@@ -16,7 +14,6 @@ from app.core.config import settings
 from app.crud.crud_task import create_task_record, update_task_status
 
 logger = logging.getLogger(__name__)
-
 
 class TaskManager:
     """
@@ -34,38 +31,121 @@ class TaskManager:
         return cls._instance
     
     def _initialize(self):
+        """Redis 연결 및 큐 초기화 - 환경 변수 문제 해결 추가"""
         try:
-            self.redis_conn = Redis.from_url(settings.REDIS_URL)
+            # 환경 변수에서 Redis 설정 가져오기
+            redis_url = settings.REDIS_URL
+            
+            # URL에서 호스트 추출
+            import re
+            host_match = re.search(r'redis://([^:]+)', redis_url)
+            redis_host = host_match.group(1) if host_match else "localhost"
+            
+            # localhost가 설정된 경우 로그 기록
+            if redis_host == "localhost":
+                logger.warning(
+                    "Redis 호스트가 'localhost'로 설정되어 있어 Docker 컨테이너 환경에서 "
+                    "연결이 실패할 수 있습니다. 환경 변수를 확인해주세요."
+                )
+                
+                # Docker 환경에서 흔히 사용하는 Redis 서비스명으로 URL 재구성 시도
+                alternative_url = redis_url.replace("localhost", "redis")
+                logger.info(f"대체 Redis URL로 연결 시도: {alternative_url}")
+                redis_url = alternative_url
+            
+            # Redis 연결 시도
+            self.redis_conn = redis.Redis.from_url(
+                redis_url, 
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                health_check_interval=30
+            )
+            
+            # 연결 테스트
             self.redis_conn.ping()
-            logger.info(f"TaskManager Redis 연결 성공: {settings.REDIS_URL}")
-
+            logger.info(f"TaskManager Redis 연결 성공 (URL: {redis_url})")
+            
+            # 작업 큐 정의
             self.queues = {
                 "pdf": rq.Queue("pdf_tasks", connection=self.redis_conn),
                 "ai": rq.Queue("ai_tasks", connection=self.redis_conn),
                 "default": rq.Queue("default", connection=self.redis_conn)
             }
-
+            
+            # 스케줄러 초기화
             self.scheduler = Scheduler(connection=self.redis_conn)
+            
             logger.info("TaskManager 초기화 완료")
-        except Exception as e:
-            logger.error(f"Redis 연결 실패: {e}")
+            
+        except redis.RedisError as e:
+            logger.error(f"Redis 연결 실패: {str(e)}")
+            
+            # 다른 호스트 시도
+            alternative_hosts = ["redis", "host.docker.internal", "127.0.0.1"]
+            original_url = settings.REDIS_URL
+            
+            for alt_host in alternative_hosts:
+                # 현재 URL에서 호스트만 교체
+                import re
+                alt_url = re.sub(r'redis://[^:]+', f'redis://{alt_host}', original_url)
+                
+                if alt_url == original_url:
+                    continue
+                    
+                try:
+                    logger.info(f"대체 Redis 호스트로 연결 시도: {alt_url}")
+                    
+                    self.redis_conn = redis.Redis.from_url(
+                        alt_url, 
+                        decode_responses=True,
+                        socket_connect_timeout=3,
+                        socket_timeout=3
+                    )
+                    
+                    # 연결 테스트
+                    self.redis_conn.ping()
+                    logger.info(f"대체 Redis 호스트로 연결 성공: {alt_url}")
+                    
+                    # 작업 큐 정의
+                    self.queues = {
+                        "pdf": rq.Queue("pdf_tasks", connection=self.redis_conn),
+                        "ai": rq.Queue("ai_tasks", connection=self.redis_conn),
+                        "default": rq.Queue("default", connection=self.redis_conn)
+                    }
+                    
+                    # 스케줄러 초기화
+                    self.scheduler = Scheduler(connection=self.redis_conn)
+                    
+                    logger.info("TaskManager 초기화 완료 (대체 호스트 사용)")
+                    return
+                    
+                except redis.RedisError as alt_e:
+                    logger.error(f"대체 호스트({alt_host}) 연결 실패: {str(alt_e)}")
+            
+            # 모든 연결 시도 실패
+            logger.warning("모든 Redis 연결 시도 실패, 더미 구현으로 대체합니다")
             self.redis_conn = None
-            self.queues = {"pdf": DummyQueue(), "ai": DummyQueue(), "default": DummyQueue()}
+            self.queues = {
+                "pdf": DummyQueue(),
+                "ai": DummyQueue(),
+                "default": DummyQueue()
+            }
             self.scheduler = DummyScheduler()
     
     def enqueue_task(
-            self, 
-            func: Callable, 
-            *args, 
-            queue_name: str = "default", 
-            job_id: Optional[str] = None, 
-            job_timeout: int = 3600,
-            user_id: Optional[int] = None,
-            db: Optional[Session] = None,  # 이 db는 작업 기록에만 사용되고 큐로 전달되지 않음
-            task_type: Optional[str] = None,
-            document_id: Optional[int] = None,
-            **kwargs
-        ) -> str:
+        self, 
+        func: Callable, 
+        *args, 
+        queue_name: str = "default", 
+        job_id: Optional[str] = None, 
+        job_timeout: int = 3600,
+        user_id: Optional[int] = None,
+        db: Optional[Session] = None,
+        task_type: Optional[str] = None,
+        document_id: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         작업 큐에 태스크 등록
         
@@ -76,9 +156,9 @@ class TaskManager:
             job_id: 작업 ID (None인 경우 자동 생성)
             job_timeout: 작업 타임아웃 (초)
             user_id: 작업 소유자 ID (선택)
-            db: DB 세션 (선택 - 작업 기록용, 큐로 전달되지 않음)
+            db: DB 세션 (선택 - 작업 기록용)
             task_type: 작업 유형 (선택 - 작업 기록용)
-            document_id: 문서 ID (선택 - 작업 기록 및 작업 함수에 전달)
+            document_id: 문서 ID (선택 - 작업 기록용)
             kwargs: 함수 키워드 인자
             
         Returns:
@@ -118,24 +198,11 @@ class TaskManager:
             if document_id:
                 description += f" (문서 ID: {document_id})"
             
-            # 작업 함수에 전달할 인자들 구성
-            # 중요: Session은 pickle할 수 없으므로 db는 전달하지 않음
-            func_kwargs = kwargs.copy()  # 기존 kwargs 복사
-            
-            # document_id와 user_id는 전달 가능
-            if document_id is not None:
-                func_kwargs['document_id'] = document_id
-            if user_id is not None:
-                func_kwargs['user_id'] = user_id
-            
-            # 디버깅 로그 추가
-            logger.info(f"작업 등록: func={func.__name__}, document_id={document_id}, kwargs={func_kwargs.keys()}")
-            
-            # 작업 등록 - args와 kwargs 모두 명시적으로 전달
+            # 작업 등록
             job = queue.enqueue(
                 func,
-                args=args,
-                kwargs=func_kwargs,  # db가 없는 업데이트된 kwargs 사용
+                *args,
+                **kwargs,
                 job_id=job_id,
                 timeout=job_timeout,
                 result_ttl=86400,  # 결과 24시간 유지
@@ -160,9 +227,93 @@ class TaskManager:
             logger.error(f"작업 등록 실패: {str(e)}")
             return job_id  # 실패해도 ID 반환 (클라이언트 처리 일관성)
     
+    def schedule_task(
+        self, 
+        func: Callable, 
+        scheduled_time: datetime,
+        *args, 
+        queue_name: str = "default", 
+        job_id: Optional[str] = None, 
+        job_timeout: int = 3600,
+        interval: Optional[int] = None,
+        repeat: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        작업 예약 (미래 실행 또는 반복 실행)
+        
+        Args:
+            func: 실행할 함수
+            scheduled_time: 예약 시간
+            args: 함수 인자
+            queue_name: 큐 이름
+            job_id: 작업 ID (None인 경우 자동 생성)
+            job_timeout: 작업 타임아웃 (초)
+            interval: 반복 간격 (초, None이면 일회성)
+            repeat: 반복 횟수 (None이면 무한 반복)
+            kwargs: 함수 키워드 인자
+            
+        Returns:
+            작업 ID
+        """
+        job_id = job_id or f"scheduled_{uuid.uuid4()}"
+        
+        try:
+            # Redis 연결이 없는 경우
+            if self.redis_conn is None or self.scheduler is None:
+                logger.warning(f"Redis 연결 없음: 예약 작업 {job_id}가 등록되었다고 가정")
+                return job_id
+                
+            # 메타데이터 설정
+            meta = {
+                "created_at": datetime.utcnow().isoformat(),
+                "scheduled_at": scheduled_time.isoformat(),
+                "status": "scheduled",
+                "interval": interval,
+                "repeat": repeat,
+                "current_repeat": 0
+            }
+            
+            # 큐 선택
+            queue = self.queues.get(queue_name, self.queues["default"])
+            
+            # 작업 예약
+            if interval is None:
+                # 일회성 예약
+                self.scheduler.enqueue_at(
+                    scheduled_time,
+                    func,
+                    *args,
+                    **kwargs,
+                    job_id=job_id,
+                    timeout=job_timeout,
+                    meta=meta
+                )
+                logger.info(f"일회성 작업 예약 성공: {job_id}, 시간: {scheduled_time}")
+            else:
+                # 반복 예약
+                self.scheduler.schedule(
+                    scheduled_time=scheduled_time,
+                    func=func,
+                    args=args,
+                    kwargs=kwargs,
+                    interval=interval,
+                    repeat=repeat,
+                    job_id=job_id,
+                    timeout=job_timeout,
+                    meta=meta
+                )
+                logger.info(f"반복 작업 예약 성공: {job_id}, 시간: {scheduled_time}, 간격: {interval}초")
+            
+            return job_id
+            
+        except Exception as e:
+            logger.error(f"작업 예약 실패: {str(e)}")
+            return job_id
+    
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """
-        작업 상태 조회
+        작업 상태 조회 - Redis가 없어도 기본 정보 제공
         
         Args:
             job_id: 작업 ID
@@ -174,11 +325,39 @@ class TaskManager:
             # Redis 연결이 없는 경우 (개발/테스트 환경)
             if self.redis_conn is None:
                 logger.warning(f"Redis 연결 없음: 작업 {job_id}의 상태 조회 불가")
-                return {
+                
+                # 기본 상태 반환
+                basic_status = {
                     "status": "unknown",
                     "progress": 0,
                     "message": "Redis 연결 없음 (개발 모드)"
                 }
+                
+                # 데이터베이스에서 작업 정보 조회 시도
+                try:
+                    from sqlalchemy.orm import Session
+                    from app.db.session import SessionLocal
+                    from app.models.task import Task
+                    
+                    db = SessionLocal()
+                    try:
+                        task = db.query(Task).filter(Task.job_id == job_id).first()
+                        if task:
+                            return {
+                                "status": task.status,
+                                "progress": task.progress,
+                                "result": task.result,
+                                "error": task.error,
+                                "created_at": task.created_at.isoformat() if task.created_at else None,
+                                "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+                                "message": "DB에서 조회한 작업 상태 (Redis 없음)"
+                            }
+                    finally:
+                        db.close()
+                except Exception as db_e:
+                    logger.error(f"DB에서 작업 조회 실패: {str(db_e)}")
+                
+                return basic_status
             
             # 모든 큐에서 작업 찾기
             job = None
@@ -197,51 +376,15 @@ class TaskManager:
             if not job:
                 return {"status": "not_found"}
                 
-            # 메타데이터 안전하게 추출
-            meta = {}
-            try:
-                if hasattr(job, 'meta') and job.meta:
-                    for key, value in job.meta.items():
-                        # 문자열로 안전하게 변환
-                        if isinstance(value, (str, int, float, bool, type(None))):
-                            meta[key] = value
-                        else:
-                            # 복잡한 객체는 문자열로 변환
-                            try:
-                                meta[key] = str(value)
-                            except:
-                                meta[key] = "복잡한 객체 (표시 불가)"
-            except Exception as e:
-                logger.error(f"메타데이터 처리 오류: {str(e)}")
-                meta = {}
-            
-            # 결과 처리 (pickle 직렬화된 바이너리 데이터 처리)
-            result = None
-            if job.is_finished:
-                try:
-                    # job.result가 바이너리인 경우 pickle.loads로 디코딩 시도
-                    if isinstance(job.result, bytes):
-                        try:
-                            result = pickle.loads(job.result)
-                        except Exception as e:
-                            logger.warning(f"피클 디코딩 실패: {e}")
-                            result = "바이너리 데이터 (디코딩 실패)"
-                    else:
-                        result = job.result
-                except Exception as e:
-                    logger.error(f"결과 처리 중 오류: {str(e)}")
-                    result = f"결과 처리 오류: {str(e)}"
-            
-            # 결과 구성
             return {
                 "status": job.get_status(),
-                "progress": meta.get("progress", 0),
-                "result": result,
+                "progress": job.meta.get("progress", 0),
+                "result": job.result if job.is_finished else None,
                 "error": job.exc_info if job.is_failed else None,
-                "created_at": meta.get("created_at"),
+                "created_at": job.meta.get("created_at"),
                 "updated_at": datetime.utcnow().isoformat(),
-                "message": meta.get("message", "작업 진행 중"),
-                "scheduled_at": meta.get("scheduled_at")
+                "message": job.meta.get("message", "작업 진행 중"),
+                "scheduled_at": job.meta.get("scheduled_at")
             }
             
         except Exception as e:
@@ -277,9 +420,6 @@ class TaskManager:
                 return False
             
             # 메타데이터 업데이트
-            if not hasattr(job, 'meta'):
-                job.meta = {}
-                
             job.meta["progress"] = progress
             if message:
                 job.meta["message"] = message

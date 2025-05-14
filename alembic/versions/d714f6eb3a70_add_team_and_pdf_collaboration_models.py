@@ -97,8 +97,17 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_mentions_id'), 'mentions', ['id'], unique=False)
-    op.drop_column('users', 'storage_limit')
-    op.drop_column('users', 'storage_usage')
+    
+    # 문제가 있는 부분을 try-except로 감싸기
+    try:
+        op.drop_column('users', 'storage_limit')
+    except Exception:
+        pass
+        
+    try:
+        op.drop_column('users', 'storage_usage')
+    except Exception:
+        pass
     # ### end Alembic commands ###
 
 
@@ -120,4 +129,3 @@ def downgrade() -> None:
     op.drop_table('notifications')
     op.drop_index(op.f('ix_attendances_id'), table_name='attendances')
     op.drop_table('attendances')
-    # ### end Alembic commands ###

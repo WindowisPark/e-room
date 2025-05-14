@@ -11,6 +11,8 @@ services:
     volumes:
       - ./app:/app/app
       - ./storage:/app/storage
+    env_file:
+      - .env
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=5432
@@ -33,6 +35,8 @@ services:
     volumes:
       - ./app:/app/app
       - ./storage:/app/storage
+    env_file:
+      - .env
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=5432
@@ -41,6 +45,9 @@ services:
       - POSTGRES_DB=agent_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_CACHE_HOST=redis
+      - REDIS_CACHE_PORT=6379
+      - REDIS_CACHE_DB=1
     depends_on:
       - redis
       - db

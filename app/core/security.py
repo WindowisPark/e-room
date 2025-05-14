@@ -30,14 +30,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # 환경 변수에서 REDIS_HOST 가져오기 (Docker Compose에서 설정됨)
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 
-# Redis 연결 (예외 처리 추가)
-try:
-    redis_client = Redis(host=REDIS_HOST, port=6379, db=0)
-    redis_client.ping()  # 연결 확인
-    logger.info("✅ Redis 연결 성공")
-except Exception as e:
-    logger.error(f"⚠️ Redis 연결 실패: {str(e)}")
-    redis_client = None
 
 def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """

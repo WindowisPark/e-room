@@ -1,22 +1,29 @@
-# app/api/v1/endpoints/pdf_agent.py의 개선사항
+# app/api/v1/endpoints/pdf_agent.py
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Path, Body
+from app.models.task import Task
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 
 from app.api import deps
 from app.models.user import User
 from app.models.tag import PDFFile
-from app.services.pdf_agent.ai_agent import PDFAgent
-from app.services.pdf_agent.processor import PDFProcessor
 from app.services.pdf_agent.embedding_service import EmbeddingService
 from app.workers.task_manager import TaskManager
 from app.core.config import settings
 
+# 🔁 비동기 처리를 위한 워커 래퍼 함수들
+from app.workers.worker import (
+    wrapper_process_and_embed_document,
+    wrapper_summarize_document,
+    wrapper_generate_questions
+)
+
 router = APIRouter()
 task_manager = TaskManager()
 
-# 문서 처리 요청 엔드포인트
+# app/api/v1/endpoints/pdf_agent.py에서 문서 처리 요청 엔드포인트 수정
+
 @router.post("/{document_id}/process", response_model=Dict[str, Any])
 async def process_document(
     document_id: int = Path(..., title="PDF 문서 ID"),
@@ -46,16 +53,43 @@ async def process_document(
             if not has_access:
                 raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
         
-        # 작업 큐에 등록
+        # 중복 작업 확인
+        job_id = f"process_{document_id}_{current_user.id}"
+        existing_task = None
+        
+        try:
+            # 트랜잭션 롤백 필요 시 대비
+            existing_task = db.query(Task).filter(Task.job_id == job_id).first()
+        except:
+            db.rollback()
+            # 롤백 후 다시 시도
+            existing_task = db.query(Task).filter(Task.job_id == job_id).first()
+        
+        # 이미 존재하는 작업인 경우 처리
+        if existing_task:
+            # RQ에서 작업 상태 조회
+            job_status = task_manager.get_job_status(job_id)
+            status = job_status.get("status", "unknown")
+            
+            # 이미 처리 중 또는 대기 중인 작업
+            if status in ["queued", "started"]:
+                return {
+                    "success": True,
+                    "job_id": job_id,
+                    "document_id": document_id,
+                    "document_name": document.filename,
+                    "status": status,
+                    "message": f"문서 처리 작업이 이미 {status} 상태입니다. WebSocket을 통해 진행 상황을 확인할 수 있습니다."
+                }
+        
+        # 작업 큐에 등록 - db 세션은 큐로 전달하지 않음
         job_id = task_manager.enqueue_task(
-            PDFProcessor.process_and_embed_document,
-            db,
-            document_id,
+            wrapper_process_and_embed_document,
             queue_name="pdf",
             job_id=f"process_{document_id}_{current_user.id}",
-            job_timeout=1800,  # 30분 타임아웃
+            job_timeout=1800,
             user_id=current_user.id,
-            db=db,
+            db=db,  # 작업 기록에만 사용됨
             task_type="process_document",
             document_id=document_id
         )
@@ -72,9 +106,9 @@ async def process_document(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"문서 처리 작업 등록 중 오류 발생: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"문서 처리 작업 등록 중 오류 발생: {str(e)}")
 
-# 문서 질의응답 엔드포인트
 @router.post("/{document_id}/query", response_model=Dict[str, Any])
 async def query_document(
     document_id: int = Path(..., title="PDF 문서 ID"),
@@ -82,71 +116,43 @@ async def query_document(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """PDF 문서 기반 질의응답"""
-    try:
-        # 문서 접근 권한 확인
-        document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
-        if not document:
-            raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
-        
-        # 개인 문서이면서 소유자가 아닌 경우 접근 거부
-        if not document.team_id and document.owner_id != current_user.id:
+    document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    if not document.team_id and document.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    if document.team_id:
+        from app.services.team_service import check_team_permission
+        has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
+        if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-        
-        # 팀 문서인 경우 팀 멤버인지 확인
-        if document.team_id:
-            from app.services.team_service import check_team_permission
-            
-            has_access = await check_team_permission(
-                db=db,
-                team_id=document.team_id,
-                user_id=current_user.id
-            )
-            if not has_access:
-                raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-        
-        # 임베딩 서비스 초기화
-        embedding_service = EmbeddingService()
-        
-        # 유사한 청크 검색 (비동기)
-        similar_chunks = await embedding_service.search_similar_chunks_async(
-            db=db,
-            document_id=document_id,
-            query_text=query,
-            limit=5
-        )
-        
-        if not similar_chunks:
-            return {
-                "success": True,
-                "document_id": document_id,
-                "document_name": document.filename,
-                "query": query,
-                "answer": "이 질문에 대한 답변을 문서에서 찾을 수 없습니다.",
-                "contexts": []
-            }
-        
-        # 유사 청크들로 컨텍스트 구성
-        contexts = [chunk["text"] for chunk in similar_chunks]
-        
-        # AI 모델로 답변 생성
-        answer = await PDFAgent.generate_answer(query, contexts)
-        
+
+    embedding_service = EmbeddingService()
+    similar_chunks = await embedding_service.search_similar_chunks_async(db=db, document_id=document_id, query_text=query, limit=5)
+
+    if not similar_chunks:
         return {
             "success": True,
             "document_id": document_id,
             "document_name": document.filename,
             "query": query,
-            "answer": answer,
-            "contexts": similar_chunks
+            "answer": "이 질문에 대한 답변을 문서에서 찾을 수 없습니다.",
+            "contexts": []
         }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"질의응답 중 오류 발생: {str(e)}")
 
-# 문서 요약 요청 엔드포인트
+    contexts = [chunk["text"] for chunk in similar_chunks]
+    from app.services.pdf_agent.ai_agent import PDFAgent
+    answer = await PDFAgent.generate_answer(query, contexts)
+
+    return {
+        "success": True,
+        "document_id": document_id,
+        "document_name": document.filename,
+        "query": query,
+        "answer": answer,
+        "contexts": similar_chunks
+    }
+
 @router.post("/{document_id}/summarize", response_model=Dict[str, Any])
 async def summarize_document(
     document_id: int = Path(..., title="PDF 문서 ID"),
@@ -154,58 +160,79 @@ async def summarize_document(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """PDF 문서 요약 요청 (비동기 처리)"""
-    try:
-        # 문서 접근 권한 확인
-        document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
-        if not document:
-            raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
-        
-        # 개인 문서이면서 소유자가 아닌 경우 접근 거부
-        if not document.team_id and document.owner_id != current_user.id:
+    document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    if not document.team_id and document.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    if document.team_id:
+        from app.services.team_service import check_team_permission
+        has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
+        if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-        
-        # 팀 문서인 경우 팀 멤버인지 확인
-        if document.team_id:
-            from app.services.team_service import check_team_permission
-            
-            has_access = await check_team_permission(
-                db=db,
-                team_id=document.team_id,
-                user_id=current_user.id
-            )
-            if not has_access:
-                raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-        
-        # 작업 큐에 등록
-        job_id = task_manager.enqueue_task(
-            PDFAgent.summarize,
-            db,
-            document_id,
-            level,
-            queue_name="ai",
-            job_id=f"summarize_{document_id}_{current_user.id}",
-            job_timeout=1800,  # 30분 타임아웃
-            user_id=current_user.id,
-            db=db,
-            task_type="summarize",
-            document_id=document_id
-        )
-        
-        return {
-            "success": True,
-            "job_id": job_id,
-            "document_id": document_id,
-            "document_name": document.filename,
-            "level": level,
-            "status": "pending",
-            "message": "요약 작업이 시작되었습니다. WebSocket을 통해 진행 상황을 확인할 수 있습니다."
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"요약 작업 등록 중 오류 발생: {str(e)}")
+
+    job_id = task_manager.enqueue_task(
+        wrapper_summarize_document,
+        document_id,
+        level,
+        queue_name="ai",
+        job_id=f"summarize_{document_id}_{current_user.id}",
+        job_timeout=1800,
+        user_id=current_user.id,
+        task_type="summarize",
+        document_id=document_id
+    )
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "document_id": document_id,
+        "document_name": document.filename,
+        "level": level,
+        "status": "pending",
+        "message": "요약 작업이 시작되었습니다. WebSocket을 통해 진행 상황을 확인할 수 있습니다."
+    }
+
+@router.post("/{document_id}/questions", response_model=Dict[str, Any])
+async def generate_questions(
+    document_id: int = Path(..., title="PDF 문서 ID"),
+    count: int = Query(5, description="생성할 문제 수", ge=1, le=20),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    if not document.team_id and document.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    if document.team_id:
+        from app.services.team_service import check_team_permission
+        has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
+        if not has_access:
+            raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+
+    job_id = task_manager.enqueue_task(
+        wrapper_generate_questions,
+        document_id,
+        count,
+        queue_name="ai",
+        job_id=f"questions_{document_id}_{current_user.id}",
+        job_timeout=1800,
+        user_id=current_user.id,
+        task_type="generate_questions",
+        document_id=document_id
+    )
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "document_id": document_id,
+        "document_name": document.filename,
+        "count": count,
+        "status": "pending",
+        "message": "문제 생성 작업이 시작되었습니다. WebSocket을 통해 진행 상황을 확인할 수 있습니다."
+    }
+
 
 # 작업 상태 조회 엔드포인트
 @router.get("/tasks/{job_id}", response_model=Dict[str, Any])
@@ -312,10 +339,6 @@ async def list_user_tasks(
             skip=skip,
             limit=limit
         )
-
-        # status로 필터링 (서비스 레벨에서 처리)
-        if status:
-            tasks = [task for task in tasks if task.status == status]
         
         # 작업 상세 정보 추가
         result = []
@@ -339,51 +362,3 @@ async def list_user_tasks(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"작업 목록 조회 중 오류 발생: {str(e)}")
-    
-
-@router.get("/get-id-by-path", response_model=Dict[str, Any])
-async def get_document_id_by_path(
-    file_path: str = Query(..., description="PDF 파일 경로"),
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
-):
-    """파일 경로로 문서 ID 조회"""
-    try:
-        from app.models.tag import PDFFile
-        import os
-        
-        # 전체 경로로 찾기
-        pdf_file = db.query(PDFFile).filter(PDFFile.file_path == file_path).first()
-        
-        if pdf_file:
-            return {
-                "success": True,
-                "document_id": pdf_file.id,
-                "file_path": pdf_file.file_path,
-                "file_name": pdf_file.filename
-            }
-        
-        # 파일명만으로 찾기
-        file_name = os.path.basename(file_path)
-        pdf_file = db.query(PDFFile).filter(PDFFile.filename == file_name).first()
-        
-        if pdf_file:
-            return {
-                "success": True,
-                "document_id": pdf_file.id,
-                "file_path": pdf_file.file_path,
-                "file_name": pdf_file.filename
-            }
-        
-        return {
-            "success": False,
-            "message": "파일을 찾을 수 없습니다",
-            "file_path": file_path
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "file_path": file_path
-        }

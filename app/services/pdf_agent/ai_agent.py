@@ -1,4 +1,4 @@
-# app/services/pdf_agent/ai_agent.py
+# app/services/pdf_agent/ai_agent.py (update)
 
 from typing import Dict, List, Any, Optional
 import logging
@@ -64,7 +64,7 @@ class PDFAgent:
             response = await client.chat.completions.create(
                 model=settings.AI_MODEL_NAME,
                 messages=[
-                    {"role": "system", "content": "당신은 문서 기반 질의응답을 제공하는 AI 어시스턴트입니다. 주어진 문서 내용만을 기반으로 정확하고 관련성 높은 답변을 제공하세요."},
+                    {"role": "system", "content": "당신은 문서 기반 질의응답을 제공하는 AI 어시스턴트입니다. 주어진 문서 내용만을 기반으로 정확하고 관련성 높은 답변을 제공하세요."}, 
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,

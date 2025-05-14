@@ -17,7 +17,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.models.tag import PDFFile
 from app.services.file_service import FileStorageManager
-
+from app.crud.crud_tag import get_pdf_by_id
 from app.services.pdf_agent.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
@@ -594,59 +594,35 @@ class PDFProcessor:
         # 적절한 문장 끝을 찾지 못한 경우
         return text[-min_overlap:]
     
-    # PDFProcessor 클래스에 추가할 메서드
     @staticmethod
     async def process_and_embed_document(db: Session, document_id: int) -> Dict[str, Any]:
         """
-        문서 처리 및 임베딩 생성을 위한 원스톱 메서드
-
-        Args:
-            db: 데이터베이스 세션
-            document_id: 처리할 PDF 문서 ID
-
-        Returns:
-            처리 결과 정보
+        PDF 문서 전체 처리: 파싱 → 청크 생성 → 임베딩 저장
         """
-        try:
-            # PDF 파일 조회
-            pdf_file = db.query(PDFFile).filter(PDFFile.id == document_id).first()
-            if not pdf_file:
-                return {"success": False, "error": "문서를 찾을 수 없습니다"}
+        db_pdf = get_pdf_by_id(db, document_id)
+        if not db_pdf:
+            raise ValueError(f"❌ Document with ID {document_id} not found")
 
-            # 1. 문서 파싱
-            parse_result = await PDFProcessor.parse_document(pdf_file)
-            if not parse_result.get("success"):
-                return parse_result
+        # 1. 문서 파싱
+        parsed = await PDFProcessor.parse_document(db_pdf)
+        if not parsed.get("success"):
+            raise ValueError(f"❌ Parsing failed: {parsed.get('error')}")
 
-            # 2. 문서 청킹
-            text = parse_result.get("text", "")
-            structure = parse_result.get("structure", None)
-            chunks = await PDFProcessor.chunk_document(text, structure)
+        # 2. 청크 생성
+        chunks = await PDFProcessor.chunk_document(
+            text=parsed["text"],
+            structure=parsed.get("structure"),
+            chunk_size=settings.PDF_CHUNK_SIZE,
+            overlap=settings.PDF_CHUNK_OVERLAP
+        )
 
-            if not chunks:
-                return {"success": False, "error": "문서에서 청크를 생성할 수 없습니다"}
+        # 3. 임베딩 생성
+        embedded = await PDFProcessor.create_embeddings(db, chunks, document_id)
 
-            # 3. 임베딩 서비스 초기화
-            embedding_service = EmbeddingService()
-
-            # 4. 모든 청크에 대해 임베딩 생성 및 저장
-            success_count, failure_count = await embedding_service.store_chunk_embeddings_batch(
-                db=db,
-                document_id=document_id,
-                chunks=chunks
-            )
-
-            # 5. 결과 반환
-            return {
-                "success": True,
-                "document_id": document_id,
-                "filename": pdf_file.filename,
-                "total_chunks": len(chunks),
-                "embedded_chunks": success_count,
-                "failed_chunks": failure_count,
-                "processed_at": datetime.utcnow().isoformat()
-            }
-
-        except Exception as e:
-            logger.error(f"문서 처리 및 임베딩 실패: {str(e)}", exc_info=True)
-            return {"success": False, "error": f"문서 처리 및 임베딩 중 오류 발생: {str(e)}"}
+        return {
+            "document_id": document_id,
+            "chunk_count": len(embedded),
+            "parsed": True,
+            "embedded": True,
+            "success": True
+        }

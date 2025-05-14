@@ -41,8 +41,8 @@ try:
     redis_client.ping()
     logger.info("✅ Redis 연결 성공")
 except RedisError as e:
-    logger.error(f"⚠️ Redis 연결 실패: {str(e)}")
-    redis_client = None
+    logger.critical(f"❌ Redis 연결 실패 - 애플리케이션을 종료합니다: {str(e)}")
+    raise
 
 # ------------------------------------------------------
 # 출석 체크 관련 함수
@@ -164,7 +164,7 @@ def get_redis_client() -> aioredis.Redis:
     WebSocket 연결 관리에 사용됨
     """
     return aioredis.Redis(
-        host="localhost", #TODO: 하드코딩한 것 바꿔야됨!!!
+        host=REDIS_HOST,  # "localhost" 대신 환경 변수 사용
         port=REDIS_PORT,
         db=REDIS_DB,
         decode_responses=True  # 응답을 자동으로 디코딩

@@ -1,12 +1,10 @@
 # app/workers/task_manager.py
-
 import uuid
 import json
-import pickle
 import logging
 from typing import Dict, Any, Optional, Callable, List, Union
 from datetime import datetime, timedelta
-from redis import Redis
+import redis
 import rq
 from rq.job import Job, JobStatus
 from rq.exceptions import NoSuchJobError
@@ -16,7 +14,6 @@ from app.core.config import settings
 from app.crud.crud_task import create_task_record, update_task_status
 
 logger = logging.getLogger(__name__)
-
 
 class TaskManager:
     """
@@ -34,38 +31,57 @@ class TaskManager:
         return cls._instance
     
     def _initialize(self):
+        """Redis 연결 및 큐 초기화"""
         try:
-            self.redis_conn = Redis.from_url(settings.REDIS_URL)
-            self.redis_conn.ping()
-            logger.info(f"TaskManager Redis 연결 성공: {settings.REDIS_URL}")
-
+            # settings에서 Redis URL 직접 사용
+            redis_url = settings.REDIS_URL
+            logger.info(f"Redis URL: {redis_url} (from settings)")
+            
+            # Redis 연결 설정
+            self.redis_conn = redis.Redis.from_url(
+                redis_url, 
+                decode_responses=True,  # True로 설정하되 바이너리 처리 로직 추가
+                socket_connect_timeout=5,
+                socket_timeout=5
+            )
+            self.redis_conn.ping()  # 연결 확인
+            logger.info("TaskManager Redis 연결 성공")
+            
+            # 작업 큐 정의
             self.queues = {
                 "pdf": rq.Queue("pdf_tasks", connection=self.redis_conn),
                 "ai": rq.Queue("ai_tasks", connection=self.redis_conn),
                 "default": rq.Queue("default", connection=self.redis_conn)
             }
-
+            
+            # 스케줄러 초기화
             self.scheduler = Scheduler(connection=self.redis_conn)
+            
             logger.info("TaskManager 초기화 완료")
-        except Exception as e:
-            logger.error(f"Redis 연결 실패: {e}")
+        except redis.RedisError as e:
+            logger.error(f"Redis 연결 실패: {str(e)}")
+            # 오류 발생 시 더미 구현으로 대체 (개발용)
             self.redis_conn = None
-            self.queues = {"pdf": DummyQueue(), "ai": DummyQueue(), "default": DummyQueue()}
+            self.queues = {
+                "pdf": DummyQueue(),
+                "ai": DummyQueue(),
+                "default": DummyQueue()
+            }
             self.scheduler = DummyScheduler()
     
     def enqueue_task(
-            self, 
-            func: Callable, 
-            *args, 
-            queue_name: str = "default", 
-            job_id: Optional[str] = None, 
-            job_timeout: int = 3600,
-            user_id: Optional[int] = None,
-            db: Optional[Session] = None,  # 이 db는 작업 기록에만 사용되고 큐로 전달되지 않음
-            task_type: Optional[str] = None,
-            document_id: Optional[int] = None,
-            **kwargs
-        ) -> str:
+        self, 
+        func: Callable, 
+        *args, 
+        queue_name: str = "default", 
+        job_id: Optional[str] = None, 
+        job_timeout: int = 3600,
+        user_id: Optional[int] = None,
+        db: Optional[Session] = None,
+        task_type: Optional[str] = None,
+        document_id: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         작업 큐에 태스크 등록
         
@@ -76,9 +92,9 @@ class TaskManager:
             job_id: 작업 ID (None인 경우 자동 생성)
             job_timeout: 작업 타임아웃 (초)
             user_id: 작업 소유자 ID (선택)
-            db: DB 세션 (선택 - 작업 기록용, 큐로 전달되지 않음)
+            db: DB 세션 (선택 - 작업 기록용)
             task_type: 작업 유형 (선택 - 작업 기록용)
-            document_id: 문서 ID (선택 - 작업 기록 및 작업 함수에 전달)
+            document_id: 문서 ID (선택 - 작업 기록용)
             kwargs: 함수 키워드 인자
             
         Returns:
@@ -118,24 +134,11 @@ class TaskManager:
             if document_id:
                 description += f" (문서 ID: {document_id})"
             
-            # 작업 함수에 전달할 인자들 구성
-            # 중요: Session은 pickle할 수 없으므로 db는 전달하지 않음
-            func_kwargs = kwargs.copy()  # 기존 kwargs 복사
-            
-            # document_id와 user_id는 전달 가능
-            if document_id is not None:
-                func_kwargs['document_id'] = document_id
-            if user_id is not None:
-                func_kwargs['user_id'] = user_id
-            
-            # 디버깅 로그 추가
-            logger.info(f"작업 등록: func={func.__name__}, document_id={document_id}, kwargs={func_kwargs.keys()}")
-            
-            # 작업 등록 - args와 kwargs 모두 명시적으로 전달
+            # 작업 등록
             job = queue.enqueue(
                 func,
-                args=args,
-                kwargs=func_kwargs,  # db가 없는 업데이트된 kwargs 사용
+                *args,
+                **kwargs,
                 job_id=job_id,
                 timeout=job_timeout,
                 result_ttl=86400,  # 결과 24시간 유지
@@ -215,28 +218,11 @@ class TaskManager:
                 logger.error(f"메타데이터 처리 오류: {str(e)}")
                 meta = {}
             
-            # 결과 처리 (pickle 직렬화된 바이너리 데이터 처리)
-            result = None
-            if job.is_finished:
-                try:
-                    # job.result가 바이너리인 경우 pickle.loads로 디코딩 시도
-                    if isinstance(job.result, bytes):
-                        try:
-                            result = pickle.loads(job.result)
-                        except Exception as e:
-                            logger.warning(f"피클 디코딩 실패: {e}")
-                            result = "바이너리 데이터 (디코딩 실패)"
-                    else:
-                        result = job.result
-                except Exception as e:
-                    logger.error(f"결과 처리 중 오류: {str(e)}")
-                    result = f"결과 처리 오류: {str(e)}"
-            
             # 결과 구성
             return {
                 "status": job.get_status(),
                 "progress": meta.get("progress", 0),
-                "result": result,
+                "result": job.result if job.is_finished else None,
                 "error": job.exc_info if job.is_failed else None,
                 "created_at": meta.get("created_at"),
                 "updated_at": datetime.utcnow().isoformat(),

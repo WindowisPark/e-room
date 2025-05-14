@@ -1,3 +1,5 @@
+# app/api/v1/websocket/task_status.py
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 import asyncio
 import json
@@ -127,54 +129,3 @@ async def task_status_websocket(websocket: WebSocket, job_id: str):
     finally:
         # 연결 해제
         await TaskStatusNotifier.disconnect(job_id, connection_id)
-
-
-@router.websocket("/tasks-realtime")
-async def task_status_realtime(websocket: WebSocket):
-    """작업 상태 실시간 알림 WebSocket 엔드포인트"""
-    # 사용자 인증
-    user = await get_current_user_ws(websocket)
-    if not user:
-        await websocket.close(code=1008, reason="인증 실패")
-        return
-    
-    await websocket.accept()
-    
-    # DB 세션
-    db = next(deps.get_db())
-    
-    try:
-        while True:
-            # DB에서 사용자 작업 목록 조회
-            user_tasks = get_tasks_by_user(db, user.id, limit=20)
-            
-            # 작업 상태 전송
-            await websocket.send_json({
-                "type": "tasks_update",
-                "tasks": [
-                    {
-                        "id": task.id,
-                        "job_id": task.job_id,
-                        "task_type": task.task_type,
-                        "document_id": task.document_id,
-                        "document_name": task.document.filename if task.document else None,
-                        "status": task.status,
-                        "progress": task.progress,
-                        "created_at": task.created_at.isoformat() if task.created_at else None,
-                        "updated_at": task.updated_at.isoformat() if task.updated_at else None
-                    }
-                    for task in user_tasks
-                ],
-                "count": len(user_tasks)
-            })
-            
-            # 5초 대기 후 다음 업데이트
-            await asyncio.sleep(5)
-            
-    except WebSocketDisconnect:
-        logger.info(f"실시간 작업 알림 WebSocket 연결 종료: 사용자 {user.id}")
-    except Exception as e:
-        logger.error(f"실시간 작업 알림 WebSocket 오류: {str(e)}")
-    finally:
-        # 세션 닫기
-        db.close()
