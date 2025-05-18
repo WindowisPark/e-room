@@ -1,6 +1,6 @@
 # app/api/v1/endpoints/user.py
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
@@ -73,7 +73,13 @@ async def get_user_details(
         }
     
     # 가입 후 경과 일수 계산
-    days_since_signup = (datetime.utcnow() - current_user.created_at).days
+    days_since_signup = (datetime.now(timezone.utc) - current_user.created_at).days
+
+    # ✅ 가입 정보 추가
+    signup_info = {
+        "signup_date": current_user.created_at,
+        "days_since_signup": days_since_signup
+    }
     
     return {
         "user": {
@@ -84,10 +90,13 @@ async def get_user_details(
             "is_active": current_user.is_active,
             "is_admin": current_user.is_admin,
             "created_at": current_user.created_at,
-            "days_since_signup": days_since_signup,  # 가입 후 경과 일수 추가
             "is_phone_verified": current_user.is_phone_verified,
             "is_email_verified": current_user.is_verified,
-            "oauth_provider": current_user.oauth_provider
+            "oauth_provider": current_user.oauth_provider,
+        },
+        "signup_info": {  # ✅ 여기로 분리
+            "signup_date": current_user.created_at,
+            "days_since_signup": (datetime.now(timezone.utc) - current_user.created_at).days
         },
         "subscription": subscription_info,
         "payment": payment_info,

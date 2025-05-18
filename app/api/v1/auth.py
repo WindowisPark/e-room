@@ -260,7 +260,7 @@ async def register_user(
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다")
 
-    existing_username = db.query(schemas.User).filter(schemas.User.username == user_in.username).first()
+    existing_username = db.query(User).filter(User.username == user_in.username).first()
     if existing_username:
         raise HTTPException(status_code=400, detail="이미 사용 중인 사용자명입니다")
 

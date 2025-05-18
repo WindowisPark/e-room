@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = Optional
+    email: Optional[EmailStr] = None 
     username: Optional[str] = None
     full_name: Optional[str] = None
     disabled: Optional[bool] = False
