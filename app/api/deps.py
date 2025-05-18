@@ -83,3 +83,14 @@ def get_admin_user(
             detail="관리자 권한이 필요합니다."
         )
     return current_user
+
+def get_storage_manager():
+    """
+    환경 설정에 따라 S3 또는 로컬 스토리지 관리자 반환
+    """
+    if settings.S3_ENABLED:
+        from app.services.s3_file_service import S3StorageManager
+        return S3StorageManager()
+    else:
+        from app.services.file_service import FileStorageManager
+        return FileStorageManager()

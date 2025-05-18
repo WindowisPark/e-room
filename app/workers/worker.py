@@ -108,12 +108,13 @@ class CustomJob(Job):
 # PDF 문서 작업 처리 함수
 import asyncio
 
-def wrapper_process_and_embed_document(document_id=None, **kwargs):
+def wrapper_process_and_embed_document(document_id=None, user_id=None, **kwargs):
     """
     PDF 문서 처리 및 임베딩 생성 작업 래퍼 함수
     
     Args:
         document_id: 문서 ID (필수)
+        user_id: 사용자 ID (필수)
         kwargs: 추가 인자들
     """
     from sqlalchemy.orm import Session
@@ -124,30 +125,35 @@ def wrapper_process_and_embed_document(document_id=None, **kwargs):
     db = SessionLocal()
     
     try:
-        logger.info(f"Processing document ID: {document_id}, kwargs={kwargs}")
+        logger.info(f"Processing document ID: {document_id}, user_id: {user_id}, kwargs={kwargs}")
         
         # 모델 초기화 명시적 임포트
         import app.models.user
         import app.models.tag
         import app.models.task
         import app.models.team
-        import app.models.attendance
-        import app.models.notification
-        import app.models.payment
-        import app.models.question
         
         # document_id 체크
         if document_id is None:
             return {"success": False, "error": "문서 ID가 제공되지 않았습니다"}
+            
+        # user_id 체크
+        if user_id is None:
+            return {"success": False, "error": "사용자 ID가 제공되지 않았습니다"}
         
         # 정수 변환 시도
         try:
             document_id = int(document_id)
+            user_id = int(user_id)
         except (TypeError, ValueError):
-            return {"success": False, "error": f"유효하지 않은 문서 ID: {document_id}"}
+            return {"success": False, "error": f"유효하지 않은 문서 ID 또는 사용자 ID: {document_id}, {user_id}"}
         
-        # 문서 처리 실행
-        result = asyncio.run(PDFProcessor.process_and_embed_document(db=db, document_id=document_id))
+        # 문서 처리 실행 (사용자 ID 전달)
+        result = asyncio.run(PDFProcessor.process_and_embed_document(
+            db=db, 
+            document_id=document_id,
+            user_id=user_id
+        ))
         return result
     except Exception as e:
         logger.error(f"PDF 문서 처리 실패: {str(e)}")

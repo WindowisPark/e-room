@@ -88,7 +88,7 @@ async def process_document(
             queue_name="pdf",
             job_id=f"process_{document_id}_{current_user.id}",
             job_timeout=1800,
-            user_id=current_user.id,
+            user_id=current_user.id,  # 사용자 ID 전달
             db=db,  # 작업 기록에만 사용됨
             task_type="process_document",
             document_id=document_id
@@ -127,8 +127,14 @@ async def query_document(
         if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
 
-    embedding_service = EmbeddingService()
-    similar_chunks = await embedding_service.search_similar_chunks_async(db=db, document_id=document_id, query_text=query, limit=5)
+    # 사용자 ID 전달하도록 수정
+    similar_chunks = await PDFAgent.search_similar_chunks(
+        db=db, 
+        user_id=current_user.id,
+        document_id=document_id, 
+        query_text=query, 
+        limit=5
+    )
 
     if not similar_chunks:
         return {
@@ -141,7 +147,6 @@ async def query_document(
         }
 
     contexts = [chunk["text"] for chunk in similar_chunks]
-    from app.services.pdf_agent.ai_agent import PDFAgent
     answer = await PDFAgent.generate_answer(query, contexts)
 
     return {

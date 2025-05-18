@@ -28,7 +28,7 @@ async def upload_pdf(
     user_id: int,
     folder_name: str = Path(..., min_length=1),
     files: List[UploadFile] = File(...),
-    storage: FileStorageManager = Depends(get_storage_manager),
+    storage = Depends(deps.get_storage_manager),  # 변경된 의존성
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -36,6 +36,7 @@ async def upload_pdf(
         if current_user.id != user_id and not current_user.is_admin:
             raise HTTPException(status_code=403, detail="다른 사용자의 폴더에 파일을 업로드할 수 없습니다.")
 
+        # 스토리지 매니저 사용 (S3 또는 로컬)
         results = await storage.save_multiple_pdfs(user_id, folder_name, files)
 
         if len(results["success"]) == 0:

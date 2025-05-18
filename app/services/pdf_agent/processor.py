@@ -595,10 +595,12 @@ class PDFProcessor:
         return text[-min_overlap:]
     
     @staticmethod
-    async def process_and_embed_document(db: Session, document_id: int) -> Dict[str, Any]:
+    async def process_and_embed_document(db: Session, document_id: int, user_id: int) -> Dict[str, Any]:
         """
-        PDF 문서 전체 처리: 파싱 → 청크 생성 → 임베딩 저장
+        PDF 문서 전체 처리: 파싱 → 청크 생성 → ChromaDB에 임베딩 저장
         """
+        from app.services.pdf_agent.chromadb_service import ChromaDBService
+        
         db_pdf = get_pdf_by_id(db, document_id)
         if not db_pdf:
             raise ValueError(f"❌ Document with ID {document_id} not found")
@@ -616,13 +618,18 @@ class PDFProcessor:
             overlap=settings.PDF_CHUNK_OVERLAP
         )
 
-        # 3. 임베딩 생성
-        embedded = await PDFProcessor.create_embeddings(db, chunks, document_id)
+        # 3. ChromaDB에 저장
+        chromadb_service = ChromaDBService()
+        success = chromadb_service.add_document_chunks(
+            user_id=user_id,
+            document_id=document_id,
+            chunks=chunks
+        )
 
         return {
             "document_id": document_id,
-            "chunk_count": len(embedded),
+            "chunk_count": len(chunks),
             "parsed": True,
-            "embedded": True,
-            "success": True
+            "embedded": success,
+            "success": success
         }

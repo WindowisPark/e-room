@@ -200,3 +200,22 @@ class PDFAgent:
         except Exception as e:
             logger.error(f"문서 처리 및 임베딩 실패: {str(e)}", exc_info=True)
             return {"success": False, "error": f"문서 처리 및 임베딩 중 오류 발생: {str(e)}"}
+        
+    @staticmethod
+    async def search_similar_chunks(
+        db: Session, 
+        user_id: int,
+        document_id: int, 
+        query_text: str, 
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """쿼리와 유사한 청크 검색 - ChromaDB 사용"""
+        from app.services.pdf_agent.chromadb_service import ChromaDBService
+        
+        chromadb_service = ChromaDBService()
+        return chromadb_service.search_similar_chunks(
+            user_id=user_id,
+            document_id=document_id,
+            query_text=query_text,
+            limit=limit
+        )

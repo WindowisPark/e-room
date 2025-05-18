@@ -1,6 +1,6 @@
 # ai-agent/app/schemas/user.py
 
-from typing import Optional
+from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
@@ -64,6 +64,23 @@ class UserResponse(BaseModel):
     is_verified: bool
     is_admin: bool  # 이미 User 모델에 @property로 정의되어 있음
 
+    class Config:
+        from_attributes = True
+
+# app/schemas/user.py 스키마 업데이트
+class UserDetailResponse(BaseModel):
+    """사용자 상세 정보 응답 모델"""
+    user: Dict[str, Any]
+    signup_info: Dict[str, Any]  # 가입 정보 추가
+    subscription: Dict[str, Any]
+    payment: Optional[Dict[str, Any]] = None
+    storage: Dict[str, Any]
+    teams: List[Dict[str, Any]]
+    gamification: Dict[str, Any]
+    activity: Dict[str, Any]
+    notifications: Dict[str, Any]
+    recent_badges: List[Dict[str, Any]]
+    
     class Config:
         from_attributes = True
 
