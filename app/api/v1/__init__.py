@@ -17,6 +17,8 @@ from app.api.v1.endpoints import gamification
 from app.api.v1.endpoints import badges
 from app.api.v1.endpoints import pdf_agent  # 추가
 from app.api.v1.endpoints import user  # 새로 추가한 user 엔드포인트 임포트
+# ✅ 로컬 인증 모듈 추가
+from app.api.v1.endpoints import local_auth  # 자체 회원가입/로그인
 
 api_router = APIRouter()
 
@@ -28,6 +30,13 @@ api_router.include_router(
     user.router,
     prefix="/users",
     tags=["사용자 정보"]
+)
+
+# ✅ 자체 로그인/회원가입 라우터 추가
+api_router.include_router(
+    local_auth.router,
+    prefix="/auth/local",
+    tags=["로컬 인증"]
 )
 
 # 전화번호 인증 라우터

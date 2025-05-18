@@ -19,3 +19,6 @@ from .notification import NotificationCreate, NotificationResponse
 
 # 질문 스키마 추가
 from .question import Question, QuestionCreate, QuestionBase
+
+# ✅ 로컬 인증 스키마 추가
+from .local_auth import LocalUserCreate, LocalUserLogin, Token, RegisterResponse
