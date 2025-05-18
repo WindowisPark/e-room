@@ -44,13 +44,6 @@ app.include_router(
     tags=["Authentication"]
 )
 
-# ✅ 로컬 인증 라우터 추가
-app.include_router(
-    local_auth_router,
-    prefix=f"{settings.API_V1_STR}/auth",
-    tags=["Local Authentication"]
-)
-
 # PDF 관리 API 추가
 app.include_router(
     pdf_router,
