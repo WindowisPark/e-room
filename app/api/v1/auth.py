@@ -17,8 +17,8 @@ from app.models.user import User
 from app.core.redis_helper import redis_client
 import urllib.parse
 
-# 로컬 인증 라우터를 직접 import하지 않고, 별도 등록 방식 사용
-# from app.api.v1.endpoints import local_auth
+from app.schemas.local_auth import LocalUserCreate, RegisterResponse
+from app.schemas.local_auth import LocalUserLogin, Token  # 추가
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -249,3 +249,87 @@ async def logout(current_user: schemas.User = Depends(deps.get_current_user)):
 
     logger.info(f"🚪 로그아웃 - User ID: {current_user.id}")
     return {"msg": "성공적으로 로그아웃되었습니다"}
+
+@router.post("/register", response_model=RegisterResponse)
+async def register_user(
+    user_in: LocalUserCreate,
+    db: Session = Depends(deps.get_db)
+):
+    existing_user = crud.user.get_by_email(db, email=user_in.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다")
+
+    existing_username = db.query(schemas.User).filter(schemas.User.username == user_in.username).first()
+    if existing_username:
+        raise HTTPException(status_code=400, detail="이미 사용 중인 사용자명입니다")
+
+    user_schema = schemas.UserCreate(
+        email=user_in.email,
+        username=user_in.username,
+        password=user_in.password,
+        full_name=user_in.full_name
+    )
+    user = crud.user.create(db, obj_in=user_schema)
+
+    if user_in.phone_number:
+        crud.user.update(db, db_obj=user, obj_in={"phone_number": user_in.phone_number})
+
+    try:
+        create_user_folders(user.id)
+    except Exception as e:
+        logger.warning(f"기본 폴더 생성 실패: {str(e)}")
+
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "message": "회원가입이 완료되었습니다"
+    }
+
+@router.post("/login", response_model=Token)
+async def login_user(
+    login_data: LocalUserLogin,
+    db: Session = Depends(deps.get_db)
+):
+    user = crud.user.authenticate(
+        db, email=login_data.email, password=login_data.password
+    )
+    if not user or not crud.user.is_active(user):
+        raise HTTPException(status_code=401, detail="인증 실패")
+
+    access_token = security.create_access_token(user.id, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(user.id, expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
+    security.store_refresh_token(user.id, refresh_token, int(timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS).total_seconds()))
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_admin": user.is_admin
+    }
+
+@router.post("/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(deps.get_db)
+):
+    user = crud.user.authenticate(db, email=form_data.username, password=form_data.password)
+    if not user or not crud.user.is_active(user):
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
+
+    access_token = security.create_access_token(user.id, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(user.id, expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
+    security.store_refresh_token(user.id, refresh_token, int(timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS).total_seconds()))
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_admin": user.is_admin
+    }

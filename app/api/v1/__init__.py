@@ -1,14 +1,15 @@
-# ✅ app/api/v1/__init__.py
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import local_auth
 from app.api.v1 import auth
-from app.api.v1.endpoints import attendance, notifications, payments, question, tags, teams
-from app.api.v1.endpoints import phone_verification, team_pdf, team_activity, gamification, badges, pdf_agent, user
+from app.api.v1.endpoints import (
+    attendance, notifications, payments, question, tags, teams,
+    phone_verification, team_pdf, team_activity, gamification, badges,
+    pdf_agent, user
+)
 
 api_router = APIRouter()
 
-api_router.include_router(local_auth.router, prefix="/auth/local", tags=["로컬 인증"])
+# 로컬 및 소셜 인증 포함한 auth 하나로 통합
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 api_router.include_router(user.router, prefix="/users", tags=["사용자 정보"])
 api_router.include_router(phone_verification.router, prefix="/phone-verification", tags=["전화번호 인증"])

@@ -64,9 +64,9 @@ def custom_openapi():
     }
 
     auth_exceptions = [
-        f"{settings.API_V1_STR}/auth/local/register",
-        f"{settings.API_V1_STR}/auth/local/login",
-        f"{settings.API_V1_STR}/auth/local/token",
+        f"{settings.API_V1_STR}/auth/register",
+        f"{settings.API_V1_STR}/auth/login",
+        f"{settings.API_V1_STR}/auth/token",
         f"{settings.API_V1_STR}/auth/kakao/authorize",
         f"{settings.API_V1_STR}/auth/kakao/callback",
         f"{settings.API_V1_STR}/auth/refresh-token",
