@@ -34,13 +34,6 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# API 라우터 포함
-app.include_router(
-    auth.router,
-    prefix=f"{settings.API_V1_STR}/auth",
-    tags=["Authentication"]
-)
-
 # PDF 관리 API 추가
 app.include_router(
     pdf_router,
