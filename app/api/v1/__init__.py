@@ -25,18 +25,18 @@ api_router = APIRouter()
 # 인증 관련 라우터
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 
+# 로컬 인증 라우터 명시적 등록
+api_router.include_router(
+    local_auth.router,
+    prefix="/auth/local",
+    tags=["로컬 인증"]
+)
+
 # 사용자 관련 라우터 등록
 api_router.include_router(
     user.router,
     prefix="/users",
     tags=["사용자 정보"]
-)
-
-# ✅ 자체 로그인/회원가입 라우터 추가
-api_router.include_router(
-    local_auth.router,
-    prefix="/auth/local",
-    tags=["로컬 인증"]
 )
 
 # 전화번호 인증 라우터

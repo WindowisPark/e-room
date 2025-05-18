@@ -94,9 +94,26 @@ def custom_openapi():
             "bearerFormat": "JWT"
         }
     }
-    for path in openapi_schema["paths"].values():
-        for operation in path.values():
-            operation["security"] = [{"BearerAuth": []}]
+    
+    # 인증 예외 경로 목록
+    auth_exceptions = [
+        f"{settings.API_V1_STR}/auth/local/register",
+        f"{settings.API_V1_STR}/auth/local/login",
+        f"{settings.API_V1_STR}/auth/local/token",
+        # 기타 인증 필요 없는 경로...
+    ]
+    
+    # 경로별 보안 설정
+    for path, path_item in openapi_schema["paths"].items():
+        # 인증 예외 경로인지 확인
+        is_auth_exception = any(path.startswith(exc) for exc in auth_exceptions)
+        
+        # 경로의 각 작업(GET, POST 등)에 보안 설정 적용
+        for operation in path_item.values():
+            # 인증 예외 경로가 아닌 경우에만 보안 요구사항 적용
+            if not is_auth_exception:
+                operation["security"] = [{"BearerAuth": []}]
+    
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

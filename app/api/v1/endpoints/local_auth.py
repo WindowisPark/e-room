@@ -17,7 +17,7 @@ from app.schemas.local_auth import LocalUserCreate, LocalUserLogin, Token, Regis
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["로컬 인증"])
 
 @router.post("/register", response_model=RegisterResponse)
 async def register_user(
