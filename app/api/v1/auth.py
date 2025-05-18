@@ -16,11 +16,18 @@ from app.models.user import User
 from app.core.redis_helper import redis_client
 import urllib.parse
 
+from app.api.v1.endpoints import local_auth
+
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 반드시 이 위치에 선언
+@router.on_event("startup")
+async def ensure_local_auth_attached():
+    router.include_router(local_auth.router, prefix="/local", tags=["로컬 인증"])
 
 def create_user_folders(user_id: int):
     """

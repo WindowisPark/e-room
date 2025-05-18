@@ -25,7 +25,6 @@ api_router = APIRouter()
 
 # 인증 관련 라우터
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
-api_router.include_router(local_auth.router, prefix="/auth/local", tags=["로컬 인증"])
 
 # 사용자 관련 라우터 등록
 api_router.include_router(
