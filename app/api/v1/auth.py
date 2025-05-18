@@ -1,4 +1,4 @@
-# app/api/v1/auth.py
+# app/api/v1/auth.py 수정 버전
 
 from datetime import timedelta
 from typing import Any
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import httpx
 import os
 import logging
+import json  # JSON 모듈 추가 (누락됨)
 
 from app import crud, schemas
 from app.api import deps
@@ -16,18 +17,18 @@ from app.models.user import User
 from app.core.redis_helper import redis_client
 import urllib.parse
 
-from app.api.v1.endpoints import local_auth
-
+# 로컬 인증 라우터를 직접 import하지 않고, 별도 등록 방식 사용
+# from app.api.v1.endpoints import local_auth
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 반드시 이 위치에 선언
-@router.on_event("startup")
-async def ensure_local_auth_attached():
-    router.include_router(local_auth.router, prefix="/local", tags=["로컬 인증"])
+# startup 이벤트 제거 (local_auth 관련 로직 분리)
+# @router.on_event("startup")
+# async def ensure_local_auth_attached():
+#     router.include_router(local_auth.router, prefix="/local", tags=["로컬 인증"])
 
 def create_user_folders(user_id: int):
     """

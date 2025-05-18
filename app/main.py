@@ -1,4 +1,4 @@
-# app/main.py
+# app/main.py 수정 버전
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,16 +71,17 @@ def custom_openapi():
         }
     }
 
-    # 인증 제외 경로 목록
+    # 인증 제외 경로 목록 - '/local/' 접두사를 제거하고 전체 경로로 변경
     auth_exceptions = [
         f"{settings.API_V1_STR}/auth/local/register",
         f"{settings.API_V1_STR}/auth/local/login",
         f"{settings.API_V1_STR}/auth/local/token",
         f"{settings.API_V1_STR}/auth/kakao/authorize",
         f"{settings.API_V1_STR}/auth/kakao/callback",
+        f"{settings.API_V1_STR}/auth/refresh-token",
     ]
 
-    # ✅ Swagger에 포함된 경로들 디버깅 로그 (옵션)
+    # ✅ Swagger에 포함된 경로들 디버깅 로그
     print("🔍 Swagger 경로 목록:")
     for path in openapi_schema["paths"]:
         print(f"  {path}")
@@ -91,6 +92,9 @@ def custom_openapi():
         for operation in path_item.values():
             if not is_auth_exception:
                 operation["security"] = [{"BearerAuth": []}]
+            else:
+                # 인증 예외 경로 표시 (선택 사항)
+                print(f"🔓 인증 예외 경로: {path}")
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
