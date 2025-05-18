@@ -1,37 +1,15 @@
-# app/api/v1/__init__.py
-
+# ✅ app/api/v1/__init__.py
 from fastapi import APIRouter
 
-# 통합 인증
+from app.api.v1.endpoints import local_auth
 from app.api.v1 import auth
-
-# 각 도메인별 엔드포인트
-from app.api.v1.endpoints import (
-    attendance,
-    notifications,
-    payments,
-    question,
-    tags,
-    teams,
-    phone_verification,
-    team_pdf,
-    team_activity,
-    gamification,
-    badges,
-    pdf_agent,
-    user,
-    local_auth  # ✅ 중요: 로컬 인증 포함
-)
+from app.api.v1.endpoints import attendance, notifications, payments, question, tags, teams
+from app.api.v1.endpoints import phone_verification, team_pdf, team_activity, gamification, badges, pdf_agent, user
 
 api_router = APIRouter()
 
-# ✅ 인증 관련 라우터 (카카오, refresh, me, logout 등)
-api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
-
-# ✅ 로컬 인증 라우터 명시적으로 Swagger에 등록
 api_router.include_router(local_auth.router, prefix="/auth/local", tags=["로컬 인증"])
-
-# ✅ 기타 도메인 라우터들
+api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 api_router.include_router(user.router, prefix="/users", tags=["사용자 정보"])
 api_router.include_router(phone_verification.router, prefix="/phone-verification", tags=["전화번호 인증"])
 api_router.include_router(pdf_agent.router, prefix="/pdf-agent", tags=["PDF Agent"])
