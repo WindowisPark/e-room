@@ -51,17 +51,23 @@ async def refresh_token(refresh_token: str = Body(...)):
 @router.get("/kakao/authorize")
 async def kakao_authorize():
     """
-    카카오 OAuth2 인증 URL 생성
+    카카오 OAuth2 인증 URL 생성 - 동의 항목 설정에 맞게 수정
     """
     encoded_redirect_uri = urllib.parse.quote(settings.KAKAO_REDIRECT_URI, safe=':/')
-
+    
+    # 동의 항목은 카카오 개발자 콘솔의 설정과 일치시킴
+    authorization_url = (
+        "https://kauth.kakao.com/oauth/authorize?"
+        f"client_id={settings.KAKAO_CLIENT_ID}"
+        f"&redirect_uri={encoded_redirect_uri}"
+        f"&response_type=code"
+        f"&scope=profile_nickname,profile_image,account_email,name,phone_number"
+    )
+    
+    logger.info(f"카카오 인증 URL 생성: {authorization_url}")
+    
     return {
-        "authorization_url": (
-            "https://kauth.kakao.com/oauth/authorize?"
-            f"client_id={settings.KAKAO_CLIENT_ID}"
-            f"&redirect_uri={encoded_redirect_uri}"
-            f"&response_type=code"
-        )
+        "authorization_url": authorization_url
     }
 
 @router.get("/kakao/callback")
@@ -81,24 +87,35 @@ async def kakao_callback(
         "redirect_uri": settings.KAKAO_REDIRECT_URI
     }
 
+    # 요청 데이터 로깅 추가
+    logger.info(f"카카오 토큰 요청: {token_url}")
+    logger.info(f"카카오 인증 정보: client_id={settings.KAKAO_CLIENT_ID}, redirect_uri={settings.KAKAO_REDIRECT_URI}")
+
     async with httpx.AsyncClient() as client:
         try:
             # 카카오 토큰 요청
             token_response = await client.post(token_url, data=token_data)
+            
+            # 응답 상태 코드 및 내용 로깅
+            logger.info(f"토큰 응답 상태: {token_response.status_code}")
+            if token_response.status_code != 200:
+                logger.error(f"토큰 응답 에러: {token_response.text}")
+                
             token_response.raise_for_status()
             token_info = token_response.json()
-            # 로그 추가
             logger.info(f"토큰 정보: {token_info}")
 
             # 카카오 사용자 정보 가져오기
             user_info_response = await client.get(
                 "https://kapi.kakao.com/v2/user/me",
                 headers={"Authorization": f"Bearer {token_info['access_token']}"},
+                params={"property_keys": '["kakao_account.profile", "kakao_account.email", "kakao_account.name", "kakao_account.phone_number"]'}
             )
             user_info_response.raise_for_status()
             user_info = user_info_response.json()
+            logger.info(f"사용자 정보: {json.dumps(user_info, indent=2, ensure_ascii=False)}")
             
-            # 사용자 정보 처리
+            # 사용자 정보 처리 - 동의 항목에 맞게 수정
             kakao_account = user_info.get("kakao_account", {})
             profile = kakao_account.get("profile", {})
             kakao_id = str(user_info.get("id"))
@@ -109,25 +126,33 @@ async def kakao_callback(
                     detail="카카오 사용자 ID를 가져올 수 없습니다"
                 )
 
+            # 동의 항목에서 데이터 추출 (있을 수도, 없을 수도 있음)
+            nickname = profile.get("nickname")
+            profile_image = profile.get("profile_image_url")
+            email = kakao_account.get("email")
+            name = kakao_account.get("name")
+            phone_number = kakao_account.get("phone_number")
+            
             # 기존 사용자인지 확인
             user = crud.user.get_by_oauth_id(db, "kakao", kakao_id)
             
             # 새 사용자라면 등록
             if not user:
-                email = kakao_account.get("email")
-                name = profile.get("nickname", "Kakao User")
-                
-                # 필수 정보 확인
+                # 필수 정보 확인 및 대체값 설정
                 if not email:
                     email = f"kakao_{kakao_id}@example.com"  # 이메일 없는 경우 대체값
+                
+                # 표시 이름은 실명 > 닉네임 > 기본값 순으로 사용
+                display_name = name or nickname or "Kakao User"
                 
                 user_in = schemas.UserCreateOAuth(
                     oauth_provider="kakao",
                     oauth_id=kakao_id,
                     email=email,
-                    full_name=name,
-                    # 카카오에서 제공하는 기본 정보로 verified 상태로 설정
-                    is_verified=True
+                    full_name=display_name,
+                    username=nickname or f"kakao_user_{kakao_id[:8]}", # 닉네임을 사용자명으로
+                    phone_number=phone_number,  # 전화번호 필드 추가
+                    is_verified=True  # 카카오 인증은 기본적으로 verified 상태
                 )
                 
                 user = crud.user.create_oauth_user(db, obj_in=user_in)
@@ -135,9 +160,23 @@ async def kakao_callback(
                 # 새 사용자인 경우 기본 폴더 생성
                 create_user_folders(user.id)
                 
-                logger.info(f"✅ 카카오 회원가입 성공 - User ID: {user.id}")
+                logger.info(f"✅ 카카오 회원가입 성공 - User ID: {user.id}, Name: {display_name}")
             else:
-                logger.info(f"✅ 카카오 로그인 성공 - User ID: {user.id}")
+                # 기존 사용자 정보 업데이트 (선택적)
+                update_data = {}
+                if phone_number and not user.phone_number:
+                    update_data["phone_number"] = phone_number
+                if nickname and not user.username:
+                    update_data["username"] = nickname
+                if name and not user.full_name:
+                    update_data["full_name"] = name
+                
+                # 업데이트할 데이터가 있으면 적용
+                if update_data:
+                    crud.user.update(db, db_obj=user, obj_in=update_data)
+                    logger.info(f"✅ 카카오 로그인 및 사용자 정보 업데이트 - User ID: {user.id}")
+                else:
+                    logger.info(f"✅ 카카오 로그인 성공 - User ID: {user.id}")
 
             # 토큰 생성
             access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -173,10 +212,10 @@ async def kakao_callback(
                 detail=f"카카오 인증 실패: {str(e)}, 상세: {error_detail}"
             )
         except Exception as e:
-            logger.error(f"🚨 카카오 로그인/회원가입 오류: {str(e)}")
+            logger.error(f"🚨 카카오 로그인/회원가입 오류: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="인증 중 오류가 발생했습니다"
+                detail=f"인증 중 오류가 발생했습니다: {str(e)}"
             )
 
 @router.get("/me", response_model=schemas.User)

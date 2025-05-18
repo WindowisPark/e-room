@@ -57,14 +57,24 @@ def after_job_hook(job, connection, result, *args, **kwargs):
     try:
         if not job.is_failed and 'user_id' in job.kwargs:
             user_id = job.kwargs.get('user_id')
+            # 비동기 함수를 동기식으로 변환하여 호출
+            from app.services.notification_service import create_system_notification
+            import asyncio
+            
             with SessionLocal() as db:
-                send_notification(
-                    db=db,
-                    user_id=user_id,
-                    type="system",
-                    message=f"작업이 완료되었습니다: {job.description}",
-                    link=f"/tasks/{job.id}/result"
-                )
+                # 비동기 함수를 별도의 이벤트 루프에서 실행
+                async def send_async_notification():
+                    await create_system_notification(
+                        db=db,
+                        user_id=user_id,
+                        message=f"작업이 완료되었습니다: {job.description}",
+                        link=f"/tasks/{job.id}/result"
+                    )
+                
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(send_async_notification())
+                loop.close()
     except Exception as e:
         logger.error(f"알림 전송 실패: {str(e)}")
 

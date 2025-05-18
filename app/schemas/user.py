@@ -17,8 +17,10 @@ class UserCreate(UserBase):
 class UserCreateOAuth(BaseModel):
     oauth_provider: str
     oauth_id: str
-    email: Optional[str] = None  # EmailStr에서 str로 변경하고 Optional로
+    email: Optional[str] = None
     full_name: Optional[str] = None
+    username: Optional[str] = None
+    phone_number: Optional[str] = None  # 전화번호 필드 추가
     is_verified: bool = False
 
     class Config:

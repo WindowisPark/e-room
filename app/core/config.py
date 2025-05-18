@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # ✅ Kakao OAuth 설정
     KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
     KAKAO_CLIENT_SECRET: str = os.getenv("KAKAO_CLIENT_SECRET", "")
-    KAKAO_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/kakao/callback"
+    KAKAO_REDIRECT_URI=https://api.planova.kr/api/v1/auth/kakao/callback
 
     # ✅ CORS 설정
     BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"]

@@ -1,5 +1,6 @@
 # app/api/v1/endpoints/pdf_agent.py
 
+from asyncio.log import logger
 from app.models.task import Task
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session

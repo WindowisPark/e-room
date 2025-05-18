@@ -160,9 +160,10 @@ class TaskManager:
             logger.error(f"작업 등록 실패: {str(e)}")
             return job_id  # 실패해도 ID 반환 (클라이언트 처리 일관성)
     
+
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """
-        작업 상태 조회
+        작업 상태 조회 - 개선된 버전
         
         Args:
             job_id: 작업 ID
@@ -171,7 +172,7 @@ class TaskManager:
             작업 상태 정보
         """
         try:
-            # Redis 연결이 없는 경우 (개발/테스트 환경)
+            # Redis 연결이 없는 경우
             if self.redis_conn is None:
                 logger.warning(f"Redis 연결 없음: 작업 {job_id}의 상태 조회 불가")
                 return {
@@ -180,29 +181,36 @@ class TaskManager:
                     "message": "Redis 연결 없음 (개발 모드)"
                 }
             
-            # 모든 큐에서 작업 찾기
+            # 안전하게 작업 조회
             job = None
-            for queue_name, queue in self.queues.items():
-                job = queue.fetch_job(job_id)
-                if job:
-                    break
-            
-            # 스케줄러에서 작업 찾기
-            if not job and self.scheduler:
-                for scheduled_job in self.scheduler.get_jobs():
-                    if scheduled_job.id == job_id:
-                        job = scheduled_job
-                        break
+            try:
+                # 모든 큐에서 작업 찾기
+                for queue_name, queue in self.queues.items():
+                    try:
+                        job = queue.fetch_job(job_id)
+                        if job:
+                            break
+                    except Exception as queue_error:
+                        logger.warning(f"큐 {queue_name}에서 작업 조회 실패: {str(queue_error)}")
+                
+                # 스케줄러에서 작업 찾기
+                if not job and self.scheduler:
+                    for scheduled_job in self.scheduler.get_jobs():
+                        if scheduled_job.id == job_id:
+                            job = scheduled_job
+                            break
+            except Exception as fetch_error:
+                logger.error(f"작업 조회 중 오류: {str(fetch_error)}")
             
             if not job:
                 return {"status": "not_found"}
-                
+            
             # 메타데이터 안전하게 추출
             meta = {}
             try:
                 if hasattr(job, 'meta') and job.meta:
                     for key, value in job.meta.items():
-                        # 문자열로 안전하게 변환
+                        # 안전한 직렬화를 위한 처리
                         if isinstance(value, (str, int, float, bool, type(None))):
                             meta[key] = value
                         else:
@@ -211,26 +219,29 @@ class TaskManager:
                                 meta[key] = str(value)
                             except:
                                 meta[key] = "복잡한 객체 (표시 불가)"
-            except Exception as e:
-                logger.error(f"메타데이터 처리 오류: {str(e)}")
+            except Exception as meta_error:
+                logger.error(f"메타데이터 처리 오류: {str(meta_error)}")
                 meta = {}
             
-            # 결과 처리 (pickle 직렬화된 바이너리 데이터 처리)
+            # 결과 처리 (바이너리/직렬화된 데이터 안전하게 처리)
             result = None
             if job.is_finished:
                 try:
-                    # job.result가 바이너리인 경우 pickle.loads로 디코딩 시도
+                    import pickle
+                    
+                    # 결과가 바이너리인 경우 안전하게 디코딩 시도
                     if isinstance(job.result, bytes):
                         try:
                             result = pickle.loads(job.result)
-                        except Exception as e:
-                            logger.warning(f"피클 디코딩 실패: {e}")
-                            result = "바이너리 데이터 (디코딩 실패)"
+                        except Exception as pickle_error:
+                            logger.warning(f"결과 디코딩 실패: {str(pickle_error)}")
+                            # 바이너리를 안전하게 문자열로 변환
+                            result = f"바이너리 데이터 ({len(job.result)} 바이트)"
                     else:
                         result = job.result
-                except Exception as e:
-                    logger.error(f"결과 처리 중 오류: {str(e)}")
-                    result = f"결과 처리 오류: {str(e)}"
+                except Exception as result_error:
+                    logger.error(f"결과 처리 중 오류: {str(result_error)}")
+                    result = "결과 처리 중 오류 발생"
             
             # 결과 구성
             return {
