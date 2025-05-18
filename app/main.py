@@ -14,9 +14,6 @@ from app.api.v1 import api_router
 # ✅ WebSocket 라우터 추가
 from app.api.v1.websocket import ws_router
 
-# ✅ 로컬 인증 라우터 추가
-from app.api.v1.local_auth_routes import router as local_auth_router
-
 # FastAPI 앱 초기화
 app = FastAPI(
     title=settings.PROJECT_NAME,
