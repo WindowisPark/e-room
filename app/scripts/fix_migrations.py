@@ -37,7 +37,11 @@ def reset_migrations():
         try:
             # 1. alembic_version 초기화
             logger.info("alembic_version 테이블 초기화 중...")
-            conn.execute(text("DELETE FROM alembic_version"))
+            logger.info("alembic_version 테이블 초기화 중 (존재 시)...")
+            try:
+                conn.execute(text("DELETE FROM alembic_version"))
+            except Exception as e:
+                logger.warning(f"alembic_version 테이블이 없거나 삭제 실패: {e}")
             
             # 2. 모든 외래 키 제약 조건 삭제
             logger.info("모든 외래 키 제약 조건 삭제 중...")
