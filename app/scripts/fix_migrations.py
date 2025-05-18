@@ -42,6 +42,9 @@ def reset_migrations():
                 conn.execute(text("DELETE FROM alembic_version"))
             except Exception as e:
                 logger.warning(f"alembic_version 테이블이 없거나 삭제 실패: {e}")
+                # 💥 롤백하고 트랜잭션 새로 시작
+                trans.rollback()
+                trans = conn.begin()
             
             # 2. 모든 외래 키 제약 조건 삭제
             logger.info("모든 외래 키 제약 조건 삭제 중...")
