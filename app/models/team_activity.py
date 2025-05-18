@@ -1,9 +1,14 @@
 # app/models/team_activity.py
 
 from sqlalchemy.orm import relationship
-from app.db.base_class import Base  # 상속하는 Base
+from app.db.base_class import Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.team import Team
 
 class TeamActivity(Base):
     """
@@ -21,10 +26,6 @@ class TeamActivity(Base):
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # 🔄 역참조는 back_populates로 명시적으로 연결
+    # 관계 설정 - 문자열 참조로 순환 참조 방지
     user = relationship("User", back_populates="team_activities")
     team = relationship("Team", back_populates="activities")
-
-    @property
-    def username(self) -> str:
-        return self.user.username if self.user else None

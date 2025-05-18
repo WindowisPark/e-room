@@ -1,8 +1,15 @@
+
 # app/models/team.py
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.tag import PDFFile
+    from app.models.team_activity import TeamActivity
 
 class Team(Base):
     """
@@ -19,13 +26,7 @@ class Team(Base):
     owner = relationship("User", back_populates="owned_teams", foreign_keys=[owner_id])
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     pdf_files = relationship("PDFFile", back_populates="team")
-
-    # TeamActivity 관계 설정 시 문자열로 참조
-    activities = relationship(
-        "TeamActivity",
-        back_populates="team",
-        cascade="all, delete-orphan"
-    )
+    activities = relationship("TeamActivity", back_populates="team", cascade="all, delete-orphan")
     
 class TeamMember(Base):
     """

@@ -7,7 +7,6 @@ from app.db.base_class import Base
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.tag import PDFFile
     from app.models.user import User
 
 class Task(Base):
@@ -25,7 +24,6 @@ class Task(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # 관계 설정
+    # 관계 설정 - 문자열로 지연 참조하여 순환 참조 방지
     user = relationship("User", back_populates="tasks")
-    # 단순하게 문자열 참조로만 변경
     document = relationship("PDFFile", back_populates="tasks")
