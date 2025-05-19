@@ -1188,13 +1188,13 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     end_char INTEGER NOT NULL,
     embedding vector(1536),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
+
     CONSTRAINT unique_chunk_per_document UNIQUE (document_id, chunk_index),
     CONSTRAINT fk_document_id FOREIGN KEY (document_id) REFERENCES pdf_files(id) ON DELETE CASCADE
 );
 
 -- 벡터 검색을 위한 인덱스 생성
-CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx 
+CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
 ON document_chunks
 USING ivfflat (embedding vector_l2_ops)
 WITH (lists = 100);

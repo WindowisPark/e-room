@@ -17,7 +17,7 @@ from app.models.user import User
 
 # OAuth2 스키마 수정 (카카오 콜백 후 토큰이 반환되므로 여기서는 별도 엔드포인트 필요 없음)
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/kakao/callback", 
+    tokenUrl=f"{settings.API_V1_STR}/auth/kakao/callback",
     auto_error=False  # 토큰이 없을 때 자동 에러 방지
 )
 
@@ -38,10 +38,10 @@ async def get_current_user(
             detail="인증이 필요합니다",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     if redis_client is not None and redis_client.exists(token):  # redis_client가 None이 아닐 때만 체크
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="토큰이 취소되었습니다"
         )
 
@@ -50,14 +50,14 @@ async def get_current_user(
         token_data = schemas.TokenPayload(**payload)
     except (JWTError, ValidationError):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="인증 정보를 확인할 수 없습니다"
         )
 
     user = crud.user.get(db, id=token_data.sub)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="사용자를 찾을 수 없습니다"
         )
     return user
@@ -67,7 +67,7 @@ def get_current_active_user(
 ) -> User:
     if not crud.user.is_active(current_user):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="비활성화된 사용자입니다"
         )
     return current_user

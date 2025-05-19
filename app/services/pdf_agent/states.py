@@ -1,13 +1,16 @@
-from typing import TypedDict, List
+# app/services/pdf_agent/states.py
 
-class AgentState(TypedDict):
-    pdf_path : str
-    pdfs : List # pdf Document 담는 list
-    pdf_step : int = 0
-    messages : List[dict] # message들을 담는 list
-    summaries : str # 요약한 내용을 담는 문자열
-    result : str # 최종적으로 다듬은 내용을 담은 문자열
-    need_to_explain : dict
-    explain_step : int
-    previous_exam_problems : List # 시험 기출 문제 Documents들을 담는 list
-    analysis_of_exam_writers : str
+from typing import TypedDict, List, Dict, Any, Optional
+
+
+class AgentState(TypedDict, total=False):
+    pdf_path: str
+    pdfs: List[Any]  # PDF Document 목록
+    pdf_step: int
+    messages: List[Dict[str, Any]]  # LangChain Message 타입을 딕셔너리로 표현
+    summaries: str
+    result: str
+    need_to_explain: Dict[str, Any]
+    explain_step: int
+    previous_exam_problems: List[Any]
+    analysis_of_exam_writers: str

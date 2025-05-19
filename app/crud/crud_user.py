@@ -15,14 +15,14 @@ class CRUDUser:
     def get_by_email(self, db: Session, email: str) -> Optional[User]:
         """📌 이메일로 사용자 조회"""
         return db.query(User).filter(User.email == email).first()
-    
+
     def get_by_oauth_id(self, db: Session, oauth_provider: str, oauth_id: str) -> Optional[User]:
         """📌 OAuth 사용자 조회"""
         return db.query(User).filter(
             User.oauth_provider == oauth_provider,
             User.oauth_id == oauth_id
         ).first()
-    
+
     def get_multi(self, db: Session, skip: int = 0, limit: int = 100) -> List[User]:
         """📌 여러 사용자 조회 (페이지네이션)"""
         return db.query(User).offset(skip).limit(limit).all()
@@ -68,7 +68,7 @@ class CRUDUser:
                 update_data = obj_in
             else:
                 update_data = obj_in.dict(exclude_unset=True)
-            
+
             if "password" in update_data:
                 update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
 

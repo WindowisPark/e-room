@@ -50,14 +50,14 @@ async def process_pdf(
             cleanup_needed = True
         else:
             raise HTTPException(status_code=400, detail="파일을 업로드하거나 use_default를 true로 설정해주세요")
-        
+
         # PDF 처리
         result = pdf_ai_service.process_pdf(pdf_path)
-        
+
         # 임시 파일 삭제
         if cleanup_needed:
             os.unlink(pdf_path)
-        
+
         # 결과 반환
         if result.get("success", False):
             return {
@@ -67,7 +67,7 @@ async def process_pdf(
             }
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "PDF 처리 실패"))
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -91,14 +91,14 @@ async def generate_questions(
             cleanup_needed = True
         else:
             raise HTTPException(status_code=400, detail="파일을 업로드하거나 use_default를 true로 설정해주세요")
-        
+
         # 문제 생성
         result = pdf_ai_service.generate_exam(pdf_path, count)
-        
+
         # 임시 파일 삭제
         if cleanup_needed:
             os.unlink(pdf_path)
-        
+
         # 결과 반환
         if result.get("success", False):
             return {
@@ -108,7 +108,7 @@ async def generate_questions(
             }
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "문제 생성 실패"))
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

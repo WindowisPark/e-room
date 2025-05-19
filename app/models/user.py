@@ -10,7 +10,7 @@ from app.models.question import Question
 
 class PlanType(str, enum.Enum):
     free = "free"
-    premium = "premium"  
+    premium = "premium"
     vip = "vip"
 
 
@@ -72,7 +72,7 @@ class User(Base):
     @property
     def is_admin(self):
         return self.role == "admin"
-    
+
     # 🔥 팀 활동 로그 (역참조)
     team_activities = relationship(
         "TeamActivity",
@@ -85,14 +85,14 @@ class User(Base):
     plan_started_at = Column(DateTime, nullable=True)
     plan_expires_at = Column(DateTime, nullable=True)
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
-    
+
     @property
     def max_team_spaces(self):
         """현재 요금제에 따른 최대 팀스페이스 수 반환"""
         # 요금제 만료 확인
         if self.plan_expires_at and self.plan_expires_at < datetime.now():
             return 0  # 만료된 경우 free 플랜과 동일하게 처리
-            
+
         if self.plan_type == PlanType.premium:
             return 1
         elif self.plan_type == PlanType.vip:

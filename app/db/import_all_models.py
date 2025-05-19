@@ -42,10 +42,7 @@ ALL_MODELS = [
     Team, TeamMember, TeamActivity,
     
     # PDF 관련 모델
-    PDFFile, PDFTag, PDFTagMention,
-    
-    # 작업 관련 모델
-    Task
+    PDFFile, PDFTag, PDFTagMention
 ]
 
 # 마이그레이션에 필요한 모든 모델 의존성 제공
@@ -65,9 +62,6 @@ __all__ = [
     
     # PDF 관련 모델
     'PDFFile', 'PDFTag', 'PDFTagMention',
-    
-    # 작업 관련 모델
-    'Task',
     
     # 모델 컬렉션
     'ALL_MODELS'

@@ -40,11 +40,11 @@ def update(
     질문 업데이트
     """
     update_data = obj_in if isinstance(obj_in, dict) else obj_in.dict(exclude_unset=True)
-    
+
     for field in ["title", "content"]:
         if field in update_data:
             setattr(db_obj, field, update_data[field])
-    
+
     db.add(db_obj)
     db.flush()
     return db_obj

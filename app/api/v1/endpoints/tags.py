@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.schemas.tag import (
-    AnnotationCreate, 
-    AnnotationUpdate, 
-    AnnotationResponse, 
+    AnnotationCreate,
+    AnnotationUpdate,
+    AnnotationResponse,
     AnnotationList
 )
 from app.services.tag_service import (
@@ -38,13 +38,13 @@ async def create_annotation(
         position=annotation_data.position,
         annotation_type=annotation_data.annotation_type
     )
-    
+
     if "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result
 
 @router.put("/{tag_id}", response_model=AnnotationResponse)
@@ -63,13 +63,13 @@ async def update_annotation(
         content=annotation_data.content,
         position=annotation_data.position
     )
-    
+
     if "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -84,7 +84,7 @@ async def delete_annotation(
         tag_id=tag_id,
         user_id=current_user.id
     )
-    
+
     if "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -105,13 +105,13 @@ async def get_annotations(
         user_id=current_user.id,
         page=page
     )
-    
+
     if "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result
 
 @router.get("/search", response_model=List[AnnotationResponse])
@@ -128,13 +128,13 @@ async def search_tags(
         query=query,
         team_id=team_id
     )
-    
+
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result
 
 @router.get("/hashtag/{tag}", response_model=List[AnnotationResponse])
@@ -152,13 +152,13 @@ async def get_by_hashtag(
         query=f"#{tag}",  # 해시태그 형식으로 검색
         team_id=team_id
     )
-    
+
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result
 
 @router.get("/mention/{username}", response_model=List[AnnotationResponse])
@@ -176,11 +176,11 @@ async def get_by_mention(
         query=f"@{username}",  # 멘션 형식으로 검색
         team_id=team_id
     )
-    
+
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=result["error"]
         )
-    
+
     return result

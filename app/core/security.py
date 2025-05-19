@@ -15,7 +15,7 @@ import logging
 import hmac
 import hashlib
 from fastapi import Request, HTTPException, WebSocket, status
-from app.core.redis_helper import redis_client 
+from app.core.redis_helper import redis_client
 
 # 로깅 설정
 logger = logging.getLogger(__name__)

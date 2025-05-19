@@ -40,7 +40,7 @@ async def send_notification(
         payload.update(extra_payload)
 
     redis_client = get_redis_client()
-    
+
     # 딕셔너리를 JSON 문자열로 변환하여 전송
     await redis_client.publish(f"user:{user_id}", json.dumps(payload))
 

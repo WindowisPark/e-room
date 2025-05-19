@@ -22,6 +22,6 @@ class Question(QuestionBase):
     id: int
     user_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True  # Pydantic v2에서는 orm_mode 대신 from_attributes 사용

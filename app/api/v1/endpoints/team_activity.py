@@ -35,8 +35,8 @@ async def list_team_activities(
     """
     # 팀 멤버십 확인
     has_access = await check_team_permission(
-        db=db, 
-        team_id=team_id, 
+        db=db,
+        team_id=team_id,
         user_id=current_user.id
     )
     if not has_access:
@@ -44,7 +44,7 @@ async def list_team_activities(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이 팀스페이스의 활동 로그를 조회할 권한이 없습니다"
         )
-    
+
     activities = await get_team_activities(
         db=db,
         team_id=team_id,
@@ -56,7 +56,7 @@ async def list_team_activities(
         page=page,
         limit=limit
     )
-    
+
     return activities
 
 @router.get("/{team_id}/activities/recent", response_model=List[TeamActivityLog])
@@ -72,8 +72,8 @@ async def get_recent_activities(
     """
     # 팀 멤버십 확인
     has_access = await check_team_permission(
-        db=db, 
-        team_id=team_id, 
+        db=db,
+        team_id=team_id,
         user_id=current_user.id
     )
     if not has_access:
@@ -81,14 +81,14 @@ async def get_recent_activities(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이 팀스페이스의 활동 로그를 조회할 권한이 없습니다"
         )
-    
+
     activities = await get_recent_team_activities(
         db=db,
         team_id=team_id,
         hours=hours,
         limit=limit
     )
-    
+
     return activities
 
 @router.get("/activities/me", response_model=List[TeamActivityLog])
@@ -106,8 +106,8 @@ async def get_my_team_activities(
     # 특정 팀이 지정된 경우 멤버십 확인
     if team_id:
         has_access = await check_team_permission(
-            db=db, 
-            team_id=team_id, 
+            db=db,
+            team_id=team_id,
             user_id=current_user.id
         )
         if not has_access:
@@ -115,7 +115,7 @@ async def get_my_team_activities(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="이 팀스페이스의 활동 로그를 조회할 권한이 없습니다"
             )
-    
+
     activities = await get_user_team_activities(
         db=db,
         user_id=current_user.id,
@@ -124,7 +124,7 @@ async def get_my_team_activities(
         page=page,
         limit=limit
     )
-    
+
     return activities
 
 @router.post("/{team_id}/activities/test-log")

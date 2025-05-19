@@ -1,4 +1,4 @@
-창의학기제 VUE || FLUTTER || FASTAPI 
+창의학기제 VUE || FLUTTER || FASTAPI
 
 # 📚  e-room : PDF 협업 플랫폼
 

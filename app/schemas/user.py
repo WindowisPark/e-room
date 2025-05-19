@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None 
+    email: Optional[EmailStr] = None
     username: Optional[str] = None
     full_name: Optional[str] = None
     disabled: Optional[bool] = False
@@ -82,7 +82,7 @@ class UserDetailResponse(BaseModel):
     activity: Dict[str, Any]
     notifications: Dict[str, Any]
     recent_badges: List[Dict[str, Any]]
-    
+
     class Config:
         from_attributes = True
 

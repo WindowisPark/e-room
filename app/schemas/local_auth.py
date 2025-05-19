@@ -9,13 +9,13 @@ class LocalUserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
-    
+
     @validator('username')
     def username_alphanumeric(cls, v):
         if not v.isalnum():
             raise ValueError('사용자명은 알파벳과 숫자만 허용합니다')
         return v
-    
+
     @validator('password')
     def password_min_length(cls, v):
         if len(v) < 8:

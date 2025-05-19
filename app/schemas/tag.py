@@ -33,7 +33,7 @@ class AnnotationResponse(AnnotationBase):
     created_at: datetime
     mentions: List[str] = []
     hashtags: List[str] = []
-    
+
     class Config:
         orm_mode = True
 
@@ -43,6 +43,6 @@ class AnnotationList(BaseModel):
     file_name: str
     page: Optional[int] = None
     annotations: List[AnnotationResponse]
-    
+
     class Config:
         orm_mode = True

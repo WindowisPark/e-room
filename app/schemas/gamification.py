@@ -30,7 +30,7 @@ class PointHistoryResponse(PointHistoryBase):
     id: int
     user_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -43,7 +43,7 @@ class PointSummary(BaseModel):
 
 # Badge-related schemas
 class BadgeType(str, Enum):
-    ATTENDANCE = "attendance" 
+    ATTENDANCE = "attendance"
     ANNOTATION = "annotation"
     PDF = "pdf"
     TEAM = "team"
@@ -65,7 +65,7 @@ class BadgeCreate(BadgeBase):
 class BadgeResponse(BadgeBase):
     id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -73,7 +73,7 @@ class UserBadgeResponse(BaseModel):
     id: int
     badge: BadgeResponse
     acquired_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -83,13 +83,13 @@ class LevelInfo(BaseModel):
     min_points: int
     max_points: int
     points_to_next_level: int
-    
+
 class UserLevelInfoResponse(BaseModel):
     current_level: int
     current_points: int
     next_level_points: int
     progress_percent: float
-    
+
 class UserGamificationProfile(BaseModel):
     user_id: int
     username: str
@@ -99,6 +99,6 @@ class UserGamificationProfile(BaseModel):
     streak_days: int
     badges_count: int
     recent_badges: List[UserBadgeResponse]
-    
+
     class Config:
         from_attributes = True

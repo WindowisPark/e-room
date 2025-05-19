@@ -32,7 +32,6 @@ from app.models.attendance import Attendance
 from app.models.notification import Notification
 from app.models.payment import Payment
 from app.models.question import Question
-from app.models.task import Task
 
 # Alembic 설정
 config = context.config

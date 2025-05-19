@@ -269,7 +269,7 @@ class FileStorageManager:
             return Path(f"/{user_id}/{new_path.name}")
         except Exception as e:
             raise FileOperationError(f"폴더 이동 실패: {e}")
-        
+
     def move_file(
             self, user_id: int, old_folder: str, filename: str, new_folder: str, create_if_not_exists: bool = False
         ) -> Path:

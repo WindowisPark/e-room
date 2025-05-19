@@ -10,7 +10,6 @@ from app.db.base_class import Base
 # 모든 모델 클래스 - 명시적 임포트
 from app.models.user import User
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
-from app.models.task import Task
 from app.models.team import Team, TeamMember
 from app.models.notification import Notification
 from app.models.payment import Payment, PaymentStatus

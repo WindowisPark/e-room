@@ -13,13 +13,13 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     end_char INTEGER NOT NULL,
     embedding vector(1536),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
+
     -- 빠른 문서 조회를 위한 인덱스 추가
     CONSTRAINT unique_chunk_per_document UNIQUE (document_id, chunk_index)
 );
 
 -- 효율적인 유사도 검색을 위한 HNSW 인덱스 생성
-CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx 
+CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
 ON document_chunks
 USING ivfflat (embedding vector_l2_ops)
 WITH (lists = 100);
@@ -29,7 +29,7 @@ CREATE OR REPLACE FUNCTION search_similar_chunks(
     query_embedding vector,
     document_id INTEGER,
     limit_val INTEGER DEFAULT 5
-) 
+)
 RETURNS TABLE (
     id INTEGER,
     document_id INTEGER,
@@ -41,14 +41,14 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         dc.id,
         dc.document_id,
         dc.chunk_index,
         dc.text,
         1 - (dc.embedding <=> query_embedding) AS similarity
     FROM document_chunks dc
-    WHERE 
+    WHERE
         dc.document_id = document_id
         AND dc.embedding IS NOT NULL
     ORDER BY dc.embedding <=> query_embedding

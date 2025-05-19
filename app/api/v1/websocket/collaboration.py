@@ -144,11 +144,11 @@ async def process_client_message(data: str, team_id: int, user: User):
 
         # 메시지 파싱
         message_obj = schema_cls(**json_data)
-        
+
         # DB 작업 결과 저장용 변수
         result = None
         db = next(get_db())
-        
+
         # 메시지 타입에 따른 DB 처리
         if msg_type == "annotation_create":
             result = await handle_annotation_create(db, message_obj.data, user.id)
@@ -165,7 +165,7 @@ async def process_client_message(data: str, team_id: int, user: User):
                 cursor.page,
                 {"x": cursor.x, "y": cursor.y}
             )
-        
+
         # 오류 발생 시 처리
         if result and "error" in result:
             logger.error(f"DB 작업 오류: {result['error']}")
@@ -179,14 +179,14 @@ async def process_client_message(data: str, team_id: int, user: User):
                 "annotation_update": "update",
                 "annotation_delete": "delete"
             }
-            
+
             # DB 저장 결과에서 리소스 ID 가져오기
             resource_id = None
             if result and "id" in result:
                 resource_id = result["id"]
             elif "tag_id" in message_obj.data:
                 resource_id = message_obj.data["tag_id"]
-            
+
             await log_team_activity(
                 db=next(get_db()),
                 team_id=team_id,
@@ -255,11 +255,11 @@ async def handle_annotation_create(
     content = message_data.get("content")
     position = message_data.get("position")
     annotation_type = message_data.get("annotation_type", "highlight")
-    
+
     if not all([pdf_id, page is not None, content, position]):
         logger.warning(f"주석 생성 메시지 필드 누락: {message_data}")
         return {"error": "필수 필드가 누락되었습니다"}
-    
+
     # 주석 생성 서비스 호출
     result = await create_pdf_annotation(
         db=db,
@@ -270,7 +270,7 @@ async def handle_annotation_create(
         position=position,
         annotation_type=annotation_type
     )
-    
+
     return result
 
 async def handle_annotation_update(
@@ -280,11 +280,11 @@ async def handle_annotation_update(
     tag_id = message_data.get("tag_id")
     content = message_data.get("content")
     position = message_data.get("position")
-    
+
     if not tag_id or (content is None and position is None):
         logger.warning(f"주석 업데이트 메시지 필드 누락: {message_data}")
         return {"error": "필수 필드가 누락되었습니다"}
-    
+
     # 주석 업데이트 서비스 호출
     result = await update_pdf_annotation(
         db=db,
@@ -293,7 +293,7 @@ async def handle_annotation_update(
         content=content,
         position=position
     )
-    
+
     return result
 
 async def handle_annotation_delete(
@@ -301,16 +301,16 @@ async def handle_annotation_delete(
 ) -> Dict[str, Any]:
     """주석 삭제 처리 및 DB 저장"""
     tag_id = message_data.get("tag_id")
-    
+
     if not tag_id:
         logger.warning(f"주석 삭제 메시지 필드 누락: {message_data}")
         return {"error": "tag_id가 누락되었습니다"}
-    
+
     # 주석 삭제 서비스 호출
     result = await delete_pdf_annotation(
         db=db,
         tag_id=int(tag_id),
         user_id=user_id
     )
-    
+
     return result

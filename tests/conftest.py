@@ -100,15 +100,15 @@ def mock_iamport_client():
     """Mock 포트원 클라이언트"""
     with patch("app.core.iamport_client.IamportClient") as mock:
         mock_client = MagicMock()
-        
+
         # _get_token 메소드 모킹
         mock_client._get_token.return_value = "mock_token"
-        
+
         # get_headers 메소드 모킹
         mock_client.get_headers.return_value = {
             "Authorization": "Bearer mock_token"
         }
-        
+
         # find_payment_by_imp_uid 메소드 모킹
         mock_client.find_payment_by_imp_uid.return_value = {
             "code": 0,
@@ -121,7 +121,7 @@ def mock_iamport_client():
                 "paid_at": int(datetime.now().timestamp())
             }
         }
-        
+
         # cancel_payment 메소드 모킹
         mock_client.cancel_payment.return_value = {
             "code": 0,
@@ -133,7 +133,7 @@ def mock_iamport_client():
                 "status": "cancelled"
             }
         }
-        
+
         mock.return_value = mock_client
         yield mock_client
 

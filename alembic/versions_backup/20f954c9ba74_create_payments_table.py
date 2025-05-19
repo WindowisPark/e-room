@@ -19,7 +19,7 @@ depends_on = None
 
 def upgrade():
     # PaymentStatus enum 생성 부분 제거 (이미 존재함)
-    
+
     # payments 테이블 생성
     op.create_table('payments',
         sa.Column('id', sa.Integer(), nullable=False),

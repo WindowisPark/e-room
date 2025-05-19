@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, List, Optional
 if TYPE_CHECKING:
     from app.models.team import Team
     from app.models.user import User
-    from app.models.task import Task
 
 class PDFFile(Base):
     """
@@ -27,7 +26,6 @@ class PDFFile(Base):
     team = relationship("Team", back_populates="pdf_files")
     owner = relationship("User", back_populates="pdf_files")
     tags = relationship("PDFTag", back_populates="pdf_file", cascade="all, delete-orphan")
-    tasks = relationship("Task", back_populates="document", cascade="all, delete-orphan")
 
 class PDFTag(Base):
     """

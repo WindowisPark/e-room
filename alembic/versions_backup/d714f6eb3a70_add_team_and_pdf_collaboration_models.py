@@ -97,13 +97,13 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_mentions_id'), 'mentions', ['id'], unique=False)
-    
+
     # 문제가 있는 부분을 try-except로 감싸기
     try:
         op.drop_column('users', 'storage_limit')
     except Exception:
         pass
-        
+
     try:
         op.drop_column('users', 'storage_usage')
     except Exception:

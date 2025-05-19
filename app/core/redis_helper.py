@@ -75,14 +75,14 @@ def mark_attendance(user_id: int):
     try:
         # 사용자 출석 추가
         redis_client.sadd(key, user_id)
-        
+
         # 자정까지 만료 설정
         expire_at = datetime.combine(datetime.now().date() + timedelta(days=1), datetime.min.time())
         seconds_until_expire = int(expire_at.timestamp()) - int(datetime.now().timestamp())
-        
+
         # expireat 대신 expire 사용 (만료 시간을 초 단위로 설정)
         redis_client.expire(key, seconds_until_expire)
-        
+
         logger.info(f"출석 체크됨 - User ID: {user_id}")
     except RedisError as e:
         logger.error(f"출석 체크 실패 - User ID: {user_id}, Error: {str(e)}")
@@ -152,7 +152,7 @@ def delete_key(key: str):
         logger.info(f"Redis 키 삭제됨 - {key}")
     except RedisError as e:
         logger.error(f"Redis 키 삭제 실패 - {key}, Error: {str(e)}")
-        
+
 # ------------------------------------------------------
 # 비동기 Redis 클라이언트 (실시간 협업용)
 # ------------------------------------------------------
@@ -173,11 +173,11 @@ def get_redis_client() -> aioredis.Redis:
 async def publish_message(channel: str, message: Dict[str, Any]) -> int:
     """
     Redis 채널에 JSON 메시지 발행
-    
+
     Args:
         channel: 메시지를 발행할 채널명
         message: JSON 직렬화 가능한 딕셔너리 메시지
-        
+
     Returns:
         메시지를 받은 클라이언트 수
     """
@@ -192,10 +192,10 @@ async def publish_message(channel: str, message: Dict[str, Any]) -> int:
 async def subscribe_channel(channel: str) -> aioredis.client.PubSub:
     """
     Redis 채널 구독
-    
+
     Args:
         channel: 구독할 채널명
-        
+
     Returns:
         PubSub 인스턴스
     """
@@ -207,10 +207,10 @@ async def subscribe_channel(channel: str) -> aioredis.client.PubSub:
 async def get_channel_messages(pubsub: aioredis.client.PubSub):
     """
     채널에서 메시지 수신 (비동기 제너레이터)
-    
+
     Args:
         pubsub: PubSub 인스턴스
-        
+
     Yields:
         수신된, 파싱된 JSON 메시지
     """
@@ -227,10 +227,10 @@ async def get_channel_messages(pubsub: aioredis.client.PubSub):
 async def get_team_presence(team_id: str) -> list:
     """
     팀스페이스에 현재 접속 중인 사용자 목록 조회
-    
+
     Args:
         team_id: 팀 ID
-        
+
     Returns:
         접속 중인 사용자 ID 목록
     """
@@ -247,7 +247,7 @@ async def get_team_presence(team_id: str) -> list:
 async def add_user_to_team_presence(team_id: str, user_id: str, expiry_seconds: int = 300):
     """
     팀스페이스 접속자 목록에 사용자 추가 (일정 시간 후 자동 만료)
-    
+
     Args:
         team_id: 팀 ID
         user_id: 사용자 ID
@@ -255,15 +255,15 @@ async def add_user_to_team_presence(team_id: str, user_id: str, expiry_seconds: 
     """
     redis_client = get_redis_client()
     key = f"team_presence:{team_id}"
-    
+
     try:
         # Set에 사용자 ID 추가
         await redis_client.sadd(key, user_id)
-        
+
         # 사용자별 만료 시간 설정
         user_key = f"team_presence:{team_id}:user:{user_id}"
         await redis_client.set(user_key, "1", ex=expiry_seconds)
-        
+
         # 만료 시 자동으로 Set에서 제거하는 스크립트 등록
         script = """
         if redis.call('exists', KEYS[2]) == 0 then
@@ -272,7 +272,7 @@ async def add_user_to_team_presence(team_id: str, user_id: str, expiry_seconds: 
         return 0
         """
         await redis_client.eval(
-            script, 
+            script,
             2,  # 키 개수
             key,  # KEYS[1]
             user_key,  # KEYS[2]
@@ -284,7 +284,7 @@ async def add_user_to_team_presence(team_id: str, user_id: str, expiry_seconds: 
 async def remove_user_from_team_presence(team_id: str, user_id: str):
     """
     팀스페이스 접속자 목록에서 사용자 제거
-    
+
     Args:
         team_id: 팀 ID
         user_id: 사용자 ID
@@ -292,7 +292,7 @@ async def remove_user_from_team_presence(team_id: str, user_id: str):
     redis_client = get_redis_client()
     key = f"team_presence:{team_id}"
     user_key = f"team_presence:{team_id}:user:{user_id}"
-    
+
     try:
         # Set에서 사용자 ID 제거
         await redis_client.srem(key, user_id)
@@ -304,7 +304,7 @@ async def remove_user_from_team_presence(team_id: str, user_id: str):
 async def store_cursor_position(team_id: str, user_id: str, pdf_id: str, page: int, position: Dict[str, float], expiry_seconds: int = 60):
     """
     사용자의 현재 커서 위치 저장
-    
+
     Args:
         team_id: 팀 ID
         user_id: 사용자 ID
@@ -315,7 +315,7 @@ async def store_cursor_position(team_id: str, user_id: str, pdf_id: str, page: i
     """
     redis_client = get_redis_client()
     key = f"cursor_position:{team_id}:{pdf_id}:{user_id}"
-    
+
     try:
         data = {
             "page": page,
@@ -330,25 +330,25 @@ async def store_cursor_position(team_id: str, user_id: str, pdf_id: str, page: i
 async def get_all_cursor_positions(team_id: str, pdf_id: str) -> Dict[str, Any]:
     """
     특정 PDF 문서에 대한 모든 사용자의 커서 위치 조회
-    
+
     Args:
         team_id: 팀 ID
         pdf_id: PDF 문서 ID
-        
+
     Returns:
         사용자 ID를 키로 하고 커서 위치 정보를 값으로 하는 딕셔너리
     """
     redis_client = get_redis_client()
     pattern = f"cursor_position:{team_id}:{pdf_id}:*"
-    
+
     try:
         # 패턴에 일치하는 모든 키 조회
         cursor = 0
         result = {}
-        
+
         while True:
             cursor, keys = await redis_client.scan(cursor, match=pattern)
-            
+
             for key in keys:
                 # 키에서 사용자 ID 추출
                 user_id = key.split(":")[-1]
@@ -356,10 +356,10 @@ async def get_all_cursor_positions(team_id: str, pdf_id: str) -> Dict[str, Any]:
                 position_data = await redis_client.get(key)
                 if position_data:
                     result[user_id] = json.loads(position_data)
-            
+
             if cursor == 0:
                 break
-        
+
         return result
     except Exception as e:
         logger.error(f"커서 위치 조회 실패 - 팀 ID: {team_id}, PDF ID: {pdf_id}, 오류: {str(e)}")

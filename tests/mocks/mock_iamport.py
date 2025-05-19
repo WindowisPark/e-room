@@ -10,15 +10,15 @@ class MockIamportClient:
     포트원 클라이언트 모킹 클래스
     테스트에서 실제 API 호출 없이 결제 테스트를 할 수 있게 함
     """
-    
+
     def __init__(self, success=True, paid_amount=15900):
         self.success = success
         self.paid_amount = paid_amount
         self.token = "mock_access_token_for_testing"
-        
+
         # 테스트용 결제 데이터
         self.payments = {}
-    
+
     def _get_token(self) -> str:
         """토큰 발급 모킹"""
         return self.token
@@ -37,7 +37,7 @@ class MockIamportClient:
                 "message": "성공",
                 "response": payment
             }
-        
+
         # 기본 응답 생성
         status = "paid" if self.success else "failed"
         payment = {
@@ -47,10 +47,10 @@ class MockIamportClient:
             "status": status,
             "paid_at": int(datetime.now().timestamp()) if self.success else None
         }
-        
+
         # 테스트용으로 저장
         self.payments[imp_uid] = payment
-        
+
         return {
             "code": 0 if self.success else 1,
             "message": "성공" if self.success else "결제 실패",
@@ -65,9 +65,9 @@ class MockIamportClient:
                 "message": "존재하지 않는 결제입니다",
                 "response": None
             }
-        
+
         payment = self.payments[imp_uid]
-        
+
         # 이미 취소된 결제
         if payment["status"] == "cancelled":
             return {
@@ -75,11 +75,11 @@ class MockIamportClient:
                 "message": "이미 취소된 결제입니다",
                 "response": payment
             }
-        
+
         # 결제 취소 처리
         payment["status"] = "cancelled"
         self.payments[imp_uid] = payment
-        
+
         return {
             "code": 0,
             "message": "취소 성공",
@@ -89,7 +89,7 @@ class MockIamportClient:
     def create_payment(self, merchant_uid: str, amount: float, name: str, buyer_email: str) -> Dict[str, Any]:
         """결제 생성 모킹 (포트원 API에는 없지만 테스트용)"""
         imp_uid = f"imp_test_{merchant_uid[-8:]}"
-        
+
         payment = {
             "imp_uid": imp_uid,
             "merchant_uid": merchant_uid,
@@ -99,9 +99,9 @@ class MockIamportClient:
             "status": "ready",
             "created_at": int(datetime.now().timestamp())
         }
-        
+
         self.payments[imp_uid] = payment
-        
+
         return {
             "code": 0,
             "message": "결제 생성 성공",
@@ -112,17 +112,17 @@ class MockIamportClient:
         """결제 완료 처리 모킹 (테스트용)"""
         if imp_uid not in self.payments:
             return {
-                "code": 1, 
+                "code": 1,
                 "message": "존재하지 않는 결제입니다",
                 "response": None
             }
-        
+
         payment = self.payments[imp_uid]
         payment["status"] = "paid"
         payment["paid_at"] = int(datetime.now().timestamp())
-        
+
         self.payments[imp_uid] = payment
-        
+
         return {
             "code": 0,
             "message": "결제 완료",

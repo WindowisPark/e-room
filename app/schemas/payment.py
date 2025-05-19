@@ -32,5 +32,3 @@ class SubscriptionPurchase(BaseModel):
     plan_type: PlanType
     duration_months: int = 1  # 1-12개월
     payment_method: str
-
-    

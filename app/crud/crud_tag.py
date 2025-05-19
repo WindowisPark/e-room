@@ -25,11 +25,11 @@ def get_tags_by_user(db: Session, user_id: int) -> List[PDFTag]:
     return db.query(PDFTag).filter(PDFTag.user_id == user_id).all()
 
 def create_tag(
-    db: Session, 
-    pdf_id: int, 
-    user_id: int, 
-    page: int, 
-    content: str, 
+    db: Session,
+    pdf_id: int,
+    user_id: int,
+    page: int,
+    content: str,
     position: Dict[str, float],
     annotation_type: str = "highlight"
 ) -> PDFTag:
@@ -45,39 +45,39 @@ def create_tag(
     db.add(db_tag)
     db.commit()
     db.refresh(db_tag)
-    
+
     # 멘션 처리
     mentions, _ = PDFProcessor.parse_mentions_and_tags(content)
     if mentions:
         process_mentions(db, db_tag.id, mentions)
-    
+
     return db_tag
 
 def update_tag(
-    db: Session, 
-    tag_id: int, 
-    user_id: int, 
-    content: Optional[str] = None, 
+    db: Session,
+    tag_id: int,
+    user_id: int,
+    content: Optional[str] = None,
     position: Optional[Dict[str, float]] = None
 ) -> Optional[PDFTag]:
     """태그/주석 업데이트 (작성자만 가능)"""
     db_tag = get_tag_by_id(db, tag_id)
     if not db_tag or db_tag.user_id != user_id:
         return None
-    
+
     # 업데이트 필드 처리
     if content is not None:
         db_tag.content = content
-        
+
         # 멘션 업데이트
         db.query(PDFTagMention).filter(PDFTagMention.tag_id == tag_id).delete()
         mentions, _ = PDFProcessor.parse_mentions_and_tags(content)
         if mentions:
             process_mentions(db, db_tag.id, mentions)
-    
+
     if position is not None:
         db_tag.position = position
-    
+
     db.commit()
     db.refresh(db_tag)
     return db_tag
@@ -87,7 +87,7 @@ def delete_tag(db: Session, tag_id: int, user_id: int) -> bool:
     db_tag = get_tag_by_id(db, tag_id)
     if not db_tag or db_tag.user_id != user_id:
         return False
-    
+
     db.delete(db_tag)
     db.commit()
     return True
@@ -104,7 +104,7 @@ def process_mentions(db: Session, tag_id: int, usernames: List[str]) -> None:
                 mentioned_user_id=user.id
             )
             db.add(db_mention)
-    
+
     db.commit()
 
 def get_pdf_by_id(db: Session, pdf_id: int) -> Optional[PDFFile]:
@@ -112,10 +112,10 @@ def get_pdf_by_id(db: Session, pdf_id: int) -> Optional[PDFFile]:
     return db.query(PDFFile).filter(PDFFile.id == pdf_id).first()
 
 def create_pdf_file(
-    db: Session, 
-    filename: str, 
-    file_path: str, 
-    owner_id: int, 
+    db: Session,
+    filename: str,
+    file_path: str,
+    owner_id: int,
     team_id: Optional[int] = None
 ) -> PDFFile:
     """새 PDF 파일 생성"""
@@ -133,11 +133,11 @@ def create_pdf_file(
 def delete_pdf_file(db: Session, pdf_id: int, user_id: int, is_admin: bool = False) -> bool:
     """PDF 파일 삭제 (소유자 또는 관리자만 가능)"""
     db_pdf = get_pdf_by_id(db, pdf_id)
-    
+
     # 파일이 없거나 삭제 권한이 없음
     if not db_pdf or (db_pdf.owner_id != user_id and not is_admin):
         return False
-    
+
     db.delete(db_pdf)
     db.commit()
     return True

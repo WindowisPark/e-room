@@ -25,10 +25,10 @@ async def get_user_details(
     current_user: User = Depends(deps.get_current_user)
 ):
     """현재 사용자의 상세 정보 조회 (요금제, 팀 정보 등 포함)"""
-    
+
     # 팀 정보 조회
     teams = await get_user_teams(db=db, user_id=current_user.id)
-    
+
     # 요금제 정보
     subscription_info = {
         "plan_type": current_user.plan_type,
@@ -37,32 +37,32 @@ async def get_user_details(
         "days_until_expiry": current_user.days_until_expiry,
         "max_team_spaces": current_user.max_team_spaces
     }
-    
+
     # 게이미피케이션 요약 정보
     gamification_summary = get_point_summary(db, current_user.id)
-    
+
     # 배지 정보
     badges = await get_user_badges(db, current_user.id)
     recent_badges = badges[:3]  # 최근 3개만
-    
+
     # 알림 정보
     unread_notifications = get_unread_notification_count(db, current_user.id)
-    
+
     # 스토리지 사용량 계산
     pdfs = get_pdf_files_by_user(db, current_user.id)
-    
+
     storage_info = {
         "total_pdfs": len(pdfs),
         "storage_used_mb": sum(os.path.getsize(pdf.file_path) for pdf in pdfs if os.path.exists(pdf.file_path)) / (1024 * 1024),
         "storage_limit_mb": 1024 if current_user.plan_type == "free" else (5120 if current_user.plan_type == "premium" else 20480)
     }
-    
+
     # 활동 통계
     annotations_count = db.query(PDFTag).filter(PDFTag.user_id == current_user.id).count()
-    
+
     # 결제 정보
     recent_payments = get_user_payments(db, current_user.id, limit=1)
-    
+
     payment_info = None
     if recent_payments:
         payment = recent_payments[0]
@@ -71,7 +71,7 @@ async def get_user_details(
             "last_payment_amount": payment.amount,
             "next_payment_date": current_user.plan_expires_at
         }
-    
+
     # 가입 후 경과 일수 계산
     days_since_signup = (datetime.now(timezone.utc) - current_user.created_at).days
 
@@ -80,7 +80,7 @@ async def get_user_details(
         "signup_date": current_user.created_at,
         "days_since_signup": days_since_signup
     }
-    
+
     return {
         "user": {
             "id": current_user.id,

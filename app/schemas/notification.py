@@ -16,6 +16,6 @@ class NotificationResponse(NotificationBase):
     id: int
     is_read: bool
     created_at: datetime
-    
+
     class Config:
         orm_mode = True

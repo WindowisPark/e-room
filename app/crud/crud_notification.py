@@ -33,10 +33,10 @@ def get_notifications_by_user(
 ) -> List[Notification]:
     """사용자별 알림 목록 조회"""
     query = db.query(Notification).filter(Notification.user_id == user_id)
-    
+
     if unread_only:
         query = query.filter(Notification.is_read == False)
-    
+
     return (
         query
         .order_by(desc(Notification.created_at))
@@ -60,10 +60,10 @@ def mark_notification_as_read(db: Session, notification_id: int, user_id: int) -
         .filter(Notification.id == notification_id, Notification.user_id == user_id)
         .first()
     )
-    
+
     if not notification:
         return False
-    
+
     notification.is_read = True
     db.commit()
     return True
@@ -75,7 +75,7 @@ def mark_all_notifications_as_read(db: Session, user_id: int) -> int:
         .filter(Notification.user_id == user_id, Notification.is_read == False)
         .update({"is_read": True})
     )
-    
+
     db.commit()
     return result  # 업데이트된 알림 수 반환
 
@@ -86,10 +86,10 @@ def delete_notification(db: Session, notification_id: int, user_id: int) -> bool
         .filter(Notification.id == notification_id, Notification.user_id == user_id)
         .first()
     )
-    
+
     if not notification:
         return False
-    
+
     db.delete(notification)
     db.commit()
     return True
@@ -97,14 +97,14 @@ def delete_notification(db: Session, notification_id: int, user_id: int) -> bool
 def delete_old_notifications(db: Session, days: int = 30) -> int:
     """일정 기간이 지난 알림 일괄 삭제"""
     import datetime
-    
+
     cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
-    
+
     result = (
         db.query(Notification)
         .filter(Notification.created_at < cutoff_date)
         .delete()
     )
-    
+
     db.commit()
     return result  # 삭제된 알림 수 반환

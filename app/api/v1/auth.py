@@ -64,7 +64,7 @@ async def kakao_authorize():
     카카오 OAuth2 인증 URL 생성 - 동의 항목 설정에 맞게 수정
     """
     encoded_redirect_uri = urllib.parse.quote(settings.KAKAO_REDIRECT_URI, safe=':/')
-    
+
     # 동의 항목은 카카오 개발자 콘솔의 설정과 일치시킴
     authorization_url = (
         "https://kauth.kakao.com/oauth/authorize?"
@@ -73,9 +73,9 @@ async def kakao_authorize():
         f"&response_type=code"
         f"&scope=profile_nickname,profile_image,account_email,name,phone_number"
     )
-    
+
     logger.info(f"카카오 인증 URL 생성: {authorization_url}")
-    
+
     return {
         "authorization_url": authorization_url
     }
@@ -105,12 +105,12 @@ async def kakao_callback(
         try:
             # 카카오 토큰 요청
             token_response = await client.post(token_url, data=token_data)
-            
+
             # 응답 상태 코드 및 내용 로깅
             logger.info(f"토큰 응답 상태: {token_response.status_code}")
             if token_response.status_code != 200:
                 logger.error(f"토큰 응답 에러: {token_response.text}")
-                
+
             token_response.raise_for_status()
             token_info = token_response.json()
             logger.info(f"토큰 정보: {token_info}")
@@ -124,12 +124,12 @@ async def kakao_callback(
             user_info_response.raise_for_status()
             user_info = user_info_response.json()
             logger.info(f"사용자 정보: {json.dumps(user_info, indent=2, ensure_ascii=False)}")
-            
+
             # 사용자 정보 처리 - 동의 항목에 맞게 수정
             kakao_account = user_info.get("kakao_account", {})
             profile = kakao_account.get("profile", {})
             kakao_id = str(user_info.get("id"))
-            
+
             if not kakao_id:
                 raise HTTPException(
                     status_code=400,
@@ -142,19 +142,19 @@ async def kakao_callback(
             email = kakao_account.get("email")
             name = kakao_account.get("name")
             phone_number = kakao_account.get("phone_number")
-            
+
             # 기존 사용자인지 확인
             user = crud.user.get_by_oauth_id(db, "kakao", kakao_id)
-            
+
             # 새 사용자라면 등록
             if not user:
                 # 필수 정보 확인 및 대체값 설정
                 if not email:
                     email = f"kakao_{kakao_id}@example.com"  # 이메일 없는 경우 대체값
-                
+
                 # 표시 이름은 실명 > 닉네임 > 기본값 순으로 사용
                 display_name = name or nickname or "Kakao User"
-                
+
                 user_in = schemas.UserCreateOAuth(
                     oauth_provider="kakao",
                     oauth_id=kakao_id,
@@ -164,12 +164,12 @@ async def kakao_callback(
                     phone_number=phone_number,  # 전화번호 필드 추가
                     is_verified=True  # 카카오 인증은 기본적으로 verified 상태
                 )
-                
+
                 user = crud.user.create_oauth_user(db, obj_in=user_in)
-                
+
                 # 새 사용자인 경우 기본 폴더 생성
                 create_user_folders(user.id)
-                
+
                 logger.info(f"✅ 카카오 회원가입 성공 - User ID: {user.id}, Name: {display_name}")
             else:
                 # 기존 사용자 정보 업데이트 (선택적)
@@ -180,7 +180,7 @@ async def kakao_callback(
                     update_data["username"] = nickname
                 if name and not user.full_name:
                     update_data["full_name"] = name
-                
+
                 # 업데이트할 데이터가 있으면 적용
                 if update_data:
                     crud.user.update(db, db_obj=user, obj_in=update_data)
@@ -191,14 +191,14 @@ async def kakao_callback(
             # 토큰 생성
             access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-            
+
             access_token = security.create_access_token(user.id, expires_delta=access_token_expires)
             refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
-            
+
             # Refresh 토큰 저장
             security.store_refresh_token(
-                user.id, 
-                refresh_token, 
+                user.id,
+                refresh_token,
                 int(refresh_token_expires.total_seconds())
             )
 
@@ -207,7 +207,7 @@ async def kakao_callback(
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
             }
-            
+
         except httpx.HTTPStatusError as e:
             # 응답 내용 로깅 추가
             error_detail = ""
@@ -215,7 +215,7 @@ async def kakao_callback(
                 error_detail = e.response.json()
             except:
                 error_detail = e.response.text
-                
+
             logger.error(f"🚨 카카오 인증 오류: {str(e)}, 상세: {error_detail}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

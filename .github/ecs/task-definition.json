@@ -34,7 +34,7 @@
                 {
                     "name": "BACKEND_CORS_ORIGINS",
                     "value": "[\"*\"]"
-                  }                  
+                  }
             ],
             "logConfiguration": {
                 "logDriver": "awslogs",

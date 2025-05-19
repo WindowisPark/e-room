@@ -23,7 +23,7 @@ class CollaborationMessageBase(BaseModel):
     sender_name: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     team_id: int
-    
+
 class CollaborationMessage(CollaborationMessageBase):
     """협업용 WebSocket 메시지 기본 구조"""
     type: str

@@ -21,12 +21,12 @@ def upgrade():
     # 1. PlanType enum 생성
     plantype = postgresql.ENUM('free', 'premium', 'vip', name='plantype')
     plantype.create(op.get_bind())
-    
+
     # 2. User 모델에 구독 관련 필드 추가
     op.add_column('users', sa.Column('plan_type', sa.Enum('free', 'premium', 'vip', name='plantype'), nullable=False, server_default='free'))
     op.add_column('users', sa.Column('plan_started_at', sa.DateTime(), nullable=True))
     op.add_column('users', sa.Column('plan_expires_at', sa.DateTime(), nullable=True))
-    
+
     # 3. team_activities 테이블 생성
     op.create_table('team_activities',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -48,11 +48,11 @@ def downgrade():
     # 1. team_activities 테이블 삭제
     op.drop_index(op.f('ix_team_activities_id'), table_name='team_activities')
     op.drop_table('team_activities')
-    
+
     # 2. User 모델에서 구독 관련 필드 제거
     op.drop_column('users', 'plan_expires_at')
     op.drop_column('users', 'plan_started_at')
     op.drop_column('users', 'plan_type')
-    
+
     # 3. PlanType enum 삭제
     op.execute('DROP TYPE plantype')

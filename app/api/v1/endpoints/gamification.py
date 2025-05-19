@@ -7,8 +7,8 @@ from typing import List, Optional
 from app.api.deps import get_db, get_current_user, get_admin_user
 from app.models.user import User
 from app.services.point_service import (
-    add_points, 
-    get_point_summary, 
+    add_points,
+    get_point_summary,
     get_point_history,
     PointActionType
 )
@@ -65,10 +65,10 @@ async def admin_add_points(
         points=points,
         description=description
     )
-    
+
     if not result.get("success"):
         raise HTTPException(status_code=404, detail=result.get("error"))
-    
+
     return result
 
 @router.get("/profile", response_model=UserGamificationProfile)
@@ -83,11 +83,11 @@ async def get_gamification_profile(
     try:
         # 포인트 요약 정보 조회
         point_summary = get_point_summary(db, current_user.id)
-        
+
         # 배지 정보 조회 (아직 구현되지 않음)
         # 구현 후 실제 데이터로 교체 필요
         badges = []
-        
+
         return {
             "user_id": current_user.id,
             "username": current_user.username,

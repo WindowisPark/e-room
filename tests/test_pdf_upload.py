@@ -29,7 +29,7 @@ def test_upload_single_pdf(client):
 def test_upload_invalid_file_type(client):
     """
     테스트 목적: PDF 외 확장자(.txt 등)를 업로드할 경우 400 오류 반환 여부 확인
-    
+
     전제 조건:
     - .txt 파일이 준비되어 있어야 함
 

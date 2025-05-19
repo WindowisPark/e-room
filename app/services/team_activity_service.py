@@ -18,7 +18,7 @@ async def log_team_activity(
 ) -> TeamActivity:
     """
     팀 활동 로그 기록
-    
+
     Args:
         db: 데이터베이스 세션
         team_id: 팀 ID
@@ -27,7 +27,7 @@ async def log_team_activity(
         resource_type: 리소스 유형 (pdf, annotation, comment 등)
         resource_id: 관련 리소스 ID (있는 경우)
         details: 활동 상세 정보 (JSON으로 저장)
-    
+
     Returns:
         생성된 TeamActivity 객체
     """
@@ -40,11 +40,11 @@ async def log_team_activity(
         details=details,
         created_at=datetime.utcnow()
     )
-    
+
     db.add(activity)
     db.commit()
     db.refresh(activity)
-    
+
     return activity
 
 async def get_team_activities(
@@ -60,7 +60,7 @@ async def get_team_activities(
 ) -> List[TeamActivity]:
     """
     팀 활동 로그 조회 (필터링 및 페이지네이션 지원)
-    
+
     Args:
         db: 데이터베이스 세션
         team_id: 팀 ID
@@ -71,11 +71,11 @@ async def get_team_activities(
         action: 액션 필터
         page: 페이지 (1부터 시작)
         limit: 페이지당 결과 수
-    
+
     Returns:
         TeamActivity 객체 목록
     """
-  
+
 
     query = db.query(TeamActivity).options(joinedload(TeamActivity.user))  # ✅ 먼저 선언
 
@@ -85,23 +85,23 @@ async def get_team_activities(
         query = query.filter(TeamActivity.created_at >= start_date)
 
 
-    
+
     if end_date:
         query = query.filter(TeamActivity.created_at <= end_date)
-    
+
     if user_id:
         query = query.filter(TeamActivity.user_id == user_id)
-    
+
     if resource_type:
         query = query.filter(TeamActivity.resource_type == resource_type)
-    
+
     if action:
         query = query.filter(TeamActivity.action == action)
-    
+
     query = query.options(joinedload(TeamActivity.user))  # ✅ 유저 미리 로딩
     query = query.order_by(TeamActivity.created_at.desc())
     query = query.offset((page - 1) * limit).limit(limit)
-    
+
     return query.all()
 
 async def get_recent_team_activities(
@@ -112,18 +112,18 @@ async def get_recent_team_activities(
 ) -> List[TeamActivity]:
     """
     최근 팀 활동 로그 조회
-    
+
     Args:
         db: 데이터베이스 세션
         team_id: 팀 ID
         hours: 최근 몇 시간 내의 활동을 조회할지
         limit: 최대 결과 수
-    
+
     Returns:
         TeamActivity 객체 목록
     """
     start_date = datetime.utcnow() - timedelta(hours=hours)
-    
+
     return await get_team_activities(
         db=db,
         team_id=team_id,
@@ -142,7 +142,7 @@ async def get_user_team_activities(
 ) -> List[TeamActivity]:
     """
     특정 사용자의 팀 활동 로그 조회
-    
+
     Args:
         db: 데이터베이스 세션
         user_id: 사용자 ID
@@ -150,19 +150,19 @@ async def get_user_team_activities(
         days: 최근 몇 일 내의 활동을 조회할지
         page: 페이지 (1부터 시작)
         limit: 페이지당 결과 수
-    
+
     Returns:
         TeamActivity 객체 목록
     """
     start_date = datetime.utcnow() - timedelta(days=days)
-    
+
     query = db.query(TeamActivity).filter(TeamActivity.user_id == user_id)
-    
+
     if team_id:
         query = query.filter(TeamActivity.team_id == team_id)
-    
+
     query = query.filter(TeamActivity.created_at >= start_date)
     query = query.order_by(TeamActivity.created_at.desc())
     query = query.offset((page - 1) * limit).limit(limit)
-    
+
     return query.all()

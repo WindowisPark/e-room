@@ -19,7 +19,7 @@ class TeamResponse(TeamBase):
     created_at: datetime
     role: Optional[str] = None
     is_owner: Optional[bool] = None
-    
+
     class Config:
         orm_mode = True
 
@@ -37,7 +37,7 @@ class TeamMemberResponse(TeamMemberBase):
     username: str
     email: str
     joined_at: datetime
-    
+
     class Config:
         orm_mode = True
 

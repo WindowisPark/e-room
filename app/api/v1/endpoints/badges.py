@@ -8,7 +8,7 @@ from app.api.deps import get_db, get_current_user, get_admin_user
 from app.models.user import User
 from app.services.badge_service import (
     check_and_award_badge,
-    check_achievement_badges, 
+    check_achievement_badges,
     get_user_badges,
     get_available_badges
 )
@@ -62,11 +62,11 @@ async def admin_award_badge(
     관리자가 특정 사용자에게 배지 수여 (관리자 전용)
     """
     result = await check_and_award_badge(db, user_id, badge_code)
-    
+
     if not result or not result.get("success"):
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=result.get("error", "배지 부여 실패")
         )
-    
+
     return result

@@ -3,7 +3,7 @@
 """initial migration
 
 Revision ID: initial_migration
-Revises: 
+Revises:
 Create Date: 2024-01-29 00:00:00.000000
 
 """

@@ -35,21 +35,21 @@ async def send_verification_code(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효한 전화번호를 입력해주세요"
         )
-    
+
     # 전화번호 저장 (인증 완료 전이므로 인증 상태는 False)
     user_update = {"phone_number": phone_number, "is_phone_verified": False}
     crud.user.update(db, db_obj=current_user, obj_in=user_update)
-    
+
     # 인증 코드 발송
     result = sms_service.send_verification_sms(phone_number)
-    
+
     if not result.get("success"):
         logger.error(f"SMS 발송 실패: {result.get('message')}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=result.get("message", "SMS 발송에 실패했습니다")
         )
-    
+
     return {"message": "인증번호가 발송되었습니다"}
 
 @router.post("/verify")
@@ -67,25 +67,25 @@ async def verify_phone_number(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="저장된 전화번호와 일치하지 않습니다"
         )
-    
+
     # 인증 코드 검증
     is_verified = sms_service.verify_code(
-        verification_data.phone_number, 
+        verification_data.phone_number,
         verification_data.verification_code
     )
-    
+
     if not is_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="인증번호가 일치하지 않거나 만료되었습니다"
         )
-    
+
     # 인증 성공 시 사용자 정보 업데이트
     user_update = {"is_phone_verified": True}
     updated_user = crud.user.update(db, db_obj=current_user, obj_in=user_update)
-    
+
     logger.info(f"전화번호 인증 성공: User ID {current_user.id}, 전화번호: {verification_data.phone_number}")
-    
+
     return {
         "message": "전화번호 인증이 완료되었습니다",
         "is_phone_verified": True
@@ -102,4 +102,3 @@ async def get_phone_verification_status(
         "phone_number": current_user.phone_number,
         "is_verified": current_user.is_phone_verified
     }
-

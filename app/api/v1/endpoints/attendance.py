@@ -38,16 +38,16 @@ async def check_attendance(
     # 출석 처리 (DB + Redis)
     attendance = crud.crud_attendance.upsert_attendance(db, user_id)
     mark_attendance(user_id)
-    
+
     # 연속 출석일 업데이트
     current_streak = crud.crud_attendance.get_current_streak(db, user_id)
     current_user.streak_days = current_streak
     db.commit()
-    
+
     # ✅ 포인트 적립 (기본 출석 포인트 + 연속 출석 보너스)
     base_points = 10  # 기본 출석 포인트
     bonus_points = 0
-    
+
     # 연속 출석에 따른 보너스 포인트 계산
     if current_streak >= 30:
         bonus_points = 30  # 30일 이상 연속 출석
@@ -57,7 +57,7 @@ async def check_attendance(
         bonus_points = 10  # 7일 이상 연속 출석
     elif current_streak >= 3:
         bonus_points = 5   # 3일 이상 연속 출석
-    
+
     # 포인트 적립
     point_result = await add_points(
         db=db,

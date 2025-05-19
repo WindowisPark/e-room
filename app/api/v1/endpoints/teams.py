@@ -29,7 +29,7 @@ async def ensure_team_access(team_id: int, user: User, db: Session):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이 팀스페이스에 접근할 권한이 없습니다"
         )
-    
+
 @router.post("/", response_model=TeamResponse)
 async def create_team(
     team_data: TeamCreate,
@@ -37,7 +37,7 @@ async def create_team(
     current_user: User = Depends(get_current_user)
 ):
     """팀스페이스 생성 (구독 권한 확인)"""
-    
+
     # 팀 생성 권한 확인
     has_permission = await check_team_creation_permission(db, current_user.id)
     if not has_permission:
@@ -45,13 +45,13 @@ async def create_team(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="팀스페이스 생성 권한이 없습니다. 구독 요금제를 확인해주세요."
         )
-    
+
     # 기존 로직 유지
     result = await create_new_team(db=db, team_data=team_data, owner_id=current_user.id)
-    
+
     # 포인트 적립
     from app.services.point_service import add_points, PointActionType
-    
+
     await add_points(
         db=db,
         user_id=current_user.id,
@@ -95,18 +95,18 @@ async def update_team(
 ):
     """팀스페이스 정보 업데이트 (소유자만 가능)"""
     result = await update_team_info(
-        db=db, 
-        team_id=team_id, 
-        team_data=team_data, 
+        db=db,
+        team_id=team_id,
+        team_data=team_data,
         owner_id=current_user.id
     )
-    
+
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="팀스페이스를 수정할 권한이 없습니다"
         )
-    
+
     return result
 
 @router.delete("/{team_id}")
@@ -117,17 +117,17 @@ async def delete_team(
 ):
     """팀스페이스 삭제 (소유자만 가능)"""
     success = await delete_team_space(
-        db=db, 
-        team_id=team_id, 
+        db=db,
+        team_id=team_id,
         owner_id=current_user.id
     )
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="팀스페이스를 삭제할 권한이 없습니다"
         )
-    
+
     return {"message": "팀스페이스가 삭제되었습니다"}
 
 @router.get("/{team_id}/members", response_model=List[TeamMemberResponse])
@@ -144,7 +144,7 @@ async def get_members(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이 팀스페이스의 멤버 목록을 조회할 권한이 없습니다"
         )
-    
+
     members = await get_team_member_list(db=db, team_id=team_id)
     return members
 
@@ -163,13 +163,13 @@ async def invite_member(
         role=member_data.role,
         admin_id=current_user.id
     )
-    
+
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="멤버를 초대할 권한이 없거나 유효하지 않은 사용자입니다"
         )
-    
+
     return result
 
 @router.delete("/{team_id}/members/{user_id}")
@@ -181,18 +181,18 @@ async def remove_member(
 ):
     """팀스페이스 멤버 제거 (소유자만 가능)"""
     success = await remove_member_from_team(
-        db=db, 
-        team_id=team_id, 
-        user_id=user_id, 
+        db=db,
+        team_id=team_id,
+        user_id=user_id,
         admin_id=current_user.id
     )
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="멤버를 제거할 권한이 없거나 유효하지 않은 요청입니다"
         )
-    
+
     return {"message": "멤버가 제거되었습니다"}
 
 @router.post("/{team_id}/owner-leave")
