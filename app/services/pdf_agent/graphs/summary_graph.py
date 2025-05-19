@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph
-import nodes.summary as summary
+from app.services.pdf_agent.nodes import summary
+
 
 
 def add_summary_node_on_graph(graph: StateGraph) -> StateGraph:

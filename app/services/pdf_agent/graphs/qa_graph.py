@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph
-import nodes.qa_system as qa_system
+from app.services.pdf_agent.nodes import qa_system
 
 
 def add_qa_node_on_graph(graph: StateGraph) -> StateGraph:

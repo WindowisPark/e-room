@@ -4,13 +4,13 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_upstage import UpstageDocumentParseLoader
 from langchain_text_splitters import CharacterTextSplitter,RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage,SystemMessage
-from states import AgentState
+from app.services.pdf_agent.states import AgentState
 from gptpdf import parse_pdf
 import mimetypes
 import base64
 import os
 import json
-from tools import search_documents_for_exam
+from app.services.pdf_agent.tools import search_documents_for_exam
 
 envs = dotenv_values(".env")
 api_key = envs["OPENAI_API_KEY"]

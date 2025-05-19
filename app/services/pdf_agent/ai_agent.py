@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.models.tag import PDFFile
 from app.services.pdf_agent.processor import PDFProcessor
-from app.services.pdf_agent.embedding_service import EmbeddingService
 from app.core.config import settings
 
 # AI 서비스 통합
@@ -93,9 +92,6 @@ class PDFAgent:
             요약 결과 (성공 여부, 요약 텍스트 등)
         """
         try:
-            # 임베딩 서비스 초기화
-            embedding_service = EmbeddingService()
-
             # 문서 조회
             pdf_file = db.query(PDFFile).filter(PDFFile.id == document_id).first()
             if not pdf_file:

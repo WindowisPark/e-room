@@ -1,8 +1,8 @@
-import nodes.common as common
-import nodes.exam as exam
-import nodes.qa_system as qa_system
-import nodes.scheduler as scheduler
-import nodes.summary as summary
+from app.services.pdf_agent.nodes import common
+from app.services.pdf_agent.nodes import exam
+from app.services.pdf_agent.nodes import qa_system
+from app.services.pdf_agent.nodes import scheduler
+from app.services.pdf_agent.nodes import summary
 from langgraph.graph import StateGraph
 
 def add_common_node_on_graph(graph: StateGraph) -> StateGraph:

@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph
-import nodes.exam as exam
+from app.services.pdf_agent.nodes import exam
 
 
 def add_exam_node_on_graph(graph: StateGraph) -> StateGraph:

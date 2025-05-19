@@ -1,8 +1,7 @@
 from langchain_openai import ChatOpenAI
-from states import AgentState
-from tools import search_documents_for_scheduler
+from app.services.pdf_agent.states import AgentState
+from app.services.pdf_agent.tools import search_documents_for_exam
 from dotenv import dotenv_values
-from states import AgentState
 from langchain_core.messages import HumanMessage
 import os
 from datetime import date

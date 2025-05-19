@@ -4,8 +4,8 @@ from langchain_openai import ChatOpenAI,OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from gptpdf import parse_pdf
 from opensearchpy import OpenSearch
-from states import AgentState
-from tools import search_documents_for_qa
+from app.services.pdf_agent.states import AgentState
+from app.services.pdf_agent.tools import search_documents_for_exam
 import os
 envs = dotenv_values(".env")
 api_key = envs["OPENAI_API_KEY"]
