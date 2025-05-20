@@ -13,11 +13,17 @@ llm = ChatOpenAI(model = "gpt-4.1-mini")
 def start_point_of_summary(state : AgentState):
     print("요약 그래프 시작")
 
-def get_related_pdf(state : AgentState):
+def get_related_pdf(state: AgentState):
     messages = state["messages"]
     require = messages.pop().content
-    pdf = search_documents_for_summary(state["user_id"],state["folder"],require)
-    return {"pdf_content":pdf[0]}
+    pdf = search_documents_for_summary(state["user_id"], state["folder"], require)
+
+    if not pdf:
+        raise ValueError(
+            f"관련 PDF 문서를 찾을 수 없습니다. user_id={state['user_id']}, folder={state['folder']}, query='{require}'"
+        )
+
+    return {"pdf_content": pdf[0]}
 
 def pdf_parsing(state: AgentState):
     pdf_content = state["pdf_content"]

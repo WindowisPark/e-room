@@ -23,6 +23,3 @@ from app.models.team import Team, TeamMember
 # 4. 여러 모델을 참조하는 복합 모델
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
 from app.models.team_activity import TeamActivity
-
-# 5. 가장 의존성이 많은 모델을 마지막에 임포트
-from app.models.task import Task

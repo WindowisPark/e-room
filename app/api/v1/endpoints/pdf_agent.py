@@ -36,6 +36,8 @@ async def process_document(
     """LangGraph 기반 PDF 문서 처리 (전처리 + 벡터 저장 등 포함)"""
     from app.services.pdf_agent.tools import get_initial_state
     from app.services.pdf_agent.graphs.main import intergrate_graph
+    from langchain_core.messages import HumanMessage
+    import os
 
     # 권한 검증
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
@@ -50,11 +52,28 @@ async def process_document(
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
 
     try:
-        # LangGraph 실행
+        # LangGraph 실행 준비
         graph = intergrate_graph()
-        state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
+        state = get_initial_state()
+        
+        # 중요: 파일 경로에서 폴더 이름 추출
+        folder_name = os.path.basename(os.path.dirname(document.file_path))
+        
+        # 필요한 모든 상태 변수 설정 (user_id 포함)
+        state["user_id"] = str(current_user.id)
+        state["folder"] = folder_name  # 폴더 이름 설정 (select_folder 함수가 필요로 할 수 있음)
+        state["document_id"] = document.id 
+        
+        # HumanMessage 추가
+        query = "문서를 처리하고 분석해주세요"
+        state["messages"].append(HumanMessage(content=query))
+        
+        # 디버깅용 로그
+        print(f"Starting LangGraph with state: {state}")
+        
+        # LangGraph 실행
         result_state = graph.invoke(state)
-
+        
         return {
             "success": True,
             "document_id": document.id,
@@ -64,6 +83,9 @@ async def process_document(
         }
 
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"LangGraph Error: {str(e)}\n{error_traceback}")
         raise HTTPException(status_code=500, detail=f"LangGraph 처리 중 오류 발생: {str(e)}")
 
 @router.post("/{document_id}/query", response_model=Dict[str, Any])
@@ -90,7 +112,8 @@ async def query_document(
 
     try:
         graph = get_qa_graph()
-        state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
+        state = get_initial_state()
+        state["user_id"] = str(current_user.id) 
         state["purpose"] = "qa"
         state["query"] = query
 
@@ -133,9 +156,10 @@ async def summarize_document(
     try:
         # 요약용 LangGraph 실행
         graph = get_summary_graph()
-        state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
+        state = get_initial_state()
+        state["user_id"] = str(current_user.id)  # ✅ 필수!
         state["purpose"] = "summarize"
-        state["summary_level"] = level  # 요약 수준이 필요하다면 상태에 삽입
+        state["summary_level"] = level
 
         result_state = graph.invoke(state)
 
@@ -176,7 +200,7 @@ async def generate_questions(
     try:
         # 시험 생성용 LangGraph 실행
         graph = get_exam_graph()
-        state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
+        state = get_initial_state()  # 매개변수 없이 호출
         state["purpose"] = "generate_questions"
         state["question_count"] = count
 

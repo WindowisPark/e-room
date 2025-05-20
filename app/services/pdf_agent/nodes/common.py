@@ -15,9 +15,14 @@ llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=api_key)
 
 def input_question(state: AgentState) -> dict:
     """사용자에게 질문을 직접 입력받아 state 업데이트"""
-    question = input("질문을 입력해주세요: ")
     messages = state.get("messages", [])
-    messages.append(HumanMessage(content=question))
+    # 이미 메시지가 추가됐으면 그대로 반환
+    if len(messages) > 1:  # 시스템 메시지 외에 다른 메시지가 있는지 확인
+        return state
+    
+    # 기본 질문 추가
+    default_question = "문서를 처리하고 분석해주세요"
+    messages.append(HumanMessage(content=default_question))
     return {**state, "messages": messages}
 
 

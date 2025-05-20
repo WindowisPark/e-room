@@ -120,3 +120,47 @@ class S3StorageManager:
         except Exception as e:
             logger.error(f"S3 파일 목록 조회 실패: {str(e)}")
             return []
+        
+    async def save_multiple_pdfs(
+        self, user_id: int, folder: str, files: List[UploadFile], overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """
+        여러 개의 PDF 파일을 S3에 업로드
+
+        Args:
+            user_id: 사용자 ID
+            folder: 저장할 폴더 경로
+            files: 업로드된 파일 리스트
+            overwrite: 같은 이름일 때 덮어쓸지 여부 (현재는 미사용)
+
+        Returns:
+            업로드 결과 dict (성공/실패 내역 포함)
+        """
+        results = {"total": len(files), "success": [], "failed": []}
+
+        for file in files:
+            try:
+                if not file.filename.lower().endswith(".pdf"):
+                    raise ValueError("PDF 파일만 업로드 가능합니다.")
+
+                s3_key = f"users/{user_id}/{folder}/{file.filename}"
+                file_data = await file.read()
+
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    Body=file_data,
+                    ContentType="application/pdf"
+                )
+
+                results["success"].append({
+                    "original_name": file.filename,
+                    "saved_name": file.filename,
+                    "size": len(file_data),
+                    "path": f"https://{self.bucket_name}.s3.amazonaws.com/{s3_key}"
+                })
+            except Exception as e:
+                logger.error(f"파일 업로드 실패: {file.filename} - {str(e)}")
+                results["failed"].append(f"{file.filename}: {str(e)}")
+
+        return results

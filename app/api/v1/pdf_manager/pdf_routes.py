@@ -73,7 +73,7 @@ async def upload_pdf(
 async def get_files(
     user_id: int,
     folder_name: str,
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         return storage.list_files(user_id, folder_name)
@@ -88,7 +88,7 @@ async def get_files(
 async def create_folder(
     user_id: int,
     folder_name: str,
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         folder_path = storage.create_folder(user_id, folder_name)
@@ -108,7 +108,7 @@ async def delete_file(
     user_id: int,
     folder_name: str,
     file_name: str,
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         storage.delete_file(user_id, folder_name, file_name)
@@ -128,7 +128,7 @@ async def delete_file(
 async def delete_folder(
     user_id: int,
     folder_name: str,
-    storage: FileStorageManager = Depends(get_storage_manager)
+   storage = Depends(deps.get_storage_manager)
 ):
     try:
         storage.delete_folder(user_id, folder_name)
@@ -151,7 +151,7 @@ async def rename_file(
     folder_name: str,
     file_name: str,
     new_name: str = Query(...),
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         new_path = storage.rename_file(user_id, folder_name, file_name, new_name)
@@ -176,7 +176,7 @@ async def move_folder(
     old_folder: str,
     new_folder: str,
     create_if_not_exists: bool = Query(False),
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         new_path = storage.move_folder(user_id, old_folder, new_folder, create_if_not_exists)
@@ -202,7 +202,7 @@ async def move_file(
     file_name: str,
     new_folder: str = Query(...),
     create_if_not_exists: bool = Query(False),
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         new_path = storage.move_file(user_id, old_folder, file_name, new_folder, create_if_not_exists)
@@ -227,7 +227,7 @@ async def list_folders(
     include_subfolders: bool = False,
     skip: int = 0,
     limit: int = 100,
-    storage: FileStorageManager = Depends(get_storage_manager)
+    storage = Depends(deps.get_storage_manager)
 ):
     try:
         return storage.list_folders(user_id, include_subfolders, skip, limit)
