@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.10-slim
 
 WORKDIR /app
 
@@ -11,13 +11,18 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# requirements 분리 설치
+# pip 업그레이드
+RUN pip install --upgrade pip
+
+# 이메일 검증과 Pydantic 먼저 명시적으로 설치
+RUN pip install email-validator pydantic>=2.4.0
+
+# 나머지 requirements 설치
 COPY requirements/base.txt ./requirements/
-RUN pip install --upgrade pip \
-    && pip install --prefer-binary --use-deprecated=legacy-resolver -r requirements/base.txt
+RUN pip install --prefer-binary -r requirements/base.txt
 
 COPY requirements/dev.txt ./requirements/
-RUN pip install --prefer-binary --use-deprecated=legacy-resolver -r requirements/dev.txt
+RUN pip install --prefer-binary -r requirements/dev.txt
 
 # 앱 복사
 COPY . .

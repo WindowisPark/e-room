@@ -25,7 +25,7 @@ class ChromaDBService:
     def _initialize(self):
         """ChromaDB 클라이언트 초기화"""
         try:
-            self.db_path = os.path.join("/app/storage/chromadb")
+            self.db_path = settings.CHROMADB_STORAGE_PATH
             os.makedirs(self.db_path, exist_ok=True)
 
             self.client = chromadb.PersistentClient(
@@ -46,13 +46,14 @@ class ChromaDBService:
             logger.error(f"ChromaDB 초기화 실패: {str(e)}")
             self.client = None
 
-    def _get_user_collection(self, user_id: int, create_if_not_exists: bool = True):
+    def _get_user_collection(self, user_id: int, folder_name: str = "default", create_if_not_exists: bool = True):
         """사용자별 컬렉션 가져오기 (없으면 생성)"""
         if not self.client:
             logger.error("ChromaDB 클라이언트가 초기화되지 않았습니다.")
             return None
-
-        collection_name = f"user_{user_id}_vstore"
+        
+        # 사용자_폴더_저장소 형태의 컬렉션 이름 사용
+        collection_name = f"user_{user_id}_{folder_name}"
 
         try:
             collections = self.client.list_collections()
@@ -67,7 +68,7 @@ class ChromaDBService:
                 return self.client.create_collection(
                     name=collection_name,
                     embedding_function=self.embedding_function,
-                    metadata={"user_id": user_id}
+                    metadata={"user_id": user_id, "folder": folder_name}
                 )
             else:
                 return None
@@ -75,14 +76,15 @@ class ChromaDBService:
         except Exception as e:
             logger.error(f"사용자 컬렉션 접근 실패: {str(e)}")
             return None
-
-    def add_document_chunks(self, user_id: int, document_id: int, chunks: List[Dict[str, Any]]) -> bool:
-        collection = self._get_user_collection(user_id)
+        
+    def add_document_chunks(self, user_id: int, document_id: int, folder_name: str, chunks: List[Dict[str, Any]]) -> bool:
+        collection = self._get_user_collection(user_id, folder_name=folder_name)
         if not collection:
             return False
 
         try:
-            self.delete_document_chunks(user_id, document_id)
+            # 기존 청크 삭제 (폴더 포함 메타데이터)
+            self.delete_document_chunks(user_id, document_id, folder_name)
 
             ids = []
             texts = []
@@ -94,6 +96,7 @@ class ChromaDBService:
                 texts.append(chunk["text"])
                 metadatas.append({
                     "document_id": document_id,
+                    "folder": folder_name,  # 폴더 정보 추가
                     "chunk_index": chunk["index"],
                     "start_char": chunk.get("start_char", 0),
                     "end_char": chunk.get("end_char", len(chunk["text"])),
@@ -135,9 +138,14 @@ class ChromaDBService:
         user_id: int,
         document_id: int,
         query_text: str,
+        folder_name: str = "default",
         limit: int = 5
     ) -> List[Dict[str, Any]]:
-        collection = self._get_user_collection(user_id, create_if_not_exists=False)
+        collection = self._get_user_collection(
+            user_id, 
+            folder_name=folder_name, 
+            create_if_not_exists=False
+        )
         if not collection:
             return []
 

@@ -20,12 +20,11 @@ from app.core.config import settings
 # 각 기능별 LangGraph 빌더 및 상태 초기화 유틸
 from app.services.pdf_agent.tools import get_initial_state
 from app.services.pdf_agent.graphs.main import intergrate_graph
-from app.services.pdf_agent.graphs.qa_graph import build_qa_graph
-from app.services.pdf_agent.graphs.summary_graph import build_summary_graph
-from app.services.pdf_agent.graphs.exam_graph import build_exam_graph
+from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
+from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
+from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
 
 router = APIRouter()
-task_manager = TaskManager()
 
 
 @router.post("/{document_id}/process", response_model=Dict[str, Any])
@@ -76,7 +75,7 @@ async def query_document(
 ):
     """LangGraph 기반 문서 질의응답 처리"""
     from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.qa_graph import build_qa_graph
+    from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
 
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
@@ -90,7 +89,7 @@ async def query_document(
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
 
     try:
-        graph = build_qa_graph()
+        graph = get_qa_graph()
         state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
         state["purpose"] = "qa"
         state["query"] = query
@@ -118,7 +117,7 @@ async def summarize_document(
 ):
     """LangGraph 기반 문서 요약 실행"""
     from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.summary_graph import build_summary_graph
+    from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
 
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
@@ -133,7 +132,7 @@ async def summarize_document(
 
     try:
         # 요약용 LangGraph 실행
-        graph = build_summary_graph()
+        graph = get_summary_graph()
         state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
         state["purpose"] = "summarize"
         state["summary_level"] = level  # 요약 수준이 필요하다면 상태에 삽입
@@ -161,7 +160,7 @@ async def generate_questions(
 ):
     """LangGraph 기반 문서 문제 생성"""
     from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.exam_graph import build_exam_graph
+    from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
 
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
@@ -176,7 +175,7 @@ async def generate_questions(
 
     try:
         # 시험 생성용 LangGraph 실행
-        graph = build_exam_graph()
+        graph = get_exam_graph()
         state = get_initial_state(folder=document.folder_name, user_id=str(current_user.id))
         state["purpose"] = "generate_questions"
         state["question_count"] = count

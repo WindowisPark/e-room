@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     FILE_LIST_CACHE_TTL: int = 300
     FOLDER_LIST_CACHE_TTL: int = 300
 
+    # ✅ S3 설정 추가
+    S3_ENABLED: bool = False  # 기본값은 False로 설정
+    S3_BUCKET_NAME: Optional[str] = None
+    AWS_ACCESS_KEY: Optional[str] = None
+    AWS_SECRET_KEY: Optional[str] = None
+    AWS_REGION: str = "ap-northeast-2"  # 기본 리전 설정 (한국/서울)
+
+    # ✅ 스토리지 경로 설정
+    STORAGE_BASE_PATH: str = "./storage"  # 도커 볼륨 마운트 기준점
+    PDF_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}"  # 사용자 ID 폴더 내에 PDF 저장
+    CHUNKS_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chunks"  # 기존 청크 저장 경로
+    CHROMADB_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chromadb"  # 새로운 ChromaDB 저장 경로
     # ✅ PDF Agent 설정
     PDF_STORAGE_PATH: str = "./storage/pdf"
     PDF_CHUNK_SIZE: int = 1000

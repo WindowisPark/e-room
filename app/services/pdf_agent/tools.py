@@ -2,7 +2,8 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from dotenv import dotenv_values
-
+from app.core.config import settings
+from app.services.pdf_agent.chromadb_service import ChromaDBService
 
 def get_initial_state():
     return {

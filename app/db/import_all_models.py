@@ -23,8 +23,6 @@ from app.models.team_activity import TeamActivity
 # 5. PDF 관련 모델 (사용자와 팀 모델 의존)
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
 
-# 6. 작업 관련 모델 (사용자와 PDF 모델 의존)
-from app.models.task import Task
 
 # 모든 모델을 모아서 리스트로 정의 (필요시 사용)
 ALL_MODELS = [
