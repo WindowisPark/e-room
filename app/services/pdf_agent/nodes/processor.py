@@ -29,7 +29,7 @@ def load_pdf_text(state: AgentState) -> Dict[str, Any]:
         
         # 상태에서 문서 ID 가져오기
         document_id = state.get("document_id")
-        logger.info(f"PDF 로드 시작: document_id={document_id}, state={state}")
+        logger.info(f"PDF 로드 시작: document_id={document_id}")
         
         if not document_id:
             logger.error(f"document_id가 상태에 없습니다: {state}")
@@ -37,7 +37,6 @@ def load_pdf_text(state: AgentState) -> Dict[str, Any]:
                 **state,
                 "error": "document_id가 상태에 없습니다"
             }
-            
             
         # PDF 파일 조회
         pdf_file = db.query(PDFFile).filter(PDFFile.id == document_id).first()
@@ -49,18 +48,29 @@ def load_pdf_text(state: AgentState) -> Dict[str, Any]:
         if not os.path.exists(file_path):
             raise ValueError(f"파일이 존재하지 않습니다: {file_path}")
             
-        # PDF 파싱 (실제 구현에서는 PDFProcessor.parse_document 호출)
+        # PDF 파싱
         from app.services.pdf_agent.processor import PDFProcessor
         
         parsed_result = asyncio.run(PDFProcessor.parse_document(pdf_file))
         if not parsed_result.get("success"):
-            raise ValueError(parsed_result.get("error", "PDF 파싱 실패"))
+            error_msg = parsed_result.get("error", "PDF 파싱 실패")
+            logger.error(f"PDF 파싱 실패: {error_msg}")
+            return {
+                **state,
+                "error": error_msg
+            }
+        
+        # 텍스트 확인 로깅 추가
+        text = parsed_result.get("text", "")
+        logger.info(f"PDF 텍스트 추출 결과: {len(text)} 글자")
+        if not text:
+            logger.warning("추출된 텍스트가 없습니다!")
             
         # 결과 반환 - 새 상태 딕셔너리 생성
         return {
             **state,
-            "pdf_text": parsed_result["text"],
-            "pdf_metadata": parsed_result["metadata"],
+            "pdf_text": text,
+            "pdf_metadata": parsed_result.get("metadata", {}),
             "structure": parsed_result.get("structure", {})
         }
         
