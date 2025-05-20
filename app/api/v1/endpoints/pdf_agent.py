@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 import logging
+import os
 
 from app.api import deps
 from app.models.user import User
@@ -38,20 +39,106 @@ async def process_document(
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
 
     try:
-        # document_id를 정수형으로 명시적 변환하여 전달
+        from urllib.parse import urlparse
+        import tempfile
+        import os
+        import requests
+
+        file_path = document.file_path
+        parsed_url = urlparse(file_path)
+        is_http_s3_url = file_path.startswith("http://") or file_path.startswith("https://")
+        is_s3_uri = parsed_url.scheme == "s3" or "amazonaws.com" in parsed_url.netloc
+
+        temp_path = None
+
+        if is_s3_uri and not is_http_s3_url:
+            # boto3 방식 S3 다운로드
+            from app.core.config import settings
+            import boto3
+            from botocore.client import Config
+
+            logger.info(f"S3 파일 다운로드 시작 (boto3): {file_path}")
+
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            temp_path = temp_file.name
+            temp_file.close()
+
+            try:
+                bucket_name = parsed_url.netloc.split('.')[0]
+                object_key = parsed_url.path.lstrip('/')
+
+                s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=settings.AWS_ACCESS_KEY,
+                    aws_secret_access_key=settings.AWS_SECRET_KEY,
+                    region_name=settings.AWS_REGION,
+                    config=Config(signature_version='s3v4')
+                )
+
+                s3_client.download_file(bucket_name, object_key, temp_path)
+                logger.info(f"S3 파일 다운로드 완료: {file_path} -> {temp_path}")
+                file_path = temp_path
+            except Exception as e:
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                logger.error(f"S3 다운로드 실패: {e}")
+                raise HTTPException(status_code=500, detail="S3 파일 다운로드 실패")
+
+        elif is_http_s3_url:
+            # signed/public URL 다운로드 (requests 사용)
+            logger.info(f"S3 파일 다운로드 시작 (requests): {file_path}")
+
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            temp_path = temp_file.name
+            temp_file.close()
+
+            try:
+                response = requests.get(file_path, stream=True)
+                response.raise_for_status()
+
+                with open(temp_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                logger.info(f"S3 파일 다운로드 완료: {file_path} -> {temp_path}")
+                file_path = temp_path
+            except Exception as download_err:
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                logger.error(f"S3 파일 다운로드 실패: {str(download_err)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"S3 파일 다운로드 실패: {str(download_err)}"
+                )
+
+        elif not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
+
+        # 상태 초기화
         state = get_initial_state(
             user_id=str(current_user.id),
-            document_id=int(document_id),  # 명시적으로 int 타입 지정
-            pdf_path=document.file_path,
-            purpose="preprocessing"
+            document_id=int(document_id),
+            pdf_path=file_path,
+            purpose="preprocessing",
+            folder="default"
         )
-        # 디버깅 로그 추가
-        logger.info(f"PDF 처리 시작: document_id={document_id}, 상태={state}")
 
+        logger.info(f"PDF 처리 시작: document_id={document_id}, file_path={file_path}")
         graph = get_processing_graph()
         result = graph.invoke(state)
 
-        # 결과에 오류가 있으면 HTTPException 발생
+        # 임시 파일 삭제
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+                logger.info(f"임시 파일 삭제 완료: {temp_path}")
+            except Exception as del_err:
+                logger.warning(f"임시 파일 삭제 실패: {str(del_err)}")
+
         if result.get("error"):
             logger.error(f"PDF 처리 실패: {result.get('error')}")
             raise HTTPException(
@@ -59,16 +146,18 @@ async def process_document(
                 detail=f"문서 처리 중 오류 발생: {result.get('error')}"
             )
 
-
         return {
             "success": True,
             "document_id": document.id,
             "document_name": document.filename,
             "message": "문서 처리가 완료되었습니다.",
             "embedding_stored": result.get("embedding_stored", False),
+            "chunks_count": len(result.get("doc_chunks", [])),
             "error": result.get("error")
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"PDF Agent 오류: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"문서 처리 중 오류 발생: {str(e)}")

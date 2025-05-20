@@ -103,17 +103,25 @@ def get_processing_graph():
     """
     문서 처리만 수행하는 단순 그래프
     """
-    # 간소화된 방식 - dict 타입 사용
-    graph = StateGraph(dict)
-    
-    # 처리 노드만 추가
-    graph.add_node("load_pdf", load_pdf_text)
-    graph.add_node("split_chunks", split_into_chunks)
-    graph.add_node("store_embeddings", store_embedding)
-    
-    # 직렬화된 흐름
-    graph.set_entry_point("load_pdf")
-    graph.add_edge("load_pdf", "split_chunks")
-    graph.add_edge("split_chunks", "store_embeddings")
-    
-    return graph.compile()
+    try:
+        # 간소화된 방식 - dict 타입 사용
+        graph = StateGraph(dict)
+        
+        # 처리 노드만 추가
+        graph.add_node("load_pdf", load_pdf_text)
+        graph.add_node("split_chunks", split_into_chunks)
+        graph.add_node("store_embeddings", store_embedding)
+        
+        # 직렬화된 흐름
+        graph.set_entry_point("load_pdf")
+        graph.add_edge("load_pdf", "split_chunks")
+        graph.add_edge("split_chunks", "store_embeddings")
+        
+        return graph.compile()
+    except Exception as e:
+        logger.error(f"처리 그래프 생성 중 오류: {str(e)}", exc_info=True)
+        # 기본 오류 처리 함수를 포함한 최소 그래프 반환
+        graph = StateGraph(dict)
+        graph.add_node("error", lambda state: {**state, "error": f"그래프 초기화 실패: {str(e)}"})
+        graph.set_entry_point("error")
+        return graph.compile()

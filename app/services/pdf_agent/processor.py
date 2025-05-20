@@ -5,6 +5,7 @@ import logging
 import re
 import json
 import shutil
+import requests 
 from datetime import datetime
 import pdfplumber
 from pdf2image import convert_from_path
@@ -21,81 +22,6 @@ class PDFProcessor:
     - 문서 파싱, 청킹, 메타데이터 및 구조 정보 추출
     """
 
-    @staticmethod
-    def _extract_text_with_fallback(file_path: str) -> Tuple[str, bool]:
-        """
-        PDF에서 텍스트 추출 - 여러 방법 시도
-        
-        Args:
-            file_path: PDF 파일 경로
-            
-        Returns:
-            (추출된 텍스트, 스캔된 문서 여부) 튜플
-        """
-        try:
-            logger.info(f"PDF 텍스트 추출 시작: {file_path}")
-            
-            # 파일 존재 확인
-            if not os.path.exists(file_path):
-                logger.error(f"파일이 존재하지 않음: {file_path}")
-                return "", True
-                
-            # 먼저 pdfplumber 시도
-            try:
-                with pdfplumber.open(file_path) as pdf:
-                    all_text = ""
-                    is_scanned = True
-                    
-                    for i, page in enumerate(pdf.pages):
-                        try:
-                            page_text = page.extract_text() or ""
-                            all_text += page_text + "\n\n"
-                            
-                            # 페이지 로깅
-                            logger.debug(f"페이지 {i+1} 텍스트 길이: {len(page_text)} 문자")
-                            
-                            if page_text.strip():
-                                is_scanned = False
-                        except Exception as page_err:
-                            logger.warning(f"페이지 {i+1} 처리 중 오류: {str(page_err)}")
-                    
-                    # pdfplumber 결과 확인
-                    logger.info(f"pdfplumber로 추출한 텍스트 길이: {len(all_text)}, 스캔여부: {is_scanned}")
-                    
-                    if len(all_text.strip()) > 100 or not is_scanned:
-                        return all_text, False
-                        
-            except Exception as plumber_err:
-                logger.warning(f"pdfplumber 오류, OCR로 대체: {str(plumber_err)}")
-                
-            # OCR 시도 (pdfplumber가 실패하거나 텍스트가 거의 없는 경우)
-            logger.info("OCR 텍스트 추출 시도 중...")
-            try:
-                text_from_ocr = ""
-                is_scanned = True
-                
-                # PDF를 이미지로 변환
-                images = convert_from_path(file_path, dpi=300)
-                logger.info(f"PDF를 {len(images)}개 이미지로 변환 완료")
-                
-                for i, image in enumerate(images):
-                    try:
-                        page_text = pytesseract.image_to_string(image, lang='kor+eng')
-                        text_from_ocr += page_text + "\n\n"
-                        logger.debug(f"OCR 페이지 {i+1} 텍스트 길이: {len(page_text)} 문자")
-                    except Exception as ocr_page_err:
-                        logger.warning(f"OCR 페이지 {i+1} 처리 중 오류: {str(ocr_page_err)}")
-                
-                logger.info(f"OCR로 추출한 텍스트 길이: {len(text_from_ocr)}")
-                return text_from_ocr, is_scanned
-                
-            except Exception as ocr_err:
-                logger.error(f"OCR 텍스트 추출 실패: {str(ocr_err)}")
-                return "", True
-
-        except Exception as e:
-            logger.error(f"텍스트 추출 총괄 실패: {str(e)}", exc_info=True)
-            return "", True
 
     @staticmethod
     async def chunk_document(
@@ -315,3 +241,110 @@ class PDFProcessor:
             if len(text) - pos >= min_overlap:
                 return text[pos:]
         return text[-min_overlap:]
+    
+    @staticmethod
+    async def parse_document(db_pdf: PDFFile) -> Dict[str, Any]:
+        try:
+            file_path = db_pdf.file_path
+            temp_path = None
+            
+            # S3 URL 처리 (또는 기타 HTTP URL)
+            is_remote_url = file_path.startswith("http://") or file_path.startswith("https://")
+            
+            if is_remote_url:
+                import requests
+                
+                logger.info(f"원격 URL에서 PDF 파일 다운로드 시작: {file_path}")
+                
+                # 임시 파일 생성
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                    temp_path = temp_file.name
+                
+                try:
+                    # URL에서 파일 다운로드
+                    response = requests.get(file_path, stream=True)
+                    response.raise_for_status()  # 오류 발생 시 예외 발생
+                    
+                    # 파일 저장
+                    with open(temp_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    
+                    logger.info(f"원격 파일 다운로드 완료: {file_path} -> {temp_path}")
+                    
+                    # 임시 파일 경로로 대체
+                    file_path = temp_path
+                except Exception as download_err:
+                    # 임시 파일 삭제 시도
+                    if temp_path and os.path.exists(temp_path):
+                        try:
+                            os.unlink(temp_path)
+                        except:
+                            pass
+                    
+                    logger.error(f"원격 파일 다운로드 실패: {str(download_err)}")
+                    return {"error": f"원격 파일 다운로드 실패: {str(download_err)}", "success": False}
+            
+            # 로컬 파일 경로 확인
+            if not os.path.exists(file_path):
+                logger.error(f"파일을 찾을 수 없습니다: {file_path}")
+                return {"error": f"파일을 찾을 수 없습니다: {file_path}", "success": False}
+
+            try:
+                optimized_path = None
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    try:
+                        optimized_path = os.path.join(temp_dir, "optimized.pdf")
+                        PDFProcessor._optimize_pdf(file_path, optimized_path)
+                        working_path = optimized_path
+                    except Exception as e:
+                        logger.warning(f"PDF 최적화 실패, 원본 사용: {str(e)}")
+                        working_path = file_path
+
+                    extracted_text, is_scanned = PDFProcessor._extract_text_with_fallback(working_path)
+                    
+                    # 텍스트 추출 확인
+                    if not extracted_text or len(extracted_text.strip()) == 0:
+                        logger.error(f"PDF에서 텍스트 추출 실패: {file_path}")
+                        # 임시 파일 정리
+                        if temp_path and os.path.exists(temp_path):
+                            os.unlink(temp_path)
+                        return {"error": "PDF에서 텍스트를 추출할 수 없습니다", "success": False}
+                    
+                    logger.info(f"텍스트 추출 성공: {len(extracted_text)} 문자")
+                    metadata = PDFProcessor._extract_metadata(working_path)
+                    metadata["is_scanned"] = is_scanned
+                    structure_info = PDFProcessor._extract_structure(working_path)
+
+                    # 임시 다운로드 파일 정리
+                    if temp_path and os.path.exists(temp_path):
+                        try:
+                            os.unlink(temp_path)
+                            logger.info(f"임시 파일 삭제 완료: {temp_path}")
+                        except Exception as del_err:
+                            logger.warning(f"임시 파일 삭제 실패: {str(del_err)}")
+
+                    return {
+                        "success": True,
+                        "document_id": db_pdf.id,
+                        "filename": db_pdf.filename,
+                        "text": extracted_text,
+                        "metadata": metadata,
+                        "structure": structure_info,
+                        "page_count": metadata.get("page_count", 0),
+                        "processed_at": datetime.utcnow().isoformat()
+                    }
+
+            except Exception as e:
+                # 임시 파일 정리
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                logger.error(f"PDF 파싱 실패: {str(e)}", exc_info=True)
+                return {"error": f"PDF 파싱 중 오류 발생: {str(e)}", "success": False}
+
+        except Exception as e:
+            logger.error(f"PDF 파싱 실패: {str(e)}", exc_info=True)
+            return {"error": f"PDF 파싱 중 오류 발생: {str(e)}", "success": False}
