@@ -1,38 +1,39 @@
 # app/services/pdf_agent/states.py
-
-from typing import TypedDict, List, Dict, Any, Optional, Annotated
+from typing import TypedDict, List, Dict, Any, Optional, Annotated, Callable
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
-# 상태 어노테이션을 위한 클래스
+# 리듀서 함수 정의
+def message_reducer(a: List[BaseMessage], b: List[BaseMessage]) -> List[BaseMessage]:
+    return b
+
+def string_reducer(a: str, b: str) -> str:
+    return b
+
+def dict_reducer(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    return b
+
+def int_reducer(a: int, b: int) -> int:
+    return b
+
 class MessageAnnotation:
     """메시지 상태 어노테이션"""
-    pass
+    @staticmethod
+    def reduce(a: Any, b: Any) -> Any:
+        return b if b is not None else a
 
 class DocumentAnnotation:
     """문서 관련 상태 어노테이션"""
-    pass
+    @staticmethod
+    def reduce(a: Any, b: Any) -> Any:
+        return b if b is not None else a
 
 class ProcessingAnnotation:
     """처리 관련 상태 어노테이션"""
-    pass
+    @staticmethod
+    def reduce(a: Any, b: Any) -> Any:
+        return b if b is not None else a
 
 class AgentState(TypedDict, total=False):
-    # 메시지 관련 상태 (Annotated)
-    messages: Annotated[List[BaseMessage], MessageAnnotation]
-    last_user_query: Annotated[str, MessageAnnotation]
-    last_assistant_response: Annotated[str, MessageAnnotation]
-    
-    # 문서 관련 상태 (Annotated)
-    pdf_text: Annotated[str, DocumentAnnotation]
-    structure: Annotated[Dict[str, Any], DocumentAnnotation]
-    doc_chunks: Annotated[List[Dict[str, Any]], DocumentAnnotation]
-    
-    # 처리 관련 상태 (Annotated)
-    summaries: Annotated[str, ProcessingAnnotation]
-    result: Annotated[str, ProcessingAnnotation]
-    need_to_explain: Annotated[Dict[str, Any], ProcessingAnnotation]
-    explain_step: Annotated[int, ProcessingAnnotation]
-    
     # 일반 상태 (비주석)
     user_id: str
     folder: str
@@ -48,3 +49,19 @@ class AgentState(TypedDict, total=False):
     pdf_step: int
     embedding_stored: bool
     error: Optional[str]
+    
+    # 메시지 관련 상태
+    messages: List[BaseMessage]
+    last_user_query: str
+    last_assistant_response: str
+    
+    # 문서 관련 상태
+    pdf_text: str
+    structure: Dict[str, Any]
+    doc_chunks: List[Dict[str, Any]]
+    
+    # 처리 관련 상태
+    summaries: str
+    result: str
+    need_to_explain: Dict[str, Any]
+    explain_step: int

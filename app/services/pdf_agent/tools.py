@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-def get_initial_state() -> Dict[str, Any]:
+def get_initial_state(
+    user_id: str,
+    document_id: int,
+    pdf_path: str,
+    purpose: str,
+    folder: str = "default",
+    query: Optional[str] = ""
+) -> Dict[str, Any]:
     """
     LangGraph 초기 상태 생성
     
@@ -31,25 +38,26 @@ def get_initial_state() -> Dict[str, Any]:
             특히 질의 응답의 경우, 자료에 근거하여 답변해주시되, 질문에 답하기 위한 좋은 자료가 존재하지 않다면, 당신이 아는 지식으로 답변해주시면 됩니다.
             사용자의 요청에 친절하고 자세한 설명으로 국내 0.1% 명성에 맞게 학습자의 이해를 도와주시면 됩니다.""")
         ],
-        "last_user_query": "",      # 마지막 사용자 질문
-        "last_assistant_response": "", # 마지막 응답
-        "user_id": "",               # 처리 중 설정될 사용자 ID
-        "purpose": "",               # 사용자 요청 목적 (summary, qa_system 등)
-        "document_id": None,         # 처리할 문서 ID
-        "folder": "default",         # 저장 폴더
-        "pdf_text": "",              # 추출된 PDF 텍스트
-        "structure": {},             # 문서 구조 정보
-        "doc_chunks": [],            # 분할된 청크 (pdfs 대신 사용)
-        "summaries": "",             # 요약 결과 저장
-        "result": "",                # 최종 결과 저장
-        "explain_step": 0,           # 설명 단계 카운터
-        "need_to_explain": {},       # 설명 필요 항목
-        "subject_index": 0,          # 과목 인덱스
-        "final_index": [],           # 최종 인덱스 목록
-        "personality": [],           # 출제자 성향 목록
-        "final_personality": "",     # 최종 출제자 성향
-        "embedding_stored": False,   # 임베딩 저장 완료 여부
-        "error": None                # 오류 메시지
+        "last_user_query": "",
+        "last_assistant_response": "",
+        "user_id": user_id,
+        "document_id": document_id,
+        "pdf_path": pdf_path,
+        "purpose": purpose,
+        "folder": folder,
+        "pdf_text": "",
+        "structure": {},
+        "doc_chunks": [],
+        "summaries": "",
+        "result": "",
+        "explain_step": 0,
+        "need_to_explain": {},
+        "subject_index": 0,
+        "final_index": [],
+        "personality": [],
+        "final_personality": "",
+        "embedding_stored": False,
+        "error": None
     }
 
 

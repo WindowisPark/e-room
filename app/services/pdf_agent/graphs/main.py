@@ -103,7 +103,8 @@ def get_processing_graph():
     """
     문서 처리만 수행하는 단순 그래프
     """
-    graph = StateGraph(AgentState)
+    # 간소화된 방식 - dict 타입 사용
+    graph = StateGraph(dict)
     
     # 처리 노드만 추가
     graph.add_node("load_pdf", load_pdf_text)
