@@ -1,31 +1,22 @@
 # app/api/v1/endpoints/pdf_agent.py
 
-"""
-PDF Agent API 라우터
-
-- 기존 RQ 기반 비동기 작업 큐를 제거하고 LangGraph 기반 흐름으로 전환함
-- 문서 처리, 요약, 질문 생성, 질의응답 등의 작업을 LangGraph 내에서 상태 기반으로 처리
-- 이 파일은 향후 LangGraph 흐름을 직접 호출하여 결과를 반환하는 REST API로 구성됨
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import logging
+from langchain_core.messages import HumanMessage
 
 from app.api import deps
 from app.models.user import User
 from app.models.tag import PDFFile
-from app.core.config import settings
-
-# 각 기능별 LangGraph 빌더 및 상태 초기화 유틸
 from app.services.pdf_agent.tools import get_initial_state
-from app.services.pdf_agent.graphs.main import intergrate_graph
+from app.services.pdf_agent.graphs.main import intergrate_graph, simple_graph, get_processing_graph
 from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
 from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
 from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 @router.post("/{document_id}/process", response_model=Dict[str, Any])
 async def process_document(
@@ -34,59 +25,49 @@ async def process_document(
     current_user: User = Depends(deps.get_current_user)
 ):
     """LangGraph 기반 PDF 문서 처리 (전처리 + 벡터 저장 등 포함)"""
-    from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.main import intergrate_graph
-    from langchain_core.messages import HumanMessage
-    import os
-
-    # 권한 검증
+    # 1. 문서와 사용자 권한 검증
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    
+    # 개인 소유 문서 권한 확인
     if not document.team_id and document.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    
+    # 팀 소유 문서 권한 확인
     if document.team_id:
         from app.services.team_service import check_team_permission
         has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
         if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-
+    
     try:
-        # LangGraph 실행 준비
-        graph = intergrate_graph()
+        # 2. 단순 그래프 실행으로 테스트
         state = get_initial_state()
         
-        # 중요: 파일 경로에서 폴더 이름 추출
-        folder_name = os.path.basename(os.path.dirname(document.file_path))
-        
-        # 필요한 모든 상태 변수 설정 (user_id 포함)
+        # 중요 필드 설정
         state["user_id"] = str(current_user.id)
-        state["folder"] = folder_name  # 폴더 이름 설정 (select_folder 함수가 필요로 할 수 있음)
-        state["document_id"] = document.id 
+        state["document_id"] = document_id
+        state["folder"] = "default"  # 기본 폴더 설정
         
-        # HumanMessage 추가
-        query = "문서를 처리하고 분석해주세요"
-        state["messages"].append(HumanMessage(content=query))
+        # 3. 단순 그래프 실행
+        logger.info(f"PDF Agent 단순 그래프 실행 - 문서 ID: {document_id}, 사용자 ID: {current_user.id}")
+        graph = get_processing_graph()
+        result = graph.invoke(state)
         
-        # 디버깅용 로그
-        print(f"Starting LangGraph with state: {state}")
-        
-        # LangGraph 실행
-        result_state = graph.invoke(state)
-        
+        # 4. 결과 반환
         return {
             "success": True,
             "document_id": document.id,
             "document_name": document.filename,
-            "result": result_state.get("result", ""),
-            "message": "LangGraph 기반 문서 처리가 완료되었습니다."
+            "message": "문서 처리가 완료되었습니다.",
+            "embedding_stored": result.get("embedding_stored", False),
+            "error": result.get("error")
         }
-
+        
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"LangGraph Error: {str(e)}\n{error_traceback}")
-        raise HTTPException(status_code=500, detail=f"LangGraph 처리 중 오류 발생: {str(e)}")
+        logger.error(f"PDF Agent 오류: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"문서 처리 중 오류 발생: {str(e)}")
 
 @router.post("/{document_id}/query", response_model=Dict[str, Any])
 async def query_document(
@@ -95,40 +76,48 @@ async def query_document(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """LangGraph 기반 문서 질의응답 처리"""
-    from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
-
+    """LangGraph 기반 문서 질의응답"""
+    # 1. 문서 및 권한 검증
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    
+    # 권한 검증
     if not document.team_id and document.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    
     if document.team_id:
         from app.services.team_service import check_team_permission
         has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
         if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-
+    
     try:
-        graph = get_qa_graph()
+        # 2. LangGraph 상태 초기화 및 실행
         state = get_initial_state()
-        state["user_id"] = str(current_user.id) 
-        state["purpose"] = "qa"
-        state["query"] = query
-
-        result_state = graph.invoke(state)
-
+        state["user_id"] = str(current_user.id)
+        state["document_id"] = document_id
+        state["folder"] = "default"
+        state["purpose"] = "qa_system"
+        state["last_user_query"] = query  # 메시지 대신 직접 쿼리 설정
+        
+        # 3. QA 그래프 실행
+        graph = get_qa_graph()
+        result = graph.invoke(state)
+        
+        # 4. 결과 추출 및 반환
+        answer = result.get("last_assistant_response", "응답을 생성하지 못했습니다.")
+        
         return {
             "success": True,
-            "document_id": document.id,
+            "document_id": document_id,
             "document_name": document.filename,
             "query": query,
-            "answer": result_state.get("result", "답변 생성 실패"),
-            "message": "LangGraph 기반 질의응답이 완료되었습니다."
+            "answer": answer
         }
-
+        
     except Exception as e:
+        logger.error(f"질의응답 오류: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"질문 처리 중 오류 발생: {str(e)}")
 
 @router.post("/{document_id}/summarize", response_model=Dict[str, Any])
@@ -138,41 +127,49 @@ async def summarize_document(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """LangGraph 기반 문서 요약 실행"""
-    from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
-
+    """LangGraph 기반 문서 요약"""
+    # 1. 문서 및 권한 검증
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    
+    # 권한 검증
     if not document.team_id and document.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    
     if document.team_id:
         from app.services.team_service import check_team_permission
         has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
         if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-
+    
     try:
-        # 요약용 LangGraph 실행
-        graph = get_summary_graph()
+        # 2. 요약 그래프 실행
         state = get_initial_state()
-        state["user_id"] = str(current_user.id)  # ✅ 필수!
-        state["purpose"] = "summarize"
+        state["user_id"] = str(current_user.id)
+        state["document_id"] = document_id
+        state["folder"] = "default"
+        state["purpose"] = "summary"
         state["summary_level"] = level
-
-        result_state = graph.invoke(state)
-
+        state["last_user_query"] = f"이 문서를 {level} 수준으로 요약해주세요"
+        
+        # 3. 요약 그래프 실행
+        graph = get_summary_graph()
+        result = graph.invoke(state)
+        
+        # 4. 결과 추출 및 반환
+        summary = result.get("result", "") or result.get("last_assistant_response", "요약을 생성하지 못했습니다.")
+        
         return {
             "success": True,
-            "document_id": document.id,
+            "document_id": document_id,
             "document_name": document.filename,
             "level": level,
-            "summary": result_state.get("result", ""),
-            "message": "LangGraph 기반 요약이 완료되었습니다."
+            "summary": summary
         }
-
+        
     except Exception as e:
+        logger.error(f"요약 오류: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"요약 처리 중 오류 발생: {str(e)}")
 
 @router.post("/{document_id}/questions", response_model=Dict[str, Any])
@@ -183,37 +180,46 @@ async def generate_questions(
     current_user: User = Depends(deps.get_current_user)
 ):
     """LangGraph 기반 문서 문제 생성"""
-    from app.services.pdf_agent.tools import get_initial_state
-    from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
-
+    # 1. 문서 및 권한 검증
     document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다")
+    
+    # 권한 검증
     if not document.team_id and document.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
+    
     if document.team_id:
         from app.services.team_service import check_team_permission
         has_access = await check_team_permission(db=db, team_id=document.team_id, user_id=current_user.id)
         if not has_access:
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
-
+    
     try:
-        # 시험 생성용 LangGraph 실행
-        graph = get_exam_graph()
-        state = get_initial_state()  # 매개변수 없이 호출
-        state["purpose"] = "generate_questions"
+        # 2. 문제 생성 그래프 실행
+        state = get_initial_state()
+        state["user_id"] = str(current_user.id)
+        state["document_id"] = document_id
+        state["folder"] = "default"
+        state["purpose"] = "generate_exam"
         state["question_count"] = count
-
-        result_state = graph.invoke(state)
-
+        state["last_user_query"] = f"이 문서에서 {count}개의 시험 문제를 만들어주세요"
+        
+        # 3. 문제 생성 그래프 실행
+        graph = get_exam_graph()
+        result = graph.invoke(state)
+        
+        # 4. 결과 추출 및 반환
+        questions = result.get("result", "") or result.get("last_assistant_response", "문제를 생성하지 못했습니다.")
+        
         return {
             "success": True,
-            "document_id": document.id,
+            "document_id": document_id,
             "document_name": document.filename,
             "count": count,
-            "questions": result_state.get("result", ""),
-            "message": "LangGraph 기반 문제 생성이 완료되었습니다."
+            "questions": questions
         }
-
+        
     except Exception as e:
+        logger.error(f"문제 생성 오류: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"문제 생성 중 오류 발생: {str(e)}")
