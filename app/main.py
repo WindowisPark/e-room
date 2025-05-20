@@ -2,6 +2,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
+import os
 
 from app.core.config import settings
 from app.api.v1.pdf_manager import router as pdf_router
@@ -16,6 +18,15 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc"
+)
+# ✅ Vite 빌드 정적 파일 경로 지정
+STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Board_Backend", "src", "main", "webapp", "resources"))
+
+# ✅ 정적 파일 mount (반드시 라우터 등록 전에!)
+app.mount(
+    "/", 
+    StaticFiles(directory=STATIC_DIR, html=True), 
+    name="static"
 )
 
 if settings.BACKEND_CORS_ORIGINS:

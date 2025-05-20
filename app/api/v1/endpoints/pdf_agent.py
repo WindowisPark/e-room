@@ -38,14 +38,27 @@ async def process_document(
             raise HTTPException(status_code=403, detail="문서에 접근할 권한이 없습니다")
 
     try:
+        # document_id를 정수형으로 명시적 변환하여 전달
         state = get_initial_state(
             user_id=str(current_user.id),
-            document_id=document_id,
+            document_id=int(document_id),  # 명시적으로 int 타입 지정
             pdf_path=document.file_path,
             purpose="preprocessing"
         )
+        # 디버깅 로그 추가
+        logger.info(f"PDF 처리 시작: document_id={document_id}, 상태={state}")
+
         graph = get_processing_graph()
         result = graph.invoke(state)
+
+        # 결과에 오류가 있으면 HTTPException 발생
+        if result.get("error"):
+            logger.error(f"PDF 처리 실패: {result.get('error')}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"문서 처리 중 오류 발생: {result.get('error')}"
+            )
+
 
         return {
             "success": True,

@@ -29,8 +29,15 @@ def load_pdf_text(state: AgentState) -> Dict[str, Any]:
         
         # 상태에서 문서 ID 가져오기
         document_id = state.get("document_id")
+        logger.info(f"PDF 로드 시작: document_id={document_id}, state={state}")
+        
         if not document_id:
-            raise ValueError("document_id가 상태에 없습니다")
+            logger.error(f"document_id가 상태에 없습니다: {state}")
+            return {
+                **state,
+                "error": "document_id가 상태에 없습니다"
+            }
+            
             
         # PDF 파일 조회
         pdf_file = db.query(PDFFile).filter(PDFFile.id == document_id).first()
