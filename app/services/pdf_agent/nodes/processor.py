@@ -173,8 +173,7 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
             return {
                 **state,
                 "embedding_stored": False,
-                "error": "저장할 청크가 없습니다",
-                "message": "PDF 처리는 완료되었지만 임베딩 저장할 청크가 없습니다."
+                "error": "저장할 청크가 없습니다"
             }
             
         if not user_id or not document_id:
@@ -182,8 +181,7 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
             return {
                 **state,
                 "embedding_stored": False,
-                "error": "사용자 ID 또는 문서 ID가 유효하지 않습니다",
-                "message": "PDF 처리는 완료되었지만 사용자 정보 문제로 임베딩이 저장되지 않았습니다."
+                "error": "사용자 ID 또는 문서 ID가 유효하지 않습니다"
             }
             
         # user_id가 문자열인 경우 정수로 변환
@@ -194,8 +192,7 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
             return {
                 **state,
                 "embedding_stored": False,
-                "error": f"user_id 형식 오류: {user_id}",
-                "message": "PDF 처리는 완료되었지만 사용자 ID 형식 문제로 임베딩이 저장되지 않았습니다."
+                "error": f"user_id 형식 오류: {user_id}"
             }
             
         # 정수 변환 확인
@@ -207,41 +204,19 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
                 return {
                     **state,
                     "embedding_stored": False,
-                    "error": f"document_id 형식 오류: {document_id}",
-                    "message": "PDF 처리는 완료되었지만 문서 ID 형식 문제로 임베딩이 저장되지 않았습니다."
+                    "error": f"document_id 형식 오류: {document_id}"
                 }
         
-        # ChromaDB에 저장 시도
-        try:
-            from app.services.pdf_agent.chromadb_service import ChromaDBService
-            chroma_service = ChromaDBService()
-            
-            if not chroma_service.client:
-                logger.error("ChromaDB 클라이언트가 초기화되지 않았습니다")
-                return {
-                    **state,
-                    "embedding_stored": False,
-                    "error": "ChromaDB 클라이언트가 초기화되지 않았습니다",
-                    "message": "PDF 처리는 완료되었지만 ChromaDB 초기화 문제로 임베딩 저장이 실패했습니다."
-                }
-            
-            success = chroma_service.add_document_chunks(user_id_int, document_id, folder, chunks)
-            
-            if not success:
-                logger.error("ChromaDB 저장 실패")
-                return {
-                    **state,
-                    "embedding_stored": False,
-                    "error": "ChromaDB 저장 실패",
-                    "message": "PDF 처리는 완료되었지만 임베딩 저장에 실패했습니다."
-                }
-        except Exception as chroma_err:
-            logger.error(f"ChromaDB 저장 중 오류: {str(chroma_err)}")
+        # ChromaDB에 저장
+        chroma_service = ChromaDBService()
+        success = chroma_service.add_document_chunks(user_id_int, document_id, folder, chunks)
+        
+        if not success:
+            logger.error("ChromaDB 저장 실패")
             return {
                 **state,
                 "embedding_stored": False,
-                "error": f"ChromaDB 저장 중 오류: {str(chroma_err)}",
-                "message": "PDF 처리는 완료되었지만 임베딩 저장에 실패했습니다."
+                "error": "ChromaDB 저장 실패"
             }
             
         # 성공 메시지 추가
@@ -257,6 +232,5 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
         return {
             **state,
             "embedding_stored": False,
-            "error": f"임베딩 저장 실패: {str(e)}",
-            "message": "PDF 처리는 완료되었지만 임베딩 저장 중 예기치 않은 오류가 발생했습니다."
+            "error": f"임베딩 저장 실패: {str(e)}"
         }

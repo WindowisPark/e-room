@@ -8,6 +8,16 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# 파일 상단에 더미 클라이언트 클래스 추가
+class DummyChromaClient:
+    """ChromaDB 클라이언트가 초기화되지 않을 때 사용하는 더미 클라이언트"""
+    
+    def __getattr__(self, name):
+        def dummy_method(*args, **kwargs):
+            logger.warning(f"ChromaDB 클라이언트가 초기화되지 않았습니다. {name} 메서드 호출이 무시됩니다.")
+            return None
+        return dummy_method
+    
 class ChromaDBService:
     """
     ChromaDB를 사용한 문서 임베딩 및 검색 서비스
@@ -28,27 +38,42 @@ class ChromaDBService:
             self.db_path = settings.CHROMADB_STORAGE_PATH
             os.makedirs(self.db_path, exist_ok=True)
             
-            # OpenAI API 키 환경 변수 설정
-            os.environ["CHROMA_OPENAI_API_KEY"] = settings.AI_API_KEY
-            
-            self.client = chromadb.PersistentClient(
-                path=self.db_path,
-                settings=Settings(
-                    anonymized_telemetry=False
+            try:
+                # ChromaDB 클라이언트 초기화 시도
+                self.client = chromadb.PersistentClient(
+                    path=self.db_path,
+                    settings=Settings(anonymized_telemetry=False)
                 )
-            )
-
-            # 임베딩 함수 초기화 시 API 키 명시적 전달
-            self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-                api_key=settings.AI_API_KEY,
-                model_name="text-embedding-ada-002"
-            )
-
-            logger.info(f"ChromaDB 초기화 성공: {self.db_path}")
-
+                
+                # API 키 확인
+                api_key = os.getenv("OPENAI_API_KEY", "") or settings.AI_API_KEY
+                if api_key:
+                    # OpenAI 임베딩 함수 설정
+                    try:
+                        self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                            api_key=api_key,
+                            model_name="text-embedding-ada-002"
+                        )
+                        logger.info("OpenAI 임베딩 함수 초기화 성공")
+                    except Exception as emb_err:
+                        logger.error(f"OpenAI 임베딩 함수 초기화 실패: {str(emb_err)}")
+                        # 기본 임베딩 함수 시도
+                        self.embedding_function = None
+                else:
+                    logger.warning("AI_API_KEY가 설정되지 않았습니다. 임베딩 기능이 제한됩니다.")
+                    self.embedding_function = None
+                
+                logger.info(f"ChromaDB 초기화 성공: {self.db_path}")
+                
+            except Exception as client_err:
+                logger.error(f"ChromaDB 클라이언트 초기화 실패: {str(client_err)}")
+                self.client = DummyChromaClient()  # 더미 클라이언트 사용
+                self.embedding_function = None
+                
         except Exception as e:
-            logger.error(f"ChromaDB 초기화 실패: {str(e)}")
-            self.client = None
+            logger.error(f"ChromaDB 서비스 초기화 실패: {str(e)}")
+            self.client = DummyChromaClient()  # 더미 클라이언트 사용
+            self.embedding_function = None
 
     def _get_user_collection(self, user_id: int, folder_name: str = "default", create_if_not_exists: bool = True):
         """사용자별 컬렉션 가져오기 (없으면 생성)"""
@@ -64,16 +89,27 @@ class ChromaDBService:
             collection_exists = any(c.name == collection_name for c in collections)
 
             if collection_exists:
-                return self.client.get_collection(
-                    name=collection_name,
-                    embedding_function=self.embedding_function
-                )
+                if self.embedding_function:
+                    return self.client.get_collection(
+                        name=collection_name,
+                        embedding_function=self.embedding_function
+                    )
+                else:
+                    # 임베딩 함수 없이 컬렉션 가져오기
+                    return self.client.get_collection(name=collection_name)
             elif create_if_not_exists:
-                return self.client.create_collection(
-                    name=collection_name,
-                    embedding_function=self.embedding_function,
-                    metadata={"user_id": user_id, "folder": folder_name}
-                )
+                if self.embedding_function:
+                    return self.client.create_collection(
+                        name=collection_name,
+                        embedding_function=self.embedding_function,
+                        metadata={"user_id": user_id, "folder": folder_name}
+                    )
+                else:
+                    # 임베딩 함수 없이 컬렉션 생성
+                    return self.client.create_collection(
+                        name=collection_name,
+                        metadata={"user_id": user_id, "folder": folder_name}
+                    )
             else:
                 return None
 
@@ -87,8 +123,8 @@ class ChromaDBService:
             return False
 
         try:
-            # 기존 청크 삭제 (폴더 포함 메타데이터)
-            self.delete_document_chunks(user_id, document_id, folder_name)
+            # 수정 후
+            self.delete_document_chunks(user_id, document_id)  # folder_name 인자 제거
 
             ids = []
             texts = []
@@ -120,8 +156,8 @@ class ChromaDBService:
             logger.error(f"ChromaDB 청크 추가 실패: {str(e)}")
             return False
 
-    def delete_document_chunks(self, user_id: int, document_id: int) -> bool:
-        collection = self._get_user_collection(user_id, create_if_not_exists=False)
+    def delete_document_chunks(self, user_id: int, document_id: int, folder_name: str = "default") -> bool:
+        collection = self._get_user_collection(user_id, folder_name=folder_name, create_if_not_exists=False)
         if not collection:
             return False
 
