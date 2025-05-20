@@ -23,11 +23,7 @@ app = FastAPI(
 STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Board_Backend", "src", "main", "webapp", "resources"))
 
 # ✅ 정적 파일 mount (반드시 라우터 등록 전에!)
-app.mount(
-    "/", 
-    StaticFiles(directory=STATIC_DIR, html=True), 
-    name="static"
-)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(

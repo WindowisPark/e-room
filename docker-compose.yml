@@ -1,8 +1,35 @@
 version: '3.8'
 
 services:
+  api:
+    build:
+      context: ./
+      dockerfile: docker/backend/Dockerfile.dev
+    container_name: ai_agent_api_dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./storage:/app/storage
+      - ./app/scripts:/app/scripts
+      - ./alembic.ini:/app/alembic.ini
+      - ./Board_Backend/src/main/webapp/resources:/app/Board_Backend/src/main/webapp/resources
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=agent_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - db
+      - redis
+    restart: always
+
   db:
-    # 일반 PostgreSQL 대신 pgvector가 설치된 이미지 사용
     image: pgvector/pgvector:pg16
     container_name: ai_agent_postgres
     ports:
@@ -21,57 +48,9 @@ services:
     image: redis:alpine
     container_name: ai_agent_redis
     ports:
-      - "6380:6379"  # 로컬 포트를 6380으로 변경
+      - "6380:6379"
     volumes:
       - redis_data:/data
-    restart: always
-
-  api:
-    build:
-      context: ./
-      dockerfile: docker/backend/Dockerfile
-    container_name: ai_agent_api
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app
-      - ./storage:/app/storage
-    environment:
-      - POSTGRES_SERVER=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
-      - POSTGRES_DB=agent_db
-      - REDIS_HOST=redis
-      - REDIS_CACHE_HOST=redis  # localhost 대신 redis로 변경
-      - REDIS_CACHE_PORT=6379
-      - REDIS_CACHE_DB=1
-
-    depends_on:
-      - db
-      - redis
-    restart: always
-
-  worker:
-    build:
-      context: ./
-      dockerfile: docker/backend/Dockerfile
-    container_name: ai_agent_worker
-    command: python -m app.workers.worker
-    volumes:
-      - ./app:/app/app
-      - ./storage:/app/storage
-    environment:
-      - POSTGRES_SERVER=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
-      - POSTGRES_DB=agent_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - redis
-      - db
     restart: always
 
   redis-commander:
