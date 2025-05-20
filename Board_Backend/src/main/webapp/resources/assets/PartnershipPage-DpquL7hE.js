@@ -1,0 +1,1 @@
+import{_ as s,a as t,b as a,j as r}from"./index-C9Zi1O5e.js";const c="/static/assets/planova_partnership-CGMXBwYA.jpg",n={},o={class:"container"};function _(i,e){return r(),t("div",o,e[0]||(e[0]=[a("img",{src:c,class:"centered-image"},null,-1)]))}const d=s(n,[["render",_],["__scopeId","data-v-13bc0b0f"]]);export{d as default};
