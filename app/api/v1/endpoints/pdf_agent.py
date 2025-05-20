@@ -87,47 +87,86 @@ async def process_document(
                 raise HTTPException(status_code=500, detail="S3 파일 다운로드 실패")
 
         elif is_http_s3_url:
-            # signed/public URL 다운로드 (requests 사용)
-            logger.info(f"S3 파일 다운로드 시작 (requests): {file_path}")
-
+            # HTTP URL을 S3 URI로 변환하고 boto3를 사용하여 다운로드
+            logger.info(f"S3 파일 다운로드 시작 (boto3 with HTTP URL): {file_path}")
+            
+            from app.core.config import settings
+            import boto3
+            from botocore.client import Config
+            from urllib.parse import urlparse
+            
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             temp_path = temp_file.name
             temp_file.close()
-
+            
             try:
-                response = requests.get(file_path, stream=True)
-                response.raise_for_status()
-
-                with open(temp_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-
+                # URL에서 버킷 이름과 객체 키 추출
+                parsed_url = urlparse(file_path)
+                bucket_name = "ai-agent-pdf-storage"  # 고정된 버킷 이름 사용
+                
+                # URL 경로에서 객체 키 추출
+                if "amazonaws.com" in parsed_url.netloc:
+                    # ai-agent-pdf-storage.s3.amazonaws.com/users/1/study/...
+                    object_key = parsed_url.path.lstrip('/')
+                else:
+                    # 다른 형태의 URL
+                    object_key = '/'.join(parsed_url.path.split('/')[2:])  # 버킷 이름 이후 경로
+                
+                logger.info(f"S3 다운로드 정보: 버킷={bucket_name}, 키={object_key}")
+                
+                # S3 클라이언트 생성
+                s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=settings.AWS_ACCESS_KEY,
+                    aws_secret_access_key=settings.AWS_SECRET_KEY,
+                    region_name=settings.AWS_REGION,
+                    config=Config(signature_version='s3v4')
+                )
+                
+                # 파일이 존재하는지 확인하지 않고 바로 다운로드 시도
+                s3_client.download_file(bucket_name, object_key, temp_path)
                 logger.info(f"S3 파일 다운로드 완료: {file_path} -> {temp_path}")
                 file_path = temp_path
+                
             except Exception as download_err:
                 try:
                     os.unlink(temp_path)
                 except:
                     pass
                 logger.error(f"S3 파일 다운로드 실패: {str(download_err)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"S3 파일 다운로드 실패: {str(download_err)}"
-                )
-
+                
+                # 대체 방식: 직접 HTTP 요청 시도 (단, 공개 액세스 가능한 파일만)
+                try:
+                    logger.info(f"대체 방식으로 다운로드 시도: {file_path}")
+                    import requests
+                    response = requests.get(file_path, stream=True)
+                    response.raise_for_status()
+                    
+                    with open(temp_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                            
+                    logger.info(f"대체 방식으로 다운로드 성공: {file_path} -> {temp_path}")
+                    file_path = temp_path
+                except Exception as alt_err:
+                    logger.error(f"대체 방식 다운로드 실패: {str(alt_err)}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"S3 파일 다운로드 실패: {str(download_err)}, 대체 방식도 실패: {str(alt_err)}"
+                    )
         elif not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
 
         # 상태 초기화
-        state = get_initial_state(
-            user_id=str(current_user.id),
-            document_id=int(document_id),
-            pdf_path=file_path,
-            purpose="preprocessing",
-            folder="default"
-        )
+        state = {
+            "user_id": str(current_user.id),
+            "document_id": document_id,  # 정수 값으로 전달
+            "pdf_path": file_path,
+            "purpose": "preprocessing",
+            "folder": "default"
+        }
 
-        logger.info(f"PDF 처리 시작: document_id={document_id}, file_path={file_path}")
+        logger.info(f"초기 상태 생성: {state}")
         graph = get_processing_graph()
         result = graph.invoke(state)
 

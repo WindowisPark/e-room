@@ -107,13 +107,21 @@ def get_processing_graph():
         # 간소화된 방식 - dict 타입 사용
         graph = StateGraph(dict)
         
-        # 처리 노드만 추가
+        # 디버깅을 위한 로깅 노드 추가
+        def log_state(state):
+            logger.info(f"그래프 처리 시작: 상태 내용 = {state}")
+            return state
+        
+        graph.add_node("log_state", log_state)
+        
+        # 처리 노드 추가
         graph.add_node("load_pdf", load_pdf_text)
         graph.add_node("split_chunks", split_into_chunks)
         graph.add_node("store_embeddings", store_embedding)
         
-        # 직렬화된 흐름
-        graph.set_entry_point("load_pdf")
+        # 직렬화된 흐름 - 로깅 노드를 첫 번째로 추가
+        graph.set_entry_point("log_state")
+        graph.add_edge("log_state", "load_pdf")
         graph.add_edge("load_pdf", "split_chunks")
         graph.add_edge("split_chunks", "store_embeddings")
         

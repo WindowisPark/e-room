@@ -27,7 +27,10 @@ class ChromaDBService:
         try:
             self.db_path = settings.CHROMADB_STORAGE_PATH
             os.makedirs(self.db_path, exist_ok=True)
-
+            
+            # OpenAI API 키 환경 변수 설정
+            os.environ["CHROMA_OPENAI_API_KEY"] = settings.AI_API_KEY
+            
             self.client = chromadb.PersistentClient(
                 path=self.db_path,
                 settings=Settings(
@@ -35,6 +38,7 @@ class ChromaDBService:
                 )
             )
 
+            # 임베딩 함수 초기화 시 API 키 명시적 전달
             self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
                 api_key=settings.AI_API_KEY,
                 model_name="text-embedding-ada-002"

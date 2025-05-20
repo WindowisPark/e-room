@@ -55,5 +55,7 @@ gptpdf>=0.1.1
 packaging>=23.2
 wikipedia>=1.4.0
 boto3
+ nest_asyncio
+ 
 # ✅ 검색엔진 연동
 opensearch-py>=2.3.2
