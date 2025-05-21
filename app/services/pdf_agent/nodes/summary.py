@@ -27,34 +27,88 @@ def get_related_pdf(state: AgentState):
 
 def pdf_parsing(state: AgentState):
     pdf_content = state["pdf_content"]
-    text_splitter = RecursiveCharacterTextSplitter( # 3000자 단위로 split
+    
+    # PDF 콘텐츠에서 텍스트 추출
+    if isinstance(pdf_content, dict):
+        text = pdf_content.get("text", "")
+    else:
+        text = str(pdf_content)
+    
+    # 로깅 추가
+    print(f"PDF 파싱: 텍스트 길이 = {len(text)}")
+    
+    # Document 객체 생성
+    from langchain_core.documents import Document
+    doc = Document(page_content=text)
+    
+    text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=4000,
         chunk_overlap=400,
         length_function=len,
         is_separator_regex=False,
     )
-    pdfs = text_splitter.split_documents([pdf_content])
-    return {"pdfs":pdfs,"pdf_step":0}
+    
+    try:
+        # Document 객체를 분할
+        pdfs = text_splitter.split_documents([doc])
+        print(f"텍스트 분할 완료: {len(pdfs)}개 청크 생성됨")
+        return {"pdfs": pdfs, "pdf_step": 0}
+    except Exception as e:
+        # 오류 발생 시 빈 리스트라도 반환하여 KeyError 방지
+        print(f"텍스트 분할 오류: {str(e)}")
+        return {"pdfs": [], "pdf_step": 0, "error": str(e)}
 
-# 요약 개수 확인
-def check_summary_completion(state:AgentState):
-    total_step = len(state["pdfs"]) # pdf의 총 개수
-    now_step = state["pdf_step"] # 지금까지 요약한 pdf개수
-    print(f"{now_step}/{total_step}")
-    if total_step>now_step :# 총 개수보다 지금까지 요약한 것이 적으면
-        return "continue" # 계속
-    else :                  # 그게 아니면
-        return "completion"   # 완료 ( refine_textbook으로 진행 )
+def check_summary_completion(state: AgentState):
+    pdfs = state.get("pdfs", [])
+    print(f"check_summary_completion: PDF 청크 수 = {len(pdfs) if pdfs else 0}")
+    
+    # pdfs 키가 없거나 비어있는 경우 처리
+    if not pdfs:
+        print("PDF 청크가 없습니다. 처리를 완료합니다.")
+        return "completion"
+        
+    total_step = len(pdfs)
+    now_step = state.get("pdf_step", 0)
+    print(f"요약 진행 상황: {now_step}/{total_step}")
+    
+    if total_step > now_step:
+        return "continue"
+    else:
+        return "completion"
 
-# pdf 요약
-def summary_pdf(state:AgentState):
-    step = state["pdf_step"]
-    summaries = state["summaries"]
-    pdf = state["pdfs"][step]
-    result = llm.invoke(f"다음 내용을 전반적으로 빠지는 내용이 없게 상세하게 요약해주세요. \n\n내용 : {pdf}")
-    summaries += result.content
+def summary_pdf(state: AgentState):
+    pdfs = state.get("pdfs", [])
+    
+    # 상태 로그 출력
+    print(f"summary_pdf 함수: 상태 키 = {list(state.keys())}")
+    print(f"PDF 청크 수: {len(pdfs) if pdfs else 0}")
+    
+    # pdfs가 비어있는지 확인
+    if not pdfs:
+        print("PDF 청크가 없습니다. 빈 요약을 반환합니다.")
+        return {"pdf_step": 0, "summaries": "요약할 내용이 없습니다."}
+    
+    step = state.get("pdf_step", 0)
+    summaries = state.get("summaries", "")
+    
+    # 인덱스 범위 체크
+    if step >= len(pdfs):
+        print(f"인덱스 범위 초과: {step}/{len(pdfs)}")
+        return {"pdf_step": step, "summaries": summaries}
+    
+    try:
+        pdf = pdfs[step]
+        pdf_content = pdf.page_content if hasattr(pdf, 'page_content') else str(pdf)
+        print(f"PDF 청크 {step} 요약 시작: 텍스트 길이 = {len(pdf_content)}")
+        
+        result = llm.invoke(f"다음 내용을 전반적으로 빠지는 내용이 없게 상세하게 요약해주세요. \n\n내용 : {pdf_content}")
+        summaries += result.content
+        print(f"PDF 청크 {step} 요약 완료")
+    except Exception as e:
+        print(f"요약 생성 오류: {str(e)}")
+        summaries += f"[이 부분 요약 실패: {str(e)}]"
 
-    return {"pdf_step":step+1,"summaries":summaries}
+    return {"pdf_step": step+1, "summaries": summaries}
 
 # text book으로 재구성
 def refine_textbook(state:AgentState):

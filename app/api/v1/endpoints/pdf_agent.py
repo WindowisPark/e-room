@@ -174,6 +174,14 @@ async def process_document(
         logger.info(f"초기 상태 생성: {state}")
         graph = get_processing_graph()
         result = graph.invoke(state)
+        # 결과 확인 및 안전한 값 추출
+        if "result" not in result and "last_assistant_response" not in result:
+            logger.warning("요약 결과가 올바른 형식이 아님")
+            # 기본 응답 제공
+            summary = "요약 생성에 실패했습니다. 다시 시도해 주세요."
+        else:
+            summary = result.get("result", "") or result.get("last_assistant_response", "요약을 생성하지 못했습니다.")   
+
         # 로깅 추가
         logger.info(f"문서 처리 완료 - 결과 키: {list(result.keys() if isinstance(result, dict) else [])}")
 
@@ -298,8 +306,21 @@ async def summarize_document(
 
         graph = get_summary_graph()
         result = graph.invoke(state)
-
-        summary = result.get("result", "") or result.get("last_assistant_response", "요약을 생성하지 못했습니다.")
+        
+        # 안전하게 결과 추출
+        error = result.get("error")
+        if error:
+            logger.error(f"요약 과정에서 오류 발생: {error}")
+        
+        # 결과 확인 및 안전한 값 추출
+        summary = ""
+        if "result" in result and result["result"]:
+            summary = result["result"]
+        elif "last_assistant_response" in result and result["last_assistant_response"]:
+            summary = result["last_assistant_response"]
+        else:
+            summary = "요약 생성에 실패했습니다. 다시 시도해 주세요."
+            logger.warning("요약 결과가 올바른 형식이 아님")
 
         # PDF 생성 옵션이 활성화된 경우
         pdf_path = None
@@ -479,15 +500,24 @@ async def ask_question(
         result = None
         
         if purpose == "summary":
-            # 수정된 부분: generate_pdf 변수를 명시적으로 전달
-            result = await summarize_document(
-                document_id=document_id,
-                level="default",
-                generate_pdf=generate_pdf,  # Body에서 받은 값 전달
-                db=db,
-                current_user=current_user
-            )
-            result["answer_type"] = "summary"
+            try:
+                # 수정된 부분: generate_pdf 변수를 명시적으로 전달
+                result = await summarize_document(
+                    document_id=document_id,
+                    level="default",
+                    generate_pdf=generate_pdf,
+                    db=db,
+                    current_user=current_user
+                )
+                result["answer_type"] = "summary"
+            except Exception as e:
+                logger.error(f"요약 처리 중 오류: {str(e)}", exc_info=True)
+                result = {
+                    "success": False,
+                    "message": f"요약 생성 중 오류가 발생했습니다: {str(e)}",
+                    "answer_type": "error",
+                    "summary": "요약을 생성하지 못했습니다. 다시 시도해 주세요."
+                }
             
         elif purpose == "generate_exam":
             # 문제 생성
