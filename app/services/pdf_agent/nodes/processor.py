@@ -338,14 +338,7 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
         
         # 값 검증
         if not chunks:
-            logger.warning("저장할 청크가 없습니다. 이전 단계인 split_into_chunks 함수 출력을 확인하세요.")
-            # pdf_text가 있는지 확인하여 추가 디버깅 정보 제공
-            pdf_text = state.get("pdf_text", "")
-            if not pdf_text:
-                logger.error("PDF 텍스트가 비어 있습니다. load_pdf_text 함수 출력을 확인하세요.")
-            else:
-                logger.info(f"PDF 텍스트가 존재합니다 (길이: {len(pdf_text)}). 텍스트 분할 로직을 확인하세요.")
-            
+            logger.error("저장할 청크가 없습니다")
             return {
                 **state,
                 "embedding_stored": False,
@@ -385,12 +378,10 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
         
         # ChromaDB에 저장
         chroma_service = ChromaDBService()
-        # 임베딩 저장 시도
-        logger.info(f"ChromaDB에 청크 저장 시도: {len(chunks)}개 청크")
         success = chroma_service.add_document_chunks(user_id_int, document_id, folder, chunks)
         
         if not success:
-            logger.error("ChromaDB 저장 실패. ChromaDB 서비스 로그 확인 필요.")
+            logger.error("ChromaDB 저장 실패")
             return {
                 **state,
                 "embedding_stored": False,
@@ -399,11 +390,16 @@ def store_embedding(state: AgentState) -> Dict[str, Any]:
             
         # 성공 메시지 추가
         logger.info(f"문서 ID {document_id}의 {len(chunks)}개 청크가 ChromaDB에 저장되었습니다")
-        return {
+        result = {
             **state,
             "embedding_stored": True,
             "embedding_message": f"문서 ID {document_id}의 {len(chunks)}개 청크가 ChromaDB에 저장되었습니다"
         }
+
+        # 확인용 로깅 추가
+        logger.info(f"반환되는 상태 객체: embedding_stored={result.get('embedding_stored')}, doc_chunks 길이={len(result.get('doc_chunks', []))}")
+        
+        return result
         
     except Exception as e:
         logger.error(f"임베딩 저장 중 오류: {str(e)}", exc_info=True)

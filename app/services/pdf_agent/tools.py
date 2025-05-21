@@ -76,7 +76,7 @@ def search_documents_for_qa(user_id: str, folder: str, query: str, k: int = 2) -
     """
     try:
         # 사용자 ChromaDB 경로
-        user_dir = f"{user_id}/chroma/{folder}"
+        user_dir = f"{settings.CHROMADB_STORAGE_PATH}"  # 루트 ChromaDB 경로 사용
         
         # 경로 존재 확인
         if not os.path.exists(user_dir):
@@ -89,11 +89,21 @@ def search_documents_for_qa(user_id: str, folder: str, query: str, k: int = 2) -
         # ChromaDB 로드
         vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
         
+        filter_condition = {"folder": folder}
+        if user_id:
+            # user_id가 정수 문자열인 경우 정수로 변환
+            try:
+                user_id_int = int(user_id)
+                collection_name = f"user_{user_id_int}_{folder}"
+            except ValueError:
+                collection_name = f"user_{user_id}_{folder}"
+
         # 유사도 검색 실행
         results = vectorstore.similarity_search_with_score(
             query, 
-            k=k, 
-            filter={"is_full_document": False}
+            k=k,
+            filter_condition=filter_condition,
+            collection_name=collection_name
         )
         
         # 결과 필터링 및 반환

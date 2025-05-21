@@ -104,12 +104,12 @@ def get_processing_graph():
     문서 처리만 수행하는 단순 그래프
     """
     try:
-        # 간소화된 방식 - dict 타입 사용
+        # dict 타입으로 통일
         graph = StateGraph(dict)
         
         # 디버깅을 위한 로깅 노드 추가
         def log_state(state):
-            logger.info(f"그래프 처리 시작: 상태 내용 = {state}")
+            logger.info(f"그래프 처리 시작: 상태 키 = {list(state.keys())}")
             return state
         
         graph.add_node("log_state", log_state)
