@@ -25,24 +25,37 @@ class ChromaDBService:
     """
 
     _instance = None
+    _initialized = False  # 초기화 여부 추적
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(ChromaDBService, cls).__new__(cls)
-            cls._instance._initialize()
         return cls._instance
+    
+    def __init__(self):
+        # 이미 초기화되었으면 생략
+        if not ChromaDBService._initialized:
+            self._initialize()
+            ChromaDBService._initialized = True
 
     def _initialize(self):
         """ChromaDB 클라이언트 초기화"""
         try:
             self.db_path = settings.CHROMADB_STORAGE_PATH
             os.makedirs(self.db_path, exist_ok=True)
+
+            # 클라이언트 설정 일관성 유지
+            client_settings = Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,  # 필요시 재설정 허용
+                persist_directory=self.db_path
+            )
             
             try:
                 # ChromaDB 클라이언트 초기화 시도
                 self.client = chromadb.PersistentClient(
                     path=self.db_path,
-                    settings=Settings(anonymized_telemetry=False)
+                    settings=client_settings
                 )
                 
                 # API 키 확인
@@ -63,7 +76,6 @@ class ChromaDBService:
                         logger.info("OpenAI 임베딩 함수 초기화 성공")
                     except Exception as emb_err:
                         logger.error(f"OpenAI 임베딩 함수 초기화 실패: {str(emb_err)}")
-                        # 기본 임베딩 함수 시도
                         self.embedding_function = None
                 else:
                     logger.warning("AI_API_KEY가 설정되지 않았습니다. 임베딩 기능이 제한됩니다.")
@@ -293,84 +305,119 @@ class ChromaDBService:
     ) -> List[Dict[str, Any]]:
         """모든 문서에 걸쳐 가장 관련성 높은 청크 검색"""
         collection_name = f"user_{user_id}_{folder_name}"
-        collection = self._get_user_collection(user_id, folder_name=folder_name, create_if_not_exists=False)
         
-        if not collection:
-            logger.warning(f"컬렉션을 찾을 수 없음: {collection_name}")
-            # 대체 수단으로 기존 저장된 문서 중 하나 반환 시도
-            try:
-                # 사용자의 아무 문서나 가져오기
-                from app.db.session import SessionLocal
-                from app.models.tag import PDFFile
-                
-                db = SessionLocal()
-                pdf_file = db.query(PDFFile).filter(PDFFile.owner_id == user_id).first()
-                db.close()
-                
-                if pdf_file:
-                    logger.info(f"대체 문서 사용: id={pdf_file.id}, name={pdf_file.filename}")
-                    return [{
-                        "document_id": pdf_file.id,
-                        "text": "문서가 존재하지만 임베딩을 찾을 수 없습니다.",
-                        "similarity": 0.5
-                    }]
-            except Exception as db_err:
-                logger.error(f"대체 문서 검색 오류: {str(db_err)}")
-            
-            return []
-
         try:
-            # 쿼리 실행
+            # 컬렉션 가져오기(없으면 생성하지 않음)
+            collection = self._get_user_collection(user_id, folder_name=folder_name, create_if_not_exists=False)
+            
+            if not collection:
+                logger.warning(f"컬렉션을 찾을 수 없음: {collection_name}")
+                # DB에서 문서 검색 시도
+                try:
+                    from app.db.session import SessionLocal
+                    from app.models.tag import PDFFile
+                    
+                    db = SessionLocal()
+                    try:
+                        pdf_file = db.query(PDFFile).filter(PDFFile.owner_id == user_id).first()
+                        if pdf_file:
+                            logger.info(f"대체 문서 사용: id={pdf_file.id}, name={pdf_file.filename}")
+                            return [{
+                                "document_id": pdf_file.id,
+                                "text": f"파일명: {pdf_file.filename}\n경로: {pdf_file.file_path}",
+                                "similarity": 0.5
+                            }]
+                    finally:
+                        db.close()
+                except Exception as db_err:
+                    logger.error(f"대체 문서 검색 오류: {str(db_err)}")
+                
+                return []
+
+            # 임베딩 함수 확인
             embedding_function = self.embedding_function
             
-            # 임베딩 함수가 없으면 최신 문서 반환
+            # 임베딩 함수가 없으면 메타데이터 기반 검색
             if not embedding_function:
                 logger.warning("임베딩 함수가 없음, 메타데이터 기반 검색")
-                results = collection.get(limit=limit)
+                # collection.get() 대신 db에서 직접 검색
+                try:
+                    from app.db.session import SessionLocal
+                    from app.models.tag import PDFFile
+                    
+                    db = SessionLocal()
+                    try:
+                        pdf_files = db.query(PDFFile).filter(PDFFile.owner_id == user_id).limit(limit).all()
+                        
+                        chunks = []
+                        for pdf in pdf_files:
+                            chunks.append({
+                                "document_id": pdf.id,
+                                "text": f"파일명: {pdf.filename}",
+                                "similarity": 0.5  # 임의의 유사도
+                            })
+                        
+                        return chunks
+                    finally:
+                        db.close()
+                except Exception as db_err:
+                    logger.error(f"DB 검색 오류: {str(db_err)}")
+                    return []
+            
+            # 정상 임베딩 검색 시도
+            try:
+                results = collection.query(
+                    query_texts=[query_text],
+                    n_results=limit
+                )
                 
                 chunks = []
-                if results and results.get("ids"):
-                    for i in range(len(results["ids"])):
-                        doc = results["documents"][i] if "documents" in results else ""
-                        metadata = results["metadatas"][i] if "metadatas" in results else {}
-                        
-                        chunks.append({
-                            "document_id": metadata.get("document_id", 0),
-                            "index": metadata.get("chunk_index", 0),
-                            "text": doc,
-                            "similarity": 0.5  # 임의의 유사도
-                        })
+                if not results.get("documents") or not results["documents"][0]:
+                    return []
                     
-                    return chunks
-                return []
-            
-            # 정상 임베딩 검색
-            results = collection.query(
-                query_texts=[query_text],
-                n_results=limit
-            )
-
-            chunks = []
-            if not results.get("documents") or not results["documents"][0]:
-                return []
-
-            for i, (doc, metadata, distance) in enumerate(zip(
-                results["documents"][0],
-                results["metadatas"][0],
-                results["distances"][0] if "distances" in results else [0] * len(results["documents"][0])
-            )):
-                similarity = 1.0 - float(distance) if distance else 0.95
-                chunks.append({
-                    "document_id": metadata.get("document_id", 0),
-                    "index": metadata.get("chunk_index", 0),
-                    "text": doc,
-                    "similarity": similarity
-                })
-
-            # 유사도 기준으로 정렬
-            chunks.sort(key=lambda x: x["similarity"], reverse=True)
-            return chunks
-
+                for i, (doc, metadata, distance) in enumerate(zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0] if "distances" in results else [0] * len(results["documents"][0])
+                )):
+                    similarity = 1.0 - float(distance) if distance else 0.95
+                    chunks.append({
+                        "document_id": metadata.get("document_id", 0),
+                        "index": metadata.get("chunk_index", 0),
+                        "text": doc,
+                        "similarity": similarity
+                    })
+                    
+                # 유사도 기준으로 정렬
+                chunks.sort(key=lambda x: x["similarity"], reverse=True)
+                return chunks
+                
+            except Exception as search_err:
+                logger.error(f"ChromaDB 검색 실패: {str(search_err)}")
+                # DB 검색으로 대체
+                try:
+                    from app.db.session import SessionLocal
+                    from app.models.tag import PDFFile
+                    
+                    db = SessionLocal()
+                    try:
+                        pdf_files = db.query(PDFFile).filter(PDFFile.owner_id == user_id).limit(limit).all()
+                        
+                        chunks = []
+                        for pdf in pdf_files:
+                            chunks.append({
+                                "document_id": pdf.id,
+                                "text": f"파일명: {pdf.filename}",
+                                "similarity": 0.5  # 임의의 유사도
+                            })
+                        
+                        return chunks
+                    finally:
+                        db.close()
+                except Exception as db_err:
+                    logger.error(f"DB 검색 오류: {str(db_err)}")
+                    return []
+                
         except Exception as e:
             logger.error(f"전체 문서 검색 실패: {str(e)}")
             return []

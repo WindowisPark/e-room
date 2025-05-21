@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
 import logging
 import os
+import json  # JSON 파싱용
+from datetime import datetime
+import tempfile
 
 from app.api import deps
 from app.models.user import User
@@ -15,6 +18,7 @@ from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
 from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
 from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
 from app.services.pdf_agent.chromadb_service import ChromaDBService
+from app.services.pdf_service import PDFConverter  # 새로 추가할 서비스
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -264,6 +268,7 @@ async def query_document(
 async def summarize_document(
     document_id: int = Path(..., title="PDF 문서 ID"),
     level: str = Query("default", description="요약 수준 (default, short, detailed)"),
+    generate_pdf: bool = Query(False, description="PDF 파일 생성 여부"),  # 파라미터 추가
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -296,13 +301,29 @@ async def summarize_document(
 
         summary = result.get("result", "") or result.get("last_assistant_response", "요약을 생성하지 못했습니다.")
 
-        return {
+        # PDF 생성 옵션이 활성화된 경우
+        pdf_path = None
+        if generate_pdf and summary:
+            from app.services.pdf_service import PDFConverter
+            pdf_title = f"{document.filename} 요약본 ({level})"
+            pdf_path = PDFConverter.text_to_pdf(summary, pdf_title, current_user.id)
+        
+        response = {
             "success": True,
             "document_id": document_id,
             "document_name": document.filename,
             "level": level,
             "summary": summary
         }
+        
+        # PDF 생성 정보 추가
+        if pdf_path:
+            response["pdf_generated"] = True
+            response["pdf_path"] = pdf_path
+        else:
+            response["pdf_generated"] = False
+        
+        return response
 
     except Exception as e:
         logger.error(f"요약 오류: {str(e)}", exc_info=True)
@@ -360,6 +381,7 @@ async def generate_questions(
 @router.post("/ask", response_model=Dict[str, Any])
 async def ask_question(
     query: str = Body(..., description="사용자 질문"),
+    generate_pdf: bool = Body(False, description="요약일 경우 PDF 생성 여부"),
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -370,90 +392,98 @@ async def ask_question(
     3. 해당 요구사항에 맞는 처리 수행
     """
     try:
+
+        # ✅ 디버깅: 디렉토리 구조 확인 및 Chroma 설정 확인
+        import os
+        def list_dir_recursive(path, max_depth=3, current_depth=0):
+            result = []
+            try:
+                if current_depth >= max_depth:
+                    return [f"{path}/..."]
+                items = os.listdir(path)
+                for item in items:
+                    item_path = os.path.join(path, item)
+                    if os.path.isdir(item_path):
+                        result.append(f"{item_path}/")
+                        if current_depth < max_depth - 1:
+                            sub_items = list_dir_recursive(item_path, max_depth, current_depth + 1)
+                            result.extend([f"  {sub}" for sub in sub_items])
+                    else:
+                        result.append(item_path)
+            except Exception as e:
+                result.append(f"Error: {str(e)}")
+            return result
+
+        logger.info("=== 스토리지 디렉토리 구조 ===")
+        storage_paths = list_dir_recursive("./storage", max_depth=4)
+        for path in storage_paths[:20]:
+            logger.info(path)
+        logger.info(f"총 {len(storage_paths)}개 항목")
+
+        logger.info("=== ChromaDB 설정 ===")
+        from app.core.config import settings
+        logger.info(f"CHROMADB_STORAGE_PATH: {settings.CHROMADB_STORAGE_PATH}")
+        logger.info(f"경로 존재 여부: {os.path.exists(settings.CHROMADB_STORAGE_PATH)}")
+
         # 1. 질문 분석하여 목적 파악
         from app.services.pdf_agent.nodes.common import judge_the_purpose_of_the_input
         
-        # 임시 상태 생성
-        temp_state = {
-            "user_id": str(current_user.id),
-            "last_user_query": query
-        }
-        
-        # 목적 판단
-        purpose_state = judge_the_purpose_of_the_input(temp_state)
-        purpose = purpose_state.get("purpose", "qa_system")  # 기본값은 Q&A
+        # 목적 판단을 위한 임시 상태 - 한국어 키워드 기반 우선 판단
+        if any(keyword in query for keyword in ["요약", "정리", "간추려", "축약", "핵심"]):
+            purpose = "summary"
+            logger.info(f"한국어 키워드로 목적 판단: {purpose}")
+        else:
+            # 임시 상태 생성
+            temp_state = {
+                "user_id": str(current_user.id),
+                "last_user_query": query
+            }
+            
+            # LLM 기반 목적 판단
+            purpose_state = judge_the_purpose_of_the_input(temp_state)
+            purpose = purpose_state.get("purpose", "qa_system")  # 기본값은 Q&A
         
         logger.info(f"질문 목적 분석 결과: {purpose}")
         
-        # 2. 관련 문서 검색 (ChromaDB 유사도 검색)
-        chroma_service = ChromaDBService()
-        folder_name = "default"  # 기본 폴더
-
-        # DB와 폴더 경로 로깅
-        db_path = chroma_service.db_path if hasattr(chroma_service, 'db_path') else "Unknown"
-        logger.info(f"ChromaDB 경로: {db_path}")
-        logger.info(f"사용자 ID: {current_user.id}, 폴더: {folder_name}")
-        
-        # 이 부분에서 실패하면 자세한 오류 로깅
+        # 2. 관련 문서 검색
         try:
-            relevant_docs = chroma_service.search_across_documents(
-                user_id=current_user.id,
-                query_text=query,
-                limit=5  # 상위 5개 결과만
-            )
-            logger.info(f"관련 문서 검색 결과: {len(relevant_docs)}개 문서 찾음")
-            for i, doc in enumerate(relevant_docs[:2]):  # 처음 2개만 로깅
-                logger.info(f"  문서 {i+1}: ID={doc.get('document_id')}, 유사도={doc.get('similarity')}")
+            # 사용자의 문서가 있는지 확인
+            user_pdfs = db.query(PDFFile).filter(PDFFile.owner_id == current_user.id).all()
+            if not user_pdfs:
+                logger.warning(f"사용자 {current_user.id}의 문서가 없습니다.")
+                return {
+                    "success": False,
+                    "message": "질문에 답변할 수 있는 문서가 없습니다. 먼저 PDF 문서를 업로드해주세요.",
+                    "query": query
+                }
+            
+            # 가장 간단한 방법: 첫 번째 문서 사용 (추후 개선 가능)
+            document_id = user_pdfs[0].id
+            document = user_pdfs[0]
+            logger.info(f"기본 문서 선택: ID={document_id}, 제목={document.filename}")
+            
         except Exception as search_err:
             logger.error(f"문서 검색 중 오류: {str(search_err)}", exc_info=True)
-            relevant_docs = []
-        
-        if not relevant_docs:
-            logger.warning("질문과 관련된 문서를 찾을 수 없음")
-            return {
-                "success": False,
-                "message": "질문과 관련된 문서를 찾을 수 없습니다.",
-                "query": query,
-                "purpose": purpose
-            }
-        
-        # 사용자의 모든 문서를 대상으로 검색
-        relevant_docs = chroma_service.search_across_documents(
-            user_id=current_user.id,
-            query_text=query,
-            limit=5  # 상위 5개 결과만
-        )
-        
-        if not relevant_docs:
-            return {
-                "success": False,
-                "message": "질문과 관련된 문서를 찾을 수 없습니다.",
-                "query": query,
-                "purpose": purpose
-            }
-        
-        # 가장 관련성 높은 문서 선택
-        best_match = relevant_docs[0]
-        document_id = best_match["document_id"]
-        
-        # 문서 정보 조회
-        document = db.query(PDFFile).filter(PDFFile.id == document_id).first()
-        if not document:
-            return {
-                "success": False,
-                "message": "문서를 찾을 수 없습니다.",
-                "query": query,
-                "purpose": purpose
-            }
-        
+            if user_pdfs:
+                document_id = user_pdfs[0].id
+                document = user_pdfs[0]
+                logger.info(f"오류 발생으로 기본 문서 사용: ID={document_id}")
+            else:
+                return {
+                    "success": False,
+                    "message": f"질문 처리 중 오류가 발생했습니다: {str(search_err)}",
+                    "query": query
+                }
+            
         # 3. 목적에 따른 적절한 처리 수행
         result = None
         
         if purpose == "summary":
-            # 요약 처리
+            # 수정된 부분: generate_pdf 변수를 명시적으로 전달
             result = await summarize_document(
                 document_id=document_id,
                 level="default",
+                generate_pdf=generate_pdf,  # Body에서 받은 값 전달
                 db=db,
                 current_user=current_user
             )
@@ -478,6 +508,7 @@ async def ask_question(
                 current_user=current_user
             )
             result["answer_type"] = "qa"
+
         
         # 4. 통합 응답 구성
         response = {
@@ -486,15 +517,18 @@ async def ask_question(
             "purpose": purpose,
             "document_id": document_id,
             "document_name": document.filename,
-            **result  # 각 처리 결과 통합
+            "answer": result.get("answer", ""),
+            **{k: v for k, v in result.items() if k not in ["answer"]}  # 다른 필드들 복사
         }
-        
         return response
         
-    except Exception as e:
-        logger.error(f"질문 처리 중 오류 발생: {str(e)}", exc_info=True)
+    except Exception as process_err:
+        logger.error(f"처리 중 오류: {str(process_err)}", exc_info=True)
         return {
             "success": False,
-            "message": f"처리 중 오류가 발생했습니다: {str(e)}",
-            "query": query
+            "message": f"질문 처리 중 오류가 발생했습니다: {str(process_err)}",
+            "query": query,
+            "purpose": purpose,
+            "document_id": document_id if 'document_id' in locals() else None,
+            "document_name": document.filename if 'document' in locals() else None
         }

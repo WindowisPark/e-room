@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from app.services.pdf_agent.states import AgentState, MessageAnnotation
 import os
 import logging
+import re
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -110,6 +111,10 @@ def judge_the_purpose_of_the_input(state: AgentState) -> Dict[str, Any]:
             query = user_messages[-1].content if user_messages else ""
             
         if not query:
+            return {**state, "purpose": "summary"}
+        
+        # 요약 키워드 직접 검사 (한국어 자연어 처리 보완)
+        if any(keyword in query for keyword in ["요약", "정리", "간추려", "축약", "핵심"]):
             return {**state, "purpose": "summary"}
         
         # 목적 분류를 위한 프롬프트

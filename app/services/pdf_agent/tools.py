@@ -128,36 +128,118 @@ def search_documents_for_summary(user_id: str, folder: str, query: str = None, k
         관련 문서 목록
     """
     try:
-        # 사용자 ChromaDB 경로
-        user_dir = f"{user_id}/chroma/{folder}"
+        # ChromaDB 서비스 사용
+        from app.services.pdf_agent.chromadb_service import ChromaDBService
         
-        # 경로 존재 확인
-        if not os.path.exists(user_dir):
-            logger.warning(f"사용자 ChromaDB 경로가 존재하지 않음: {user_dir}")
-            return []
+        logger.info(f"문서 검색 시작: user_id={user_id}, folder={folder}, query={'있음' if query else '없음'}")
         
-        # 임베딩 모델 초기화
-        embeddings = OpenAIEmbeddings(api_key=API_KEY)
+        # 정수형 user_id로 변환 (문자열 입력 처리)
+        try:
+            user_id_int = int(user_id)
+        except (ValueError, TypeError):
+            user_id_int = None
+            logger.warning(f"user_id를 정수로 변환할 수 없음: {user_id}")
         
-        # ChromaDB 로드
-        vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+        # ChromaDB 서비스 인스턴스 가져오기
+        chroma_service = ChromaDBService()
         
-        # 전체 문서 검색
-        if query:
-            # 쿼리가 있는 경우 유사도 검색
-            results = vectorstore.similarity_search(
-                query, 
-                k=k, 
-                filter={"is_full_document": True}
-            )
-        else:
-            # 쿼리가 없는 경우 모든 전체 문서 가져오기
-            results = vectorstore.get(filter={"is_full_document": True})
+        # 관련 문서 검색 - 구체적인 예외 처리
+        try:
+            # 사용자 컬렉션 이름 생성
+            collection_name = f"user_{user_id}_{folder}"
             
-        return results
-        
+            # 컬렉션 확인 및 검색 실행
+            if query:
+                logger.info(f"쿼리 기반 검색 시작: query='{query}', collection={collection_name}")
+                
+                # 해당 사용자가 소유한 문서 검색 (전체 문서 대상)
+                docs = chroma_service.search_across_documents(
+                    user_id=user_id_int,
+                    query_text=query,
+                    folder_name=folder,
+                    limit=k
+                )
+                
+                if docs:
+                    logger.info(f"검색 결과: {len(docs)}개 문서 발견")
+                    return docs
+                else:
+                    # DB에서 직접 문서 검색 시도
+                    logger.warning(f"ChromaDB에서 문서를 찾을 수 없음, DB에서 직접 검색 시도")
+                    from app.db.session import SessionLocal
+                    from app.models.tag import PDFFile
+                    
+                    db = SessionLocal()
+                    try:
+                        pdf_files = db.query(PDFFile).filter(PDFFile.owner_id == user_id_int).all()
+                        if pdf_files:
+                            logger.info(f"DB에서 {len(pdf_files)}개 문서 발견")
+                            
+                            # 첫 번째 문서 사용 (더 나은 방법으로 개선 가능)
+                            pdf_file = pdf_files[0]
+                            return [{
+                                "document_id": pdf_file.id,
+                                "text": f"파일명: {pdf_file.filename}\n경로: {pdf_file.file_path}",
+                                "metadata": {"document_id": pdf_file.id}
+                            }]
+                    finally:
+                        db.close()
+            else:
+                # 쿼리 없이 모든 문서 가져오기
+                logger.info(f"모든 문서 검색 시작: collection={collection_name}")
+                from app.db.session import SessionLocal
+                from app.models.tag import PDFFile
+                
+                db = SessionLocal()
+                try:
+                    pdf_files = db.query(PDFFile).filter(PDFFile.owner_id == user_id_int).all()
+                    if pdf_files:
+                        logger.info(f"DB에서 {len(pdf_files)}개 문서 발견")
+                        
+                        # 첫 번째 문서 사용
+                        pdf_file = pdf_files[0]
+                        return [{
+                            "document_id": pdf_file.id,
+                            "text": f"파일명: {pdf_file.filename}\n경로: {pdf_file.file_path}",
+                            "metadata": {"document_id": pdf_file.id}
+                        }]
+                finally:
+                    db.close()
+                
+            # 여기까지 왔다면 문서를 찾지 못한 것
+            raise ValueError(f"관련 PDF 문서를 찾을 수 없습니다. user_id={user_id}, folder={folder}, query='{query}'")
+            
+        except Exception as search_err:
+            logger.error(f"문서 검색 중 오류: {str(search_err)}", exc_info=True)
+            raise  # 상위로 예외 전파
+            
     except Exception as e:
-        logger.error(f"요약용 문서 검색 실패: {str(e)}")
+        logger.error(f"요약용 문서 검색 실패: {str(e)}", exc_info=True)
+        
+        # 마지막 수단: DB에서 직접 문서 검색
+        try:
+            from app.db.session import SessionLocal
+            from app.models.tag import PDFFile
+            
+            db = SessionLocal()
+            try:
+                user_id_int = int(user_id) if isinstance(user_id, str) else user_id
+                pdf_files = db.query(PDFFile).filter(PDFFile.owner_id == user_id_int).all()
+                if pdf_files:
+                    logger.info(f"최종 대체 검색: DB에서 {len(pdf_files)}개 문서 발견")
+                    
+                    # 첫 번째 문서 반환
+                    pdf_file = pdf_files[0]
+                    return [{
+                        "document_id": pdf_file.id,
+                        "text": f"파일명: {pdf_file.filename}\n경로: {pdf_file.file_path}",
+                        "metadata": {"document_id": pdf_file.id}
+                    }]
+            finally:
+                db.close()
+        except Exception as db_err:
+            logger.error(f"DB 대체 검색 실패: {str(db_err)}")
+        
         return []
 
 
