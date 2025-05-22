@@ -20,8 +20,7 @@ class PDFProcessor:
         content, images = parse_pdf(
             pdf_path=pdf_path,
             model="gpt-4.1-mini",
-            api_key=os.getenv("OPENAI_API_KEY"),
-            output_path="./images"
+            api_key=os.getenv("OPENAI_API_KEY")
         )
 
         splitter = RecursiveCharacterTextSplitter(

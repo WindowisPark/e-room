@@ -52,12 +52,12 @@ langsmith>=0.1.4  # 최신 버전
 
 # ✅ 기타 유틸리티
 loguru>=0.7.2
-gptpdf>=0.1.1
+gptpdf
 packaging>=23.2
 wikipedia>=1.4.0
 boto3
-est_asyncio
-gptpdf
+nest_asyncio
+Pillow
 
 # ✅ 검색엔진 연동
 opensearch-py>=2.3.2

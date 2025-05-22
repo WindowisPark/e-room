@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional
 from langchain_core.messages import SystemMessage
+from app.services.pdf_agent.chromadb_service import ChromaDBService
 
 def get_initial_state(
     user_id: str,
@@ -54,3 +55,4 @@ def get_initial_state(
         "embedding_stored": False,
         "error": None
     }
+

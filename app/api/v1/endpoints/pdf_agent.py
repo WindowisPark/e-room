@@ -1,8 +1,8 @@
 # app/api/v1/endpoints/pdf_agent.py
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import logging
 import os
 
@@ -64,13 +64,18 @@ async def process_document(
             s3.download_file(bucket_name, object_key, temp_path)
             file_path = temp_path
 
-        elif is_http_url:
+        elif is_http_url and "amazonaws.com" in parsed_url.netloc:
+            # URL로 접근 불가 → Signed URL이 아니므로 boto3 fallback
+            bucket_name = "ai-agent-pdf-storage"
+            object_key = parsed_url.path.lstrip('/')
             temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-            response = requests.get(file_path, stream=True)
-            response.raise_for_status()
-            with open(temp_path, "wb") as f:
-                for chunk in response.iter_content(8192):
-                    f.write(chunk)
+            s3 = boto3.client("s3",
+                aws_access_key_id=settings.AWS_ACCESS_KEY,
+                aws_secret_access_key=settings.AWS_SECRET_KEY,
+                region_name=settings.AWS_REGION,
+                config=Config(signature_version='s3v4')
+            )
+            s3.download_file(bucket_name, object_key, temp_path)
             file_path = temp_path
 
         elif not os.path.exists(file_path):
@@ -152,7 +157,11 @@ async def query_document(
         graph = get_qa_graph()
         result = graph.invoke(state)
 
-        answer = result.get("last_assistant_response", "응답을 생성하지 못했습니다.")
+        answer = result.get("last_assistant_response") or \
+                (result.get("messages", [])[-1].content if result.get("messages") else None) or \
+                "응답을 생성하지 못했습니다."
+        
+        logger.debug(f"LLM 최종 응답 내용: {answer}")
 
         return {
             "success": True,
