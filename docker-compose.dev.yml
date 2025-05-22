@@ -11,6 +11,7 @@ services:
     volumes:
       - ./app:/app/app
       - ./storage:/app/storage
+      - ./static:/app/static:ro
       - ./app/scripts:/app/scripts
       - ./alembic.ini:/app/alembic.ini
       - ./Board_Backend/src/main/webapp/resources:/app/Board_Backend/src/main/webapp/resources
