@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Path, Q
 from typing import List
 from sqlalchemy.orm import Session
 from app.services.file_service import FileStorageManager, FileOperationError
+from app.services.pdf_ingest import process_pdf_upload  # ✅ 파싱 함수 import
 from app.schemas.file import (
     MultiUploadResult,
     FileRenameResponse,
@@ -12,8 +13,10 @@ from app.schemas.file import (
 from app.api import deps
 from app.models.user import User
 from app.crud.crud_tag import create_pdf_file
+import logging
 
 router = APIRouter(tags=["PDF Manager"])
+logger = logging.getLogger(__name__)
 
 def get_storage_manager() -> FileStorageManager:
     return FileStorageManager()
@@ -22,13 +25,13 @@ def get_storage_manager() -> FileStorageManager:
 @router.post(
     "/users/{user_id}/folders/{folder_name}/files",
     response_model=MultiUploadResult,
-    summary="다중 PDF 업로드"
+    summary="다중 PDF 업로드 + 자동 파싱 및 청크 저장"
 )
 async def upload_pdf(
     user_id: int,
     folder_name: str = Path(..., min_length=1),
     files: List[UploadFile] = File(...),
-    storage = Depends(deps.get_storage_manager),  # 변경된 의존성
+    storage = Depends(deps.get_storage_manager),
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -36,7 +39,7 @@ async def upload_pdf(
         if current_user.id != user_id and not current_user.is_admin:
             raise HTTPException(status_code=403, detail="다른 사용자의 폴더에 파일을 업로드할 수 없습니다.")
 
-        # 스토리지 매니저 사용 (S3 또는 로컬)
+        # ✅ 파일 저장 (S3 or 로컬)
         results = await storage.save_multiple_pdfs(user_id, folder_name, files)
 
         if len(results["success"]) == 0:
@@ -45,6 +48,7 @@ async def upload_pdf(
         from app.services.point_service import add_points, PointActionType
 
         for file_info in results["success"]:
+            # ✅ 포인트 적립
             await add_points(
                 db=db,
                 user_id=user_id,
@@ -52,12 +56,25 @@ async def upload_pdf(
                 description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
             )
 
+            # ✅ DB 기록
             create_pdf_file(
                 db=db,
                 filename=file_info["saved_name"],
                 file_path=file_info["path"],
                 owner_id=user_id
             )
+
+            # ✅ 자동 파싱 및 Chroma 저장
+            try:
+                process_pdf_upload(
+                    pdf_path=file_info["path"],
+                    user_id=str(user_id),
+                    folder_name=folder_name
+                )
+                logger.info(f"PDF 파싱 및 저장 성공: {file_info['path']}")
+            except Exception as e:
+                logger.error(f"PDF 파싱 실패: {e}")
+                # 실패하더라도 업로드 자체는 성공 처리 (로깅만)
 
         return MultiUploadResult(**results)
 

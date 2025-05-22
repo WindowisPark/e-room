@@ -2,7 +2,10 @@
 
 from typing import Dict, Any, Optional
 from langchain_core.messages import SystemMessage
-from app.services.pdf_agent.chromadb_service import ChromaDBService
+from dotenv import dotenv_values
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
 
 def get_initial_state(
     user_id: str,
@@ -14,17 +17,6 @@ def get_initial_state(
 ) -> Dict[str, Any]:
     """
     LangGraph 초기 상태 생성
-
-    Args:
-        user_id: 사용자 ID (str)
-        document_id: 문서 ID
-        pdf_path: PDF 파일 경로
-        purpose: 요약, QA, 시험 등의 목적
-        folder: 저장된 ChromaDB 폴더명
-        query: 사용자의 요청 질의 (선택)
-
-    Returns:
-        LangGraph 상태 딕셔너리
     """
     return {
         "messages": [
@@ -56,3 +48,60 @@ def get_initial_state(
         "error": None
     }
 
+def search_documents_by_purpose(
+    user_id: str,
+    folder: str,
+    purpose: str,
+    query: Optional[str] = ""
+) -> list:
+    if purpose == "summary":
+        return search_documents_for_summary(user_id, folder, query)
+    elif purpose == "qa_system":
+        return search_documents_for_qa(user_id, folder, query)
+    elif purpose == "generate_exam":
+        return search_documents_for_exam(user_id, folder)
+    elif purpose == "schedule":
+        return search_documents_for_scheduler(user_id, folder)
+    else:
+        return []
+
+def search_documents_for_qa(user_id: str, folder: str, query: str, k: int = 2):
+    envs = dotenv_values(".env")
+    api_key = envs["OPENAI_API_KEY"]
+    user_dir = f"{user_id}/chroma/{folder}"
+    embeddings = OpenAIEmbeddings(api_key=api_key)
+    vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+    results = vectorstore.similarity_search_with_score(query, k=k, filter={"is_full_document": False})
+
+    # 🔍 유사도 로그 출력
+    import logging
+    logger = logging.getLogger(__name__)
+    for doc, score in results:
+        logger.info(f"[QA 유사도] score={score:.4f}, preview={doc.page_content[:50]}")
+
+    # 🔧 점수 기준 완화
+    return [doc for doc, score in results if score >= 0.2]
+
+def search_documents_for_summary(user_id: str, folder: str, query: str, k: int = 2):
+    envs = dotenv_values(".env")
+    api_key = envs["OPENAI_API_KEY"]
+    user_dir = f"{user_id}/chroma/{folder}"
+    embeddings = OpenAIEmbeddings(api_key=api_key)
+    vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+    return vectorstore.similarity_search(query, k=k, filter={"is_full_document": True})
+
+def search_documents_for_scheduler(user_id: str, folder: str, k: int = 2):
+    envs = dotenv_values(".env")
+    api_key = envs["OPENAI_API_KEY"]
+    user_dir = f"{user_id}/chroma/{folder}"
+    embeddings = OpenAIEmbeddings(api_key=api_key)
+    vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+    return vectorstore.get(where={"indices": True})
+
+def search_documents_for_exam(user_id: str, folder: str):
+    envs = dotenv_values(".env")
+    api_key = envs["OPENAI_API_KEY"]
+    user_dir = f"{user_id}/chroma/{folder}"
+    embeddings = OpenAIEmbeddings(api_key=api_key)
+    vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+    return vectorstore.get(where={"is_full_document": True})

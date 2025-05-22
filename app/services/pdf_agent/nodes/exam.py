@@ -5,6 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.services.pdf_agent.states import AgentState
 from gptpdf import parse_pdf
+from langchain_core.messages import HumanMessage
 import os
 import mimetypes
 import base64
@@ -64,7 +65,12 @@ def analyze_previous_exam(state: AgentState):
     return {"personality": personality, "previous_exam_index": index + 1}
 
 def check_exam_count(state: AgentState):
-    if state["previous_exam_index"] >= len(state["previous_exam_path"]):
+    index = state.get("previous_exam_index", 0)
+    paths = state.get("previous_exam_path", [])
+    
+    print(f"[exam] check_exam_count: index={index}, total={len(paths)}")
+
+    if not isinstance(paths, list) or index >= len(paths):
         return "completion"
     return "continue"
 
@@ -109,3 +115,42 @@ def refine_problems(state: AgentState):
         f.write(problem)
 
     return {"result": problem}
+
+def select_previous_exam(state: AgentState):
+    """
+    기출문제 경로가 없으면 사용자에게 업로드 요청 메시지 삽입
+    """
+    if not state.get("previous_exam_path"):
+        message = HumanMessage(content="기출문제 파일을 업로드해주세요. 예: '기출_2023_정보보안.pdf'")
+        messages = state.get("messages", [])
+        messages.append(message)
+        return {
+            "messages": messages,
+            "waiting_for_exam_file": True  # 상태 표시
+        }
+    return {}  # 문제 없으면 다음으로 진행
+
+def check_exist_previous_exam(state: AgentState):
+    """
+    기출문제 유무에 따라 흐름 분기
+    """
+    if not state.get("previous_exam_path"):
+        return "no exist"
+    return "exist"
+
+def get_final_personality(state: AgentState):
+    personality = state["personality"]
+    result = llm.invoke(f"여러 기출 성향을 종합하여 출제자의 성향을 분석해주세요.\n{personality}").content
+    return {"final_personality": result}
+
+def get_all_files(state: AgentState):
+    """
+    학습용 PDF 파일이 필요할 때 사용자에게 업로드 요청
+    """
+    message = HumanMessage(content="시험 문제 생성을 위해 학습할 PDF 파일을 업로드해주세요.")
+    messages = state.get("messages", [])
+    messages.append(message)
+    return {
+        "messages": messages,
+        "waiting_for_study_file": True
+    }

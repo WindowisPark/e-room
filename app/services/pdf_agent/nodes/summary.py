@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from dotenv import load_dotenv
-from app.services.pdf_agent.chromadb_service import ChromaDBService
+from app.services.pdf_agent.tools import search_documents_for_summary  # ✅ ChromaDBService 제거하고 tools 기반으로 교체
 import json
 import os
 import logging
@@ -23,27 +23,24 @@ def get_related_pdf(state: AgentState):
     user_id = state["user_id"]
     folder = state.get("folder", "default")
 
-    # 🔍 요약 쿼리 → 핵심 키워드로 전처리
     refined_query = llm.invoke(f"""
     사용자의 요청은 문서 요약입니다.
     이 요청에서 핵심 키워드를 한두 단어로 추출하세요.
-    
+
     요청: "{request}"
     """).content.strip()
 
-    # ✅ document_id 없이 유사도 기반 검색
-    chroma = ChromaDBService()
-    pdfs = chroma.search_across_documents(
-        user_id=int(user_id),
-        query_text=refined_query,
-        folder_name=folder,
-        limit=5
+    pdfs = search_documents_for_summary(
+        user_id=user_id,
+        folder=folder,
+        query=refined_query,
+        k=5
     )
 
     if not pdfs:
         raise ValueError(f"관련 문서를 찾을 수 없습니다. refined_query='{refined_query}'")
 
-    full_text = "\n".join(p["text"] for p in pdfs)
+    full_text = "\n".join(p.page_content for p in pdfs)
     return {"pdf_content": {"text": full_text}}
 
 def pdf_parsing(state: AgentState):
@@ -65,10 +62,16 @@ def pdf_parsing(state: AgentState):
 def check_summary_completion(state: AgentState):
     pdfs = state.get("pdfs", [])
     now_step = state.get("pdf_step", 0)
+
     print(f"요약 진행 상황: {now_step}/{len(pdfs)}")
 
-    if not pdfs or now_step >= len(pdfs):
+    if not isinstance(pdfs, list) or len(pdfs) == 0:
+        print("[check_completion] pdfs가 없어서 종료")
         return "completion"
+
+    if now_step >= len(pdfs):
+        return "completion"
+
     return "continue"
 
 def summary_pdf(state: AgentState):
@@ -76,7 +79,8 @@ def summary_pdf(state: AgentState):
     step = state.get("pdf_step", 0)
     summaries = state.get("summaries", "")
 
-    if step >= len(pdfs):
+    if not isinstance(pdfs, list) or step >= len(pdfs):
+        print(f"[summary_pdf] 스킵: step={step}, pdfs 길이={len(pdfs)}")
         return {"pdf_step": step, "summaries": summaries}
 
     try:
@@ -110,7 +114,6 @@ def get_need_to_explain(state: AgentState):
     content = response.content.strip()
 
     try:
-        # ✅ 백틱 제거
         if content.startswith("```") and content.endswith("```"):
             content = content.strip("```").strip()
         if content.startswith("json"):
@@ -118,12 +121,11 @@ def get_need_to_explain(state: AgentState):
 
         parsed = json.loads(content)
 
-        # ✅ 초기화 보장
         return {
             "need_to_explain": parsed,
             "explain_step": 0
         }
-    
+
     except Exception as e:
         logger.error(f"[요약] JSON 파싱 실패: {e} / 응답: {content}")
         return {"need_to_explain": {}}
@@ -138,9 +140,8 @@ def explain(state: AgentState):
     now = state["explain_step"]
 
     if not need_to_explain or now >= len(need_to_explain):
-        # 비어 있거나 인덱스 초과 시 안전하게 종료
-        return {"explain_step": now, "need_to_explain": need_to_explain}    
-    
+        return {"explain_step": now, "need_to_explain": need_to_explain}
+
     key = list(need_to_explain.keys())[now]
     reason = list(need_to_explain.values())[now]
 

@@ -161,8 +161,12 @@ class ChromaDBService:
                     "chunk_index": chunk["index"],
                     "start_char": chunk.get("start_char", 0),
                     "end_char": chunk.get("end_char", len(chunk["text"])),
-                    "page": chunk.get("page", 1)
+                    "page": chunk.get("page", 1),
+                    "is_full_document": False  # ✅ 이 줄 추가!
                 })
+
+            # ✅ 이 아래 임시 확인 코드 추가
+            logger.info(f"[디버그] 첫 메타데이터 샘플: {metadatas[0] if metadatas else '없음'}")            
 
             logger.info(f"ChromaDB에 청크 추가 시작: {len(ids)}개 항목")
             logger.debug(f"첫 번째 청크 ID: {ids[0] if ids else 'N/A'}")

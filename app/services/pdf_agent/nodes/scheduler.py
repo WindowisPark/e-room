@@ -1,40 +1,32 @@
 # app/services/pdf_agent/nodes/scheduler.py
 
-from langchain_openai import ChatOpenAI
-from app.services.pdf_agent.states import AgentState
-from langchain_core.messages import HumanMessage
 from dotenv import dotenv_values
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 from datetime import date
 import os
 import json
-from app.services.pdf_agent.chromadb_service import ChromaDBService
+
+from app.services.pdf_agent.states import AgentState
+from app.services.pdf_agent.tools import search_documents_for_scheduler  # ✅ ChromaDBService 대체
 
 envs = dotenv_values(".env")
 api_key = envs["OPENAI_API_KEY"]
 llm = ChatOpenAI(model="gpt-4.1-mini")
 
-
 def start_point_of_schedule(state: AgentState):
     print("스케줄 그래프 시작")
 
-
 def select_subjects(state: AgentState):
-    # subjects는 이미 외부 입력을 통해 전달되므로 index 초기화만 수행
     return {"subject_index": 0}
 
-
 def select_importance(state: AgentState):
-    return {}  # 이미 state["importance"]로 존재
-
+    return {}
 
 def select_deadlines(state: AgentState):
-    return {}  # 이미 state["deadlines"]로 존재
-
+    return {}
 
 def select_folder_for_schedule(state: AgentState):
-    """
-    과목명과 가장 관련 있는 사용자 폴더 자동 선택
-    """
     user_id = state["user_id"]
     subject_index = state["subject_index"]
     subjects = state["subjects"]
@@ -52,25 +44,16 @@ def select_folder_for_schedule(state: AgentState):
 
     return {"folder": folder, "subject_index": subject_index + 1}
 
-
 def get_all_document(state: AgentState):
-    """
-    선택된 폴더에서 문서를 검색하여 학습할 전체 내용 확보
-    """
     folder = state["folder"]
-    user_id = int(state["user_id"])
+    user_id = state["user_id"]
 
-    chroma = ChromaDBService()
-    chunks = chroma.search_across_documents(user_id=user_id, query_text="", folder_name=folder, limit=20)
-    docs = [chunk["text"] for chunk in chunks]
+    chunks = search_documents_for_scheduler(user_id=user_id, folder=folder, k=20)
+    docs = [chunk.page_content if hasattr(chunk, 'page_content') else chunk.get("text", "") for chunk in chunks]
 
     return {"docs": docs}
 
-
 def define_final_index(state: AgentState):
-    """
-    폴더 내 모든 문서 내용을 결합 → 목차 요약 생성
-    """
     docs = state["docs"]
     final_index = state["final_index"]
 
@@ -82,20 +65,12 @@ def define_final_index(state: AgentState):
     final_index.append(summary)
     return {"final_index": final_index}
 
-
 def check_sub_count(state: AgentState):
-    """
-    모든 과목에 대해 폴더 선택 및 목차 생성을 완료했는지 확인
-    """
     if state["subject_index"] >= len(state["subjects"]):
         return "completion"
     return "continue"
 
-
 def make_plans(state: AgentState):
-    """
-    과목별 목차/중요도/마감일 기반 학습 계획 수립
-    """
     subjects = state["subjects"]
     final_index = state["final_index"]
     importances = state["importance"]
@@ -137,11 +112,7 @@ def make_plans(state: AgentState):
 
     return {"schedule": result}
 
-
 def save_plan(state: AgentState):
-    """
-    JSON 형식 학습 계획을 파일로 저장 + 메시지에 첨부
-    """
     schedule = state["schedule"]
     user_id = state["user_id"]
     user_dir = f"{user_id}/schedule"
