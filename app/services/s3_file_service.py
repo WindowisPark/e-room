@@ -1,382 +1,301 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Path, Query, Body
-from typing import List
-from sqlalchemy.orm import Session
-from app.services.file_service import FileOperationError
-from app.services.pdf_ingest import process_pdf_upload
-from app.schemas.file import (
-    MultiUploadResult,
-    FileRenameResponse,
-    FileMoveResponse,
-    FolderResponse,
-    FileInfo
-)
-from app.api import deps
-from app.models.user import User
-from app.crud.crud_tag import create_pdf_file
-from app.services.point_service import add_points, PointActionType
+# app/services/s3_file_service.py
+import boto3
 import logging
+import os
+from typing import List, Optional, Dict, Any
+from fastapi import UploadFile
+from botocore.exceptions import ClientError
+from app.core.config import settings
+from app.schemas.file import FolderResponse
+from datetime import datetime
 
-router = APIRouter(tags=["PDF Manager"])
 logger = logging.getLogger(__name__)
 
+class S3StorageManager:
+    """
+    S3 기반 파일 저장 및 관리 서비스
+    """
 
-@router.post(
-    "/users/{user_id}/folders/{folder_name}/files",
-    response_model=MultiUploadResult,
-    summary="PDF 파일 업로드",
-    description="지정된 폴더에 PDF 파일을 업로드하고 자동으로 파싱하여 ChromaDB에 저장합니다. S3 또는 로컬 스토리지 사용."
-)
-async def upload_pdf(
-    user_id: int,
-    folder_name: str = Path(..., min_length=1, description="업로드할 폴더명"),
-    files: List[UploadFile] = File(..., description="업로드할 PDF 파일들"),
-    storage = Depends(deps.get_storage_manager),  # ✅ S3/로컬 자동 선택
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
-):
-    """PDF 파일을 업로드하고 자동 파싱 및 임베딩을 수행합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더에 파일을 업로드할 수 없습니다."
+    def __init__(self):
+        """S3 클라이언트 초기화"""
+        self.s3_client = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY,
+            aws_secret_access_key=settings.AWS_SECRET_KEY,
+            region_name=settings.AWS_REGION
+        )
+        self.bucket_name = settings.S3_BUCKET_NAME
+
+    async def save_pdf(self, user_id: int, folder: str, file: UploadFile) -> str:
+        """
+        PDF 파일을 S3에 업로드
+
+        Args:
+            user_id: 사용자 ID
+            folder: 저장할 폴더 경로
+            file: 업로드된 파일
+
+        Returns:
+            S3 객체 URL
+        """
+        try:
+            if not file.filename.lower().endswith(".pdf"):
+                raise ValueError("PDF 파일만 허용됩니다")
+
+            # S3 키 생성 (경로/파일명)
+            s3_key = f"users/{user_id}/{folder}/{file.filename}"
+
+            # 파일 데이터 읽기
+            file_data = await file.read()
+
+            # S3에 업로드
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=file_data,
+                ContentType='application/pdf'
             )
 
-        # S3 또는 로컬 스토리지에 파일 저장
-        results = await storage.save_multiple_pdfs(user_id, folder_name, files)
+            # S3 URL 반환
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{s3_key}"
 
-        if len(results["success"]) == 0:
-            raise HTTPException(
-                status_code=400, 
-                detail="업로드에 실패한 파일이 존재합니다."
+        except Exception as e:
+            logger.error(f"S3 파일 업로드 실패: {str(e)}")
+            raise
+
+    async def delete_file(self, user_id: int, folder: str, filename: str) -> bool:
+        """
+        S3에서 파일 삭제
+
+        Args:
+            user_id: 사용자 ID
+            folder: 폴더 경로
+            filename: 파일명
+
+        Returns:
+            성공 여부
+        """
+        try:
+            s3_key = f"users/{user_id}/{folder}/{filename}"
+
+            self.s3_client.delete_object(
+                Bucket=self.bucket_name,
+                Key=s3_key
             )
 
-        # 성공한 파일들에 대해 후속 처리
-        for file_info in results["success"]:
-            # 포인트 적립
-            await add_points(
-                db=db,
-                user_id=user_id,
-                action_type=PointActionType.PDF_UPLOAD,
-                description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
+            return True
+        except Exception as e:
+            logger.error(f"S3 파일 삭제 실패: {str(e)}")
+            return False
+
+    def list_files(self, user_id: int, folder: str, limit: int = 100) -> List[str]:
+        """
+        S3 버킷 내 사용자 폴더의 파일 목록 조회
+
+        Args:
+            user_id: 사용자 ID
+            folder: 폴더 경로
+            limit: 최대 조회 파일 수
+
+        Returns:
+            파일명 목록
+        """
+        try:
+            prefix = f"users/{user_id}/{folder}/"
+
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+                MaxKeys=limit
             )
 
-            # DB에 파일 정보 기록
-            create_pdf_file(
-                db=db,
-                filename=file_info["saved_name"],
-                file_path=file_info["path"],  # S3 URL 또는 로컬 경로
-                owner_id=user_id
-            )
+            files = []
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    # 파일명만 추출 (경로 제외)
+                    key = obj['Key']
+                    filename = key.replace(prefix, '')
+                    if filename:  # 폴더 자체는 제외
+                        files.append(filename)
 
-            # 자동 파싱 및 ChromaDB 저장
+            return files
+        except Exception as e:
+            logger.error(f"S3 파일 목록 조회 실패: {str(e)}")
+            return []
+        
+    async def save_multiple_pdfs(
+        self, user_id: int, folder: str, files: List[UploadFile], overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """
+        여러 개의 PDF 파일을 S3에 업로드
+
+        Args:
+            user_id: 사용자 ID
+            folder: 저장할 폴더 경로
+            files: 업로드된 파일 리스트
+            overwrite: 같은 이름일 때 덮어쓸지 여부 (현재는 미사용)
+
+        Returns:
+            업로드 결과 dict (성공/실패 내역 포함)
+        """
+        results = {"total": len(files), "success": [], "failed": []}
+
+        for file in files:
             try:
-                process_pdf_upload(
-                    pdf_path=file_info["path"],  # S3 URL 또는 로컬 경로 처리
-                    user_id=str(user_id),
-                    folder_name=folder_name
+                if not file.filename.lower().endswith(".pdf"):
+                    raise ValueError("PDF 파일만 업로드 가능합니다.")
+
+                s3_key = f"users/{user_id}/{folder}/{file.filename}"
+                file_data = await file.read()
+
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    Body=file_data,
+                    ContentType="application/pdf"
                 )
-                logger.info(f"PDF 파싱 및 저장 성공: {file_info['path']}")
+
+                results["success"].append({
+                    "original_name": file.filename,
+                    "saved_name": file.filename,
+                    "size": len(file_data),
+                    "path": f"https://{self.bucket_name}.s3.amazonaws.com/{s3_key}"
+                })
             except Exception as e:
-                logger.error(f"PDF 파싱 실패: {e}")
-                # 파싱 실패해도 업로드 자체는 성공으로 처리
+                logger.error(f"파일 업로드 실패: {file.filename} - {str(e)}")
+                results["failed"].append(f"{file.filename}: {str(e)}")
 
-        return MultiUploadResult(**results)
+        return results
+    
+    def list_folders(self, user_id: int, include_subfolders: bool = False, skip: int = 0, limit: int = 100) -> List[FolderResponse]:
+        try:
+            prefix = f"users/{user_id}/"
 
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"PDF 업로드 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="파일 업로드 중 오류가 발생했습니다.")
-
-
-@router.get(
-    "/users/{user_id}/folders/{folder_name}/files",
-    response_model=List[str],
-    summary="폴더 내 파일 목록 조회",
-    description="지정된 폴더의 모든 파일 목록을 조회합니다."
-)
-async def get_files(
-    user_id: int = Path(..., description="사용자 ID"),
-    folder_name: str = Path(..., description="조회할 폴더명"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)  # ✅ S3/로컬 자동 선택
-):
-    """폴더 내 파일 목록을 조회합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더에 접근할 수 없습니다."
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+                Delimiter="/",
+                MaxKeys=limit + skip
             )
+
+            folders = []
+            for entry in response.get("CommonPrefixes", [])[skip:skip + limit]:
+                full_prefix = entry["Prefix"]
+                folder_name = full_prefix[len(prefix):].strip("/")
+                folders.append(FolderResponse(
+                    name=folder_name,
+                    relative_path=f"/{user_id}/{folder_name}",
+                    created_at=datetime.now(),  # 현재 시간으로 채움
+                    subfolders=[]  # S3에서는 미지원이므로 비워둠
+                ))
+
+            return folders
+
+        except Exception as e:
+            logger.error(f"S3 폴더 목록 조회 실패: {str(e)}")
+            return []
         
-        return storage.list_files(user_id, folder_name)
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"파일 목록 조회 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="파일 목록 조회 중 오류가 발생했습니다.")
+    def create_folder(self, user_id: int, folder: str) -> str:
+        """
+        S3에 '폴더' 생성 (빈 객체를 업로드하여 prefix 생성)
 
+        Args:
+            user_id: 사용자 ID
+            folder: 생성할 폴더명
 
-@router.put(
-    "/users/{user_id}/folders/{folder_name}",
-    summary="폴더 생성",
-    description="새로운 폴더를 생성합니다. (S3에서는 가상 폴더 개념)"
-)
-async def create_folder(
-    user_id: int = Path(..., description="사용자 ID"),
-    folder_name: str = Path(..., min_length=1, description="생성할 폴더명"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """새로운 폴더를 생성합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더를 생성할 수 없습니다."
+        Returns:
+            S3 경로 문자열
+        """
+        try:
+            prefix = f"users/{user_id}/{folder}/"
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=prefix  # 폴더처럼 인식될 prefix
             )
-        
-        folder_path = storage.create_folder(user_id, folder_name)
-        return {
-            "operation": "create_folder",
-            "folder_name": folder_name,
-            "path": str(folder_path),
-            "status": "success"
-        }
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"폴더 생성 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="폴더 생성 중 오류가 발생했습니다.")
+            return f"s3://{self.bucket_name}/{prefix}"
+        except Exception as e:
+            logger.error(f"S3 폴더 생성 실패: {str(e)}")
+            raise
 
-
-@router.delete(
-    "/users/{user_id}/folders/{folder_name}/files/{file_name}",
-    summary="파일 삭제",
-    description="지정된 파일을 삭제합니다."
-)
-async def delete_file(
-    user_id: int = Path(..., description="사용자 ID"),
-    folder_name: str = Path(..., description="폴더명"),
-    file_name: str = Path(..., description="삭제할 파일명"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """지정된 파일을 삭제합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 파일을 삭제할 수 없습니다."
+    def delete_folder(self, user_id: int, folder: str) -> None:
+        """
+        S3에서 폴더(접두어 prefix 전체)를 삭제
+        """
+        prefix = f"users/{user_id}/{folder}/"
+        try:
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
             )
-        
-        # S3 또는 로컬에서 파일 삭제
-        success = await storage.delete_file(user_id, folder_name, file_name)
-        
-        if success:
-            return {
-                "operation": "delete_file",
-                "folder_name": folder_name,
-                "file_name": file_name,
-                "status": "success",
-                "message": f"파일 '{file_name}'이 성공적으로 삭제되었습니다."
-            }
-        else:
-            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-            
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"파일 삭제 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="파일 삭제 중 오류가 발생했습니다.")
+            if 'Contents' in response:
+                objects = [{'Key': obj['Key']} for obj in response['Contents']]
+                self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={'Objects': objects}
+                )
+        except Exception as e:
+            logger.error(f"S3 폴더 삭제 실패: {str(e)}")
+            raise
 
-
-@router.delete(
-    "/users/{user_id}/folders/{folder_name}",
-    summary="폴더 삭제",
-    description="지정된 폴더와 그 안의 모든 파일을 삭제합니다."
-)
-async def delete_folder(
-    user_id: int = Path(..., description="사용자 ID"),
-    folder_name: str = Path(..., description="삭제할 폴더명"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """지정된 폴더와 그 안의 모든 파일을 삭제합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더를 삭제할 수 없습니다."
+    def rename_file(self, user_id: int, folder: str, old_name: str, new_name: str) -> str:
+        """
+        S3 파일 이름 변경 (실제로는 복사 후 원본 삭제)
+        """
+        old_key = f"users/{user_id}/{folder}/{old_name}"
+        new_key = f"users/{user_id}/{folder}/{new_name}"
+        try:
+            self.s3_client.copy_object(
+                Bucket=self.bucket_name,
+                CopySource={'Bucket': self.bucket_name, 'Key': old_key},
+                Key=new_key
             )
-        
-        # S3 또는 로컬에서 폴더 삭제
-        storage.delete_folder(user_id, folder_name)
-        
-        return {
-            "operation": "delete_folder",
-            "folder_name": folder_name,
-            "status": "success",
-            "message": f"폴더 '{folder_name}'이 성공적으로 삭제되었습니다."
-        }
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"폴더 삭제 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="폴더 삭제 중 오류가 발생했습니다.")
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=old_key)
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{new_key}"
+        except Exception as e:
+            logger.error(f"S3 파일 이름 변경 실패: {str(e)}")
+            raise
 
-
-@router.patch(
-    "/users/{user_id}/folders/{folder_name}/files/{file_name}/rename",
-    response_model=FileRenameResponse,
-    summary="파일 이름 변경",
-    description="지정된 파일의 이름을 변경합니다. (S3에서는 복사 후 삭제)"
-)
-async def rename_file(
-    user_id: int = Path(..., description="사용자 ID"),
-    folder_name: str = Path(..., description="폴더명"),
-    file_name: str = Path(..., description="변경할 파일명"),
-    new_name: str = Query(..., min_length=1, description="새로운 파일명"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """파일 이름을 변경합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 파일 이름을 변경할 수 없습니다."
+    def move_file(self, user_id: int, old_folder: str, filename: str, new_folder: str, create_if_not_exists: bool = False) -> str:
+        """
+        S3 파일 이동 (실제로는 복사 후 삭제)
+        """
+        old_key = f"users/{user_id}/{old_folder}/{filename}"
+        new_key = f"users/{user_id}/{new_folder}/{filename}"
+        try:
+            self.s3_client.copy_object(
+                Bucket=self.bucket_name,
+                CopySource={'Bucket': self.bucket_name, 'Key': old_key},
+                Key=new_key
             )
-        
-        new_path = storage.rename_file(user_id, folder_name, file_name, new_name)
-        return FileRenameResponse(
-            operation="rename",
-            original_name=file_name,
-            new_name=new_name,  # S3에서는 단순히 new_name 사용
-            new_path=str(new_path),
-            status="success"
-        )
-            
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"파일 이름 변경 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="파일 이름 변경 중 오류가 발생했습니다.")
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=old_key)
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{new_key}"
+        except Exception as e:
+            logger.error(f"S3 파일 이동 실패: {str(e)}")
+            raise
 
+    def move_folder(self, user_id: int, old_folder: str, new_folder: str, create_if_not_exists: bool = False) -> str:
+        """
+        S3 폴더 이동 (모든 파일을 복사 후 삭제)
+        """
+        old_prefix = f"users/{user_id}/{old_folder}/"
+        new_prefix = f"users/{user_id}/{new_folder}/"
+        try:
+            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=old_prefix)
+            if 'Contents' not in response:
+                raise ValueError("이동할 폴더에 파일이 없습니다.")
 
-@router.patch(
-    "/users/{user_id}/folders/{old_folder}/move",
-    response_model=FileMoveResponse,
-    summary="폴더 이동",
-    description="폴더를 다른 위치로 이동하거나 이름을 변경합니다."
-)
-async def move_folder(
-    user_id: int = Path(..., description="사용자 ID"),
-    old_folder: str = Path(..., description="이동할 폴더명"),
-    new_folder: str = Query(..., min_length=1, description="새로운 폴더명 또는 경로"),
-    create_if_not_exists: bool = Query(False, description="대상 폴더가 없을 때 생성 여부"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """폴더를 이동하거나 이름을 변경합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더를 이동할 수 없습니다."
-            )
-        
-        new_path = storage.move_folder(user_id, old_folder, new_folder, create_if_not_exists)
-        return FileMoveResponse(
-            operation="move_folder",
-            original_path=f"/{user_id}/{old_folder}",
-            new_path=str(new_path),
-            folder_created=create_if_not_exists,
-            status="success"
-        )
-            
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"폴더 이동 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="폴더 이동 중 오류가 발생했습니다.")
+            for obj in response['Contents']:
+                old_key = obj['Key']
+                new_key = old_key.replace(old_prefix, new_prefix, 1)
+                self.s3_client.copy_object(
+                    Bucket=self.bucket_name,
+                    CopySource={'Bucket': self.bucket_name, 'Key': old_key},
+                    Key=new_key
+                )
+            # 이후 원본 삭제
+            self.delete_folder(user_id, old_folder)
+            return f"s3://{self.bucket_name}/{new_prefix}"
+        except Exception as e:
+            logger.error(f"S3 폴더 이동 실패: {str(e)}")
+            raise
 
-
-@router.patch(
-    "/users/{user_id}/folders/{old_folder}/files/{file_name}/move",
-    response_model=FileMoveResponse,
-    summary="파일 이동",
-    description="파일을 다른 폴더로 이동합니다."
-)
-async def move_file(
-    user_id: int = Path(..., description="사용자 ID"),
-    old_folder: str = Path(..., description="현재 폴더명"),
-    file_name: str = Path(..., description="이동할 파일명"),
-    new_folder: str = Query(..., min_length=1, description="이동할 대상 폴더명"),
-    create_if_not_exists: bool = Query(False, description="대상 폴더가 없을 때 생성 여부"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """파일을 다른 폴더로 이동합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 파일을 이동할 수 없습니다."
-            )
-        
-        new_path = storage.move_file(user_id, old_folder, file_name, new_folder, create_if_not_exists)
-        return FileMoveResponse(
-            operation="move_file",
-            original_path=f"/{user_id}/{old_folder}/{file_name}",
-            new_path=str(new_path),
-            folder_created=create_if_not_exists,
-            status="success"
-        )
-            
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"파일 이동 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="파일 이동 중 오류가 발생했습니다.")
-
-
-@router.get(
-    "/users/{user_id}/folders",
-    response_model=List[FolderResponse],
-    summary="사용자 폴더 목록 조회",
-    description="사용자의 모든 폴더 구조를 조회합니다."
-)
-async def list_folders(
-    user_id: int = Path(..., description="사용자 ID"),
-    include_subfolders: bool = Query(False, description="하위 폴더 포함 여부"),
-    skip: int = Query(0, ge=0, description="건너뛸 항목 수"),
-    limit: int = Query(100, ge=1, le=1000, description="최대 조회 항목 수"),
-    current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
-):
-    """사용자의 폴더 구조를 조회합니다."""
-    try:
-        # 권한 확인
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(
-                status_code=403, 
-                detail="다른 사용자의 폴더 목록을 조회할 수 없습니다."
-            )
-        
-        return storage.list_folders(user_id, include_subfolders, skip, limit)
-            
-    except FileOperationError as e:
-        raise HTTPException(status_code=e.code, detail=e.message)
-    except Exception as e:
-        logger.error(f"폴더 목록 조회 중 예외 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail="폴더 목록 조회 중 오류가 발생했습니다.")

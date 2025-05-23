@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Path, Query, Body
 from typing import List
 from sqlalchemy.orm import Session
-from app.services.file_service import FileStorageManager, FileOperationError
+from app.services.file_service import FileOperationError  # ✅ FileStorageManager 제거
 from app.services.pdf_ingest import process_pdf_upload
 from app.schemas.file import (
     MultiUploadResult,
@@ -13,27 +13,26 @@ from app.schemas.file import (
 from app.api import deps
 from app.models.user import User
 from app.crud.crud_tag import create_pdf_file
-from app.services.point_service import add_points, PointActionType  # ✅ 추가
+from app.services.point_service import add_points, PointActionType
 import logging
 
 router = APIRouter(tags=["PDF Manager"])
 logger = logging.getLogger(__name__)
 
-def get_storage_manager() -> FileStorageManager:
-    return FileStorageManager()
+# ✅ 로컬 get_storage_manager 함수 제거 - deps.get_storage_manager만 사용
 
 
 @router.post(
     "/users/{user_id}/folders/{folder_name}/files",
     response_model=MultiUploadResult,
     summary="PDF 파일 업로드",
-    description="지정된 폴더에 PDF 파일을 업로드하고 자동으로 파싱하여 ChromaDB에 저장합니다."
+    description="지정된 폴더에 PDF 파일을 업로드하고 자동으로 파싱하여 ChromaDB에 저장합니다. S3 또는 로컬 스토리지 사용."
 )
 async def upload_pdf(
     user_id: int,
     folder_name: str = Path(..., min_length=1, description="업로드할 폴더명"),
     files: List[UploadFile] = File(..., description="업로드할 PDF 파일들"),
-    storage = Depends(deps.get_storage_manager),
+    storage = Depends(deps.get_storage_manager),  # ✅ deps에서 가져옴
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -46,7 +45,7 @@ async def upload_pdf(
                 detail="다른 사용자의 폴더에 파일을 업로드할 수 없습니다."
             )
 
-        # 파일 저장 (S3 or 로컬)
+        # S3 또는 로컬 스토리지에 파일 저장
         results = await storage.save_multiple_pdfs(user_id, folder_name, files)
 
         if len(results["success"]) == 0:
@@ -55,8 +54,7 @@ async def upload_pdf(
                 detail="업로드에 실패한 파일이 존재합니다."
             )
 
-        from app.services.point_service import add_points, PointActionType
-
+        # 성공한 파일들에 대해 후속 처리
         for file_info in results["success"]:
             # 포인트 적립
             await add_points(
@@ -66,25 +64,25 @@ async def upload_pdf(
                 description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
             )
 
-            # DB 기록
+            # DB에 파일 정보 기록
             create_pdf_file(
                 db=db,
                 filename=file_info["saved_name"],
-                file_path=file_info["path"],
+                file_path=file_info["path"],  # S3 URL 또는 로컬 경로
                 owner_id=user_id
             )
 
-            # 자동 파싱 및 Chroma 저장
+            # 자동 파싱 및 ChromaDB 저장
             try:
                 process_pdf_upload(
-                    pdf_path=file_info["path"],
+                    pdf_path=file_info["path"],  # S3 URL 또는 로컬 경로 처리
                     user_id=str(user_id),
                     folder_name=folder_name
                 )
                 logger.info(f"PDF 파싱 및 저장 성공: {file_info['path']}")
             except Exception as e:
                 logger.error(f"PDF 파싱 실패: {e}")
-                # 실패하더라도 업로드 자체는 성공 처리 (로깅만)
+                # 파싱 실패해도 업로드 자체는 성공으로 처리
 
         return MultiUploadResult(**results)
 
@@ -105,7 +103,7 @@ async def get_files(
     user_id: int = Path(..., description="사용자 ID"),
     folder_name: str = Path(..., description="조회할 폴더명"),
     current_user: User = Depends(deps.get_current_user),
-    storage = Depends(deps.get_storage_manager)
+    storage = Depends(deps.get_storage_manager)  # ✅ deps에서 가져옴
 ):
     """폴더 내 파일 목록을 조회합니다."""
     try:
@@ -179,14 +177,20 @@ async def delete_file(
                 detail="다른 사용자의 파일을 삭제할 수 없습니다."
             )
         
-        storage.delete_file(user_id, folder_name, file_name)
-        return {
-            "operation": "delete_file",
-            "folder_name": folder_name,
-            "file_name": file_name,
-            "status": "success",
-            "message": f"파일 '{file_name}'이 성공적으로 삭제되었습니다."
-        }
+        # S3 또는 로컬에서 파일 삭제
+        success = await storage.delete_file(user_id, folder_name, file_name)
+        
+        if success:
+            return {
+                "operation": "delete_file",
+                "folder_name": folder_name,
+                "file_name": file_name,
+                "status": "success",
+                "message": f"파일 '{file_name}'이 성공적으로 삭제되었습니다."
+            }
+        else:
+            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+            
     except FileOperationError as e:
         raise HTTPException(status_code=e.code, detail=e.message)
     except Exception as e:
@@ -214,7 +218,9 @@ async def delete_folder(
                 detail="다른 사용자의 폴더를 삭제할 수 없습니다."
             )
         
+        # S3 또는 로컬에서 폴더 삭제
         storage.delete_folder(user_id, folder_name)
+        
         return {
             "operation": "delete_folder",
             "folder_name": folder_name,
@@ -255,7 +261,7 @@ async def rename_file(
         return FileRenameResponse(
             operation="rename",
             original_name=file_name,
-            new_name=new_path.name,
+            new_name=new_name,  # S3에서는 단순히 new_name 사용
             new_path=str(new_path),
             status="success"
         )
