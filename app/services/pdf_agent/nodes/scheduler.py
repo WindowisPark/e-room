@@ -18,7 +18,7 @@ def start_point_of_schedule(state: AgentState):
     print("스케줄 그래프 시작")
 
 def select_subjects(state: AgentState):
-    return {"subject_index": 0}
+    return {"subject_index": 0, "subjects": ["정보보호", "네트워크"]}
 
 def select_importance(state: AgentState):
     return {}
@@ -27,9 +27,24 @@ def select_deadlines(state: AgentState):
     return {}
 
 def select_folder_for_schedule(state: AgentState):
+    """
+    과목에 해당하는 폴더를 LLM으로 선택합니다.
+    'subjects'가 없을 경우 명확한 에러를 발생시킵니다.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
     user_id = state["user_id"]
-    subject_index = state["subject_index"]
+    subject_index = state.get("subject_index", 0)
+
+    if "subjects" not in state:
+        logger.error(f"[스케줄러] 상태에 'subjects' 키가 없습니다. 현재 상태 키: {list(state.keys())}")
+        raise KeyError("'subjects' 키가 상태에 존재하지 않습니다. select_subjects 노드가 실행되지 않았을 수 있습니다.")
+
     subjects = state["subjects"]
+
+    if not subjects:
+        raise ValueError("subjects 필드가 비어 있습니다. select_subjects 노드가 올바르게 과목을 추출하지 못했을 수 있습니다.")
 
     user_folder_path = f"{user_id}/chroma"
     folders = os.listdir(user_folder_path) if os.path.exists(user_folder_path) else []
@@ -42,7 +57,10 @@ def select_folder_for_schedule(state: AgentState):
         f"폴더 목록: {folders}"
     ).content.strip()
 
-    return {"folder": folder, "subject_index": subject_index + 1}
+    return {
+        "folder": folder,
+        "subject_index": subject_index + 1
+    }
 
 def get_all_document(state: AgentState):
     folder = state["folder"]

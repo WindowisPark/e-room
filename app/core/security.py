@@ -57,7 +57,12 @@ def verify_refresh_token(token: str) -> Optional[int]:
 
         # Redis에서 해당 Refresh Token이 유효한지 확인
         stored_refresh_token = redis_client.get(f"refresh:{user_id}") if redis_client else None
-        if stored_refresh_token is None or stored_refresh_token.decode() != token:
+
+        # ✅ decode()는 bytes일 때만
+        if isinstance(stored_refresh_token, bytes):
+            stored_refresh_token = stored_refresh_token.decode()
+
+        if stored_refresh_token is None or stored_refresh_token != token:
             logger.warning(f"Refresh Token이 Redis에 없음 또는 불일치 (User ID: {user_id})")
             return None
 

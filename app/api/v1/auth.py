@@ -47,16 +47,30 @@ async def refresh_token(refresh_token: str = Body(...)):
     """
     user_id = security.verify_refresh_token(refresh_token)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
 
     stored_refresh_token = redis_client.get(f"refresh:{user_id}")
-    if stored_refresh_token is None or stored_refresh_token.decode() != refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or invalid")
+
+    # 🔧 decode() 오류 수정 → bytes일 경우만 decode
+    if isinstance(stored_refresh_token, bytes):
+        stored_refresh_token = stored_refresh_token.decode()
+
+    if stored_refresh_token is None or stored_refresh_token != refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expired or invalid"
+        )
 
     new_access_token = security.create_access_token(user_id)
     logger.info(f"🔄 Access Token 재발급 - User ID: {user_id}")
 
-    return {"access_token": new_access_token, "token_type": "bearer"}
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
 
 @router.get("/kakao/authorize")
 async def kakao_authorize():

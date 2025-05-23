@@ -132,11 +132,26 @@ def select_previous_exam(state: AgentState):
 
 def check_exist_previous_exam(state: AgentState):
     """
-    기출문제 유무에 따라 흐름 분기
+    기출문제 유무에 따라 흐름 분기 (경로 유효성까지 포함)
     """
-    if not state.get("previous_exam_path"):
-        return "no exist"
-    return "exist"
+    previous_exam_path = state.get("previous_exam_path")
+
+    if not previous_exam_path:
+        return "no_exist"
+
+    import os
+
+    # 문자열이면 하나의 파일 경로
+    if isinstance(previous_exam_path, str):
+        return "exist" if os.path.exists(previous_exam_path) else "no_exist"
+
+    # 리스트인 경우 하나라도 유효하면 exist
+    if isinstance(previous_exam_path, list):
+        if any(os.path.exists(path) for path in previous_exam_path if path):
+            return "exist"
+        return "no_exist"
+
+    return "no_exist"
 
 def get_final_personality(state: AgentState):
     personality = state["personality"]
@@ -153,4 +168,44 @@ def get_all_files(state: AgentState):
     return {
         "messages": messages,
         "waiting_for_study_file": True
+    }
+
+def simple_problem_generation(state: AgentState):
+    # 사용자의 입력 프롬프트 또는 기본 설명
+    user_prompt = state["messages"][-1].content
+    material = state.get("pdf_text") or state.get("summaries") or "자료가 충분하지 않습니다."
+
+    prompt = f"""
+다음 학습 자료를 기반으로 시험 문제를 생성해주세요.
+
+요구사항:
+- 총 10문제
+- 난이도 구성: 쉬움(Easy) 3문제, 보통(Medium) 5문제, 어려움(Hard) 2문제
+- 문제 유형 구성: 객관식(Multiple Choice) 5문제, 주관식(Short Answer) 5문제
+- 모든 문제는 아래 형식을 따르세요:
+
+형식 예시:
+문제 1. (난이도: Easy / 유형: 객관식)
+다음 중 정보보호의 기본 요소가 아닌 것은?
+A. 기밀성
+B. 무결성
+C. 가용성
+D. 가독성
+
+문제 2. (난이도: Medium / 유형: 주관식)
+공개키 암호 방식의 개념과 장단점을 서술하시오.
+
+학습 자료:
+{material}
+
+사용자 요청: {user_prompt}
+
+시험 문제를 생성해주세요.
+"""
+
+    result = llm.invoke(prompt).content
+
+    return {
+        "result": result,
+        "messages": state["messages"] + [HumanMessage(content=result)]
     }
