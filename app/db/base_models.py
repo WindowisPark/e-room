@@ -1,3 +1,4 @@
+
 # app/db/base_models.py
 """
 이 파일은 데이터베이스 모델들을 한 곳에 모아 Alembic이 자동으로 마이그레이션 할 수 있게 합니다.
@@ -19,6 +20,8 @@ from app.models.attendance import Attendance
 from app.models.notification import Notification
 from app.models.question import Question
 from app.models.team import Team, TeamMember
+# 🔐 비밀번호 재설정 모델 추가 (User 모델 의존)
+from app.models.password_reset import PasswordResetToken
 
 # 4. 여러 모델을 참조하는 복합 모델
 from app.models.tag import PDFFile, PDFTag, PDFTagMention

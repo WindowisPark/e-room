@@ -22,3 +22,13 @@ from .question import Question, QuestionCreate, QuestionBase
 
 # ✅ 로컬 인증 스키마 추가
 from .local_auth import LocalUserCreate, LocalUserLogin, Token, RegisterResponse
+
+from .password_reset import (
+    PasswordResetRequest,
+    PasswordResetResponse, 
+    PasswordResetConfirm,
+    PasswordResetConfirmResponse,
+    TokenValidationRequest,
+    TokenValidationResponse,
+    OAuthUserResetResponse
+)

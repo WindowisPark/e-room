@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import httpx
@@ -18,6 +18,17 @@ from app.models.user import User
 from app.core.redis_helper import redis_client
 import urllib.parse
 
+# 🔐 비밀번호 재설정 관련 import 추가
+from app.schemas.password_reset import (
+    PasswordResetRequest, 
+    PasswordResetResponse,
+    PasswordResetConfirm, 
+    PasswordResetConfirmResponse,
+    TokenValidationRequest, 
+    TokenValidationResponse,
+    OAuthUserResetResponse
+)
+from app.services.password_reset_service import PasswordResetService
 from app.schemas.local_auth import LocalUserCreate, RegisterResponse
 from app.schemas.local_auth import LocalUserLogin, Token  # 추가
 
@@ -25,6 +36,9 @@ from app.schemas.local_auth import LocalUserLogin, Token  # 추가
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 비밀번호 재설정 서비스 인스턴스 (기존 코드 뒤에 추가)
+password_reset_service = PasswordResetService()
 
 # startup 이벤트 제거 (local_auth 관련 로직 분리)
 # @router.on_event("startup")
@@ -348,3 +362,214 @@ async def login_for_access_token(
         "email": user.email,
         "is_admin": user.is_admin
     }
+
+@router.post("/forgot-password", 
+             response_model=PasswordResetResponse,
+             summary="비밀번호 찾기 요청",
+             description="이메일로 비밀번호 재설정 링크를 발송합니다.")
+async def forgot_password(
+    request: PasswordResetRequest,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    📧 비밀번호 찾기 요청
+    
+    - 등록된 이메일로 재설정 링크 발송
+    - OAuth 사용자는 해당 서비스 안내
+    - 보안상 존재하지 않는 이메일도 성공 메시지 반환
+    - 토큰 유효시간: 30분
+    """
+    try:
+        result = await password_reset_service.request_password_reset(
+            db=db, 
+            email=request.email
+        )
+        
+        # OAuth 사용자인 경우 별도 응답
+        if not result["success"] and result.get("oauth_provider"):
+            return OAuthUserResetResponse(
+                message=result["message"],
+                oauth_provider=result["oauth_provider"],
+                redirect_url=result.get("redirect_url")
+            )
+        
+        # 일반적인 실패 (이메일 발송 실패 등)
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result["message"]
+            )
+        
+        # 성공 응답
+        return PasswordResetResponse(
+            message=result["message"],
+            email=result["email"],
+            token_expires_in_minutes=result.get("token_expires_in_minutes")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"비밀번호 찾기 요청 처리 중 예외: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+        )
+
+
+@router.post("/validate-reset-token", 
+             response_model=TokenValidationResponse,
+             summary="재설정 토큰 유효성 검사",
+             description="비밀번호 재설정 토큰이 유효한지 확인합니다.")
+async def validate_reset_token(
+    request: TokenValidationRequest,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    🔍 비밀번호 재설정 토큰 유효성 검사
+    
+    - 프론트엔드에서 재설정 페이지 로드 시 호출
+    - 토큰 만료 여부 및 사용 여부 확인
+    - 유효한 경우 만료 시간 정보 제공
+    """
+    try:
+        result = password_reset_service.validate_reset_token(
+            db=db, 
+            token=request.token
+        )
+        
+        return TokenValidationResponse(
+            valid=result["valid"],
+            message=result["message"],
+            expires_at=result.get("expires_at")
+        )
+        
+    except Exception as e:
+        logger.error(f"토큰 검증 중 예외: {str(e)}", exc_info=True)
+        return TokenValidationResponse(
+            valid=False,
+            message="토큰 검증 중 오류가 발생했습니다.",
+            expires_at=None
+        )
+
+
+@router.post("/reset-password", 
+             response_model=PasswordResetConfirmResponse,
+             summary="비밀번호 재설정 실행",
+             description="유효한 토큰으로 새 비밀번호로 변경합니다.")
+async def reset_password(
+    request: PasswordResetConfirm,
+    db: Session = Depends(deps.get_db)
+):
+    """
+    🔄 비밀번호 재설정 실행
+    
+    - 토큰 검증 후 새 비밀번호로 변경
+    - 토큰은 사용 후 즉시 무효화
+    - 해당 사용자의 다른 유효한 토큰들도 모두 무효화
+    - 비밀번호 강도 검증 포함
+    """
+    try:
+        result = password_reset_service.reset_password(
+            db=db,
+            token=request.token,
+            new_password=request.new_password
+        )
+        
+        if not result["success"]:
+            # 토큰 관련 오류는 400 Bad Request
+            if any(keyword in result["message"].lower() 
+                   for keyword in ["토큰", "만료", "사용"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=result["message"]
+                )
+            # 기타 오류는 500 Internal Server Error  
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result["message"]
+                )
+        
+        return PasswordResetConfirmResponse(
+            message=result["message"],
+            success=result["success"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"비밀번호 재설정 중 예외: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="비밀번호 재설정 중 오류가 발생했습니다."
+        )
+
+
+# ========== 관리자용 엔드포인트 (선택사항) ==========
+
+@router.get("/admin/password-reset-history/{user_id}",
+           summary="비밀번호 재설정 이력 조회 (관리자 전용)",
+           description="특정 사용자의 비밀번호 재설정 이력을 조회합니다.")
+async def get_password_reset_history(
+    user_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(deps.get_db),
+    admin_user: User = Depends(deps.get_admin_user)  # 관리자 권한 필요
+):
+    """
+    📊 비밀번호 재설정 이력 조회 (관리자 전용)
+    
+    - 특정 사용자의 재설정 시도 이력
+    - 보안 모니터링 및 분석용
+    - 관리자만 접근 가능
+    """
+    try:
+        history = password_reset_service.get_user_reset_history(
+            db=db,
+            user_id=user_id,
+            limit=limit
+        )
+        
+        return {
+            "user_id": user_id,
+            "total_attempts": len(history),
+            "history": history
+        }
+        
+    except Exception as e:
+        logger.error(f"재설정 이력 조회 중 예외: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="이력 조회 중 오류가 발생했습니다."
+        )
+
+
+@router.post("/admin/cleanup-expired-tokens",
+            summary="만료된 토큰 정리 (관리자 전용)",
+            description="만료된 비밀번호 재설정 토큰들을 정리합니다.")
+async def cleanup_expired_tokens(
+    db: Session = Depends(deps.get_db),
+    admin_user: User = Depends(deps.get_admin_user)  # 관리자 권한 필요
+):
+    """
+    🧹 만료된 토큰 정리 (관리자 전용)
+    
+    - 1시간 이상 만료된 토큰들 삭제
+    - 데이터베이스 용량 관리
+    - 배치 작업으로도 실행 가능
+    """
+    try:
+        deleted_count = password_reset_service.cleanup_expired_tokens(db)
+        
+        return {
+            "message": f"만료된 토큰 {deleted_count}개가 정리되었습니다.",
+            "deleted_count": deleted_count
+        }
+        
+    except Exception as e:
+        logger.error(f"토큰 정리 중 예외: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="토큰 정리 중 오류가 발생했습니다."
+        )

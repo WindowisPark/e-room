@@ -58,6 +58,6 @@ wikipedia>=1.4.0
 boto3
 nest_asyncio
 Pillow
-
+bcrypt<4.1.0
 # ✅ 검색엔진 연동
 opensearch-py>=2.3.2

@@ -7,6 +7,10 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 from app.models.question import Question
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.password_reset import PasswordResetToken
 
 class PlanType(str, enum.Enum):
     free = "free"
@@ -85,6 +89,13 @@ class User(Base):
     plan_started_at = Column(DateTime, nullable=True)
     plan_expires_at = Column(DateTime, nullable=True)
 
+    password_reset_tokens = relationship(
+        "PasswordResetToken", 
+        back_populates="user", 
+        cascade="all, delete-orphan",
+        order_by="PasswordResetToken.created_at.desc()"
+    )
+    
     @property
     def max_team_spaces(self):
         """현재 요금제에 따른 최대 팀스페이스 수 반환"""
@@ -112,3 +123,5 @@ class User(Base):
             return 0
         delta = self.plan_expires_at - datetime.now()
         return max(0, delta.days)
+    
+    

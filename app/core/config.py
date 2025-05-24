@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     PDF_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}"  # 사용자 ID 폴더 내에 PDF 저장
     CHUNKS_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chunks"  # 기존 청크 저장 경로
     CHROMADB_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chromadb"  # 새로운 ChromaDB 저장 경로
+    
     # ✅ PDF Agent 설정
     PDF_STORAGE_PATH: str = "./storage/pdf"
     PDF_CHUNK_SIZE: int = 1000
@@ -83,7 +84,35 @@ class Settings(BaseSettings):
     SMS_API_SECRET: Optional[str] = None
     SMS_SENDER_NUMBER: Optional[str] = None
 
+    # ✅ 📧 이메일 서버 설정 
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = "planova.smtp@gmail.com"
+    SMTP_PASSWORD: str = "tbyf esei gsrm qfbh"  # Gmail 앱 비밀번호 사용 권장
+    FROM_EMAIL: str = "noreply@planova.kr"
+    
+    # ✅ 🌐 프론트엔드 URL 설정
+    FRONTEND_URL: str = "https://planova.kr"
+    
+    # ✅ 🔐 비밀번호 재설정 관련 설정
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_TOKEN_LENGTH: int = 64
+    
+    # ✅ 🌍 환경 설정
+    ENVIRONMENT: str = "testing"  # development, production, testing
+    
+    # ✅ 📧 이메일 템플릿 설정
+    EMAIL_TEMPLATES_ENABLED: bool = True
+    EMAIL_LOGO_URL: str = "https://planova.kr/logo.png"
+    
+    # ✅ 🔧 Gmail 설정 가이드 (주석)
+    # Gmail 사용 시:
+    # 1. Google 계정 > 보안 > 2단계 인증 활성화
+    # 2. 앱 비밀번호 생성 > SMTP_PASSWORD에 설정
+    # 3. SMTP_USERNAME에 Gmail 주소 설정
+
     # ✅ Pydantic Settings
+
     model_config = {
         "case_sensitive": True,
         "env_file": ".env",
@@ -131,6 +160,9 @@ class Settings(BaseSettings):
         "REDIS_CACHE_PORT", "REDIS_CACHE_DB",
         "FILE_LIST_CACHE_TTL", "FOLDER_LIST_CACHE_TTL",
         "POSTGRES_PORT",
+        "SMTP_PORT",  # 📧 새로 추가
+        "PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",  # 🔐 새로 추가
+        "PASSWORD_RESET_TOKEN_LENGTH",  # 🔐 새로 추가
         mode='before'
     )
     @classmethod

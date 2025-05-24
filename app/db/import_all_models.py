@@ -22,6 +22,8 @@ from app.models.team_activity import TeamActivity
 
 # 5. PDF 관련 모델 (사용자와 팀 모델 의존)
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
+# 비밀번호 재설정 모델 추가 (사용자 모델 의존)
+from app.models.password_reset import PasswordResetToken
 
 
 # 모든 모델을 모아서 리스트로 정의 (필요시 사용)
@@ -40,7 +42,10 @@ ALL_MODELS = [
     Team, TeamMember, TeamActivity,
     
     # PDF 관련 모델
-    PDFFile, PDFTag, PDFTagMention
+    PDFFile, PDFTag, PDFTagMention,
+
+    # 비밀번호 재설정 모델 추가
+    PasswordResetToken
 ]
 
 # 마이그레이션에 필요한 모든 모델 의존성 제공
@@ -60,6 +65,9 @@ __all__ = [
     
     # PDF 관련 모델
     'PDFFile', 'PDFTag', 'PDFTagMention',
+
+    # 비밀번호 재설정 모델 추가
+    'PasswordResetToken',
     
     # 모델 컬렉션
     'ALL_MODELS'
