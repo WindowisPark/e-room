@@ -73,6 +73,7 @@ services:
       - "80:80"
     volumes:
       - ./static:/usr/share/nginx/html
+      - ./ssl:/etc/nginx/ssl
     depends_on:
       - api
     restart: always
