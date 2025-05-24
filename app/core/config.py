@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     KAKAO_REDIRECT_URI: str = "https://api.planova.kr/api/v1/auth/kakao/callback"
 
     # ✅ CORS 설정
-    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"]
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000","https://api.planova.kr/"]
 
     # ✅ OAuth 토큰 만료
     OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "30"))
