@@ -65,6 +65,20 @@ services:
       - redis
     restart: always
 
+  nginx:
+    build:
+      context: ./nginx
+    container_name: ai_agent_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./static:/usr/share/nginx/html
+    depends_on:
+      - api
+    restart: always
+
 volumes:
   postgres_data:
   redis_data:
+
+
