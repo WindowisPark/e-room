@@ -59,7 +59,7 @@ async def check_attendance(
         bonus_points = 5   # 3일 이상 연속 출석
 
     # 포인트 적립
-    point_result = await add_points(
+    point_result = add_points(
         db=db,
         user_id=user_id,
         action_type=PointActionType.ATTENDANCE,

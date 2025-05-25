@@ -4,12 +4,11 @@ from app.api.v1 import auth
 from app.api.v1.endpoints import (
     attendance, notifications, payments, question, tags, teams,
     phone_verification, team_pdf, team_activity, gamification, badges,
-    pdf_agent, user
+    pdf_agent, user, events  # ✅ 추가
 )
 
 api_router = APIRouter()
 
-# 로컬 및 소셜 인증 포함한 auth 하나로 통합
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 api_router.include_router(user.router, prefix="/users", tags=["사용자 정보"])
 api_router.include_router(phone_verification.router, prefix="/phone-verification", tags=["전화번호 인증"])
@@ -24,3 +23,4 @@ api_router.include_router(badges.router, prefix="/gamification", tags=["배지"]
 api_router.include_router(question.router, prefix="/questions", tags=["질문"])
 api_router.include_router(tags.router, prefix="/tags", tags=["태그"])
 api_router.include_router(payments.router, prefix="/payments", tags=["결제"])
+api_router.include_router(events.router, prefix="/events", tags=["이벤트"])  # ✅ 다음 줄 추가!

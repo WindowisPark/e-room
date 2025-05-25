@@ -7,6 +7,7 @@ SQLAlchemy와 Alembic에서 사용되며 순환 참조를 방지합니다.
 # 1. 기본 모델과 독립 모델 (다른 모델을 참조하지 않는 모델)
 from app.models.gamification import PointHistory, Badge, UserBadge, PointActionType, BadgeType
 from app.models.payment import Payment, PaymentStatus
+from app.models.event import Event, InviteCode, EventType, EventStatus  # ✅ 이벤트 관련 추가
 
 # 2. 사용자 모델 (다른 모델의 기반이 되는 모델)
 from app.models.user import User
@@ -22,7 +23,8 @@ from app.models.team_activity import TeamActivity
 
 # 5. PDF 관련 모델 (사용자와 팀 모델 의존)
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
-# 비밀번호 재설정 모델 추가 (사용자 모델 의존)
+
+# 6. 비밀번호 재설정 모델
 from app.models.password_reset import PasswordResetToken
 
 
@@ -32,6 +34,9 @@ ALL_MODELS = [
     PointHistory, Badge, UserBadge, 
     Payment,
     
+    # 이벤트 관련
+    Event, InviteCode,
+
     # 사용자 모델
     User,
     
@@ -44,7 +49,7 @@ ALL_MODELS = [
     # PDF 관련 모델
     PDFFile, PDFTag, PDFTagMention,
 
-    # 비밀번호 재설정 모델 추가
+    # 비밀번호 재설정 모델
     PasswordResetToken
 ]
 
@@ -53,22 +58,25 @@ __all__ = [
     # 기본 모델과 열거형
     'PointHistory', 'Badge', 'UserBadge', 'PointActionType', 'BadgeType',
     'Payment', 'PaymentStatus',
-    
+
+    # 이벤트 관련
+    'Event', 'InviteCode', 'EventType', 'EventStatus',
+
     # 사용자 모델
     'User',
-    
+
     # 독립 모델
     'Attendance', 'Notification', 'Question',
-    
+
     # 팀 관련 모델
     'Team', 'TeamMember', 'TeamActivity',
-    
+
     # PDF 관련 모델
     'PDFFile', 'PDFTag', 'PDFTagMention',
 
-    # 비밀번호 재설정 모델 추가
+    # 비밀번호 재설정 모델
     'PasswordResetToken',
-    
+
     # 모델 컬렉션
     'ALL_MODELS'
 ]

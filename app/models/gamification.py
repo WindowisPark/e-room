@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey, Table, Boolean, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy import Enum as PgEnum 
 from datetime import datetime
 from app.db.base_class import Base
 import enum
@@ -42,7 +43,7 @@ class PointHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    action_type = Column(Enum(PointActionType), nullable=False)
+    action_type = Column(PgEnum(PointActionType, native_enum=False), nullable=False)
     points = Column(Integer, nullable=False)  # 양수: 적립, 음수: 차감
     description = Column(String(255), nullable=False)
     reference_id = Column(Integer, nullable=True)  # 관련 엔티티 ID (예: 주석 ID)
