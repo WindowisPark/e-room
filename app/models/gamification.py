@@ -18,6 +18,13 @@ class PointActionType(str, enum.Enum):
     ADMIN = "admin"                 # 관리자 부여/차감
     EVENT = "event"                 # 이벤트 보상
     QUEST = "quest"                 # 퀘스트 완료
+    
+    # 🎉 새로 추가되는 이벤트 관련 액션들
+    SIGNUP_EVENT = "signup_event"   # 신규가입 이벤트
+    INVITE_SENT = "invite_sent"     # 초대 코드 발송 보상
+    INVITE_USED = "invite_used"     # 초대 코드 사용 보상
+    DAILY_LOGIN_EVENT = "daily_login_event"  # 일일 로그인 이벤트
+    SPECIAL_EVENT = "special_event"  # 특별 이벤트
 
 class BadgeType(str, enum.Enum):
     """배지 타입 구분"""

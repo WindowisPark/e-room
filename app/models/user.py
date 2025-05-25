@@ -124,4 +124,19 @@ class User(Base):
         delta = self.plan_expires_at - datetime.now()
         return max(0, delta.days)
     
-    
+    # 이벤트 관련 관계 설정
+    user_events = relationship("UserEvent", back_populates="user", cascade="all, delete-orphan")
+
+    # 초대 코드 관련 관계 설정
+    generated_invite_codes = relationship(
+        "InviteCode", 
+        foreign_keys="InviteCode.inviter_id",
+        back_populates="inviter", 
+        cascade="all, delete-orphan"
+    )
+
+    used_invite_codes = relationship(
+        "InviteCode", 
+        foreign_keys="InviteCode.used_by_id",
+        back_populates="used_by"
+    )
