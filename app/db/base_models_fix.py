@@ -16,4 +16,4 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.attendance import Attendance
 from app.models.question import Question
 from app.models.gamification import PointHistory, Badge, UserBadge, PointActionType, BadgeType
-from app.models.event import InviteCode, Event, EventStatus, EventType
+

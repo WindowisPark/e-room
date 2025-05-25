@@ -19,6 +19,7 @@ passlib[bcrypt]>=1.7.4
 
 # ✅ 캐싱 및 작업 큐
 redis>=5.0.0
+websockets>=11.0.0
 rq>=1.15.1
 rq-scheduler>=0.13.1
 
@@ -28,7 +29,7 @@ aiofiles>=23.2.0
 requests>=2.31.0
 
 # ✅ PDF 처리
-pdfplumber>=0.10.2
+pdfplumber
 pdf2image>=1.16.3  # 주의: Poppler 의존성 필요
 pytesseract>=0.3.10  # 주의: Tesseract OCR 의존성 필요
 pymupdf>=1.23.4

@@ -47,6 +47,7 @@ def download_s3_pdf_tempfile(s3_url: str) -> str:
 
     except Exception as e:
         raise ValueError(f"S3 Signed URL 생성 실패 또는 다운로드 실패: {str(e)}")
+    
 def process_pdf_upload(pdf_path: str, user_id: str, folder_name: str) -> dict:
     """
     S3 또는 로컬 PDF 경로를 받아 문서를 파싱하고 ChromaDB에 저장
