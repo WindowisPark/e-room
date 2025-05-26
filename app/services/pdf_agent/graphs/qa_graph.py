@@ -11,13 +11,12 @@ def add_qa_node_on_graph(graph: StateGraph) -> StateGraph:
 
 
 def add_qa_edge_on_graph(graph: StateGraph) -> StateGraph:
-    # QA 노드는 단일 처리 흐름이므로 바로 종료
+    graph.add_edge("start_point_of_qa_system","input_question")
     return graph
 
 
-def get_qa_graph():
-    graph = StateGraph(AgentState)
+def get_qa_graph(graph: StateGraph) -> StateGraph:
     graph = add_qa_node_on_graph(graph)
     graph = add_qa_edge_on_graph(graph)
-    graph.set_entry_point("start_point_of_qa_system")
-    return graph.compile()
+    
+    return graph

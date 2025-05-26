@@ -25,19 +25,40 @@ def judge_the_purpose_of_the_input(state: AgentState) -> Dict[str, Any]:
     (summary / qa_system / generate_exam / schedule)
     """
     question = state["messages"][-1].content
-    prompt = f"""
-다음 사용자의 질문을 분석하여 목적을 아래 JSON 형식으로 출력하세요:
-{{
-  "question": "사용자의 질문 요약",
-  "purpose": "summary | qa_system | generate_exam | schedule 중 하나",
-  "full_document": 1 또는 0
-}}
-
-사용자 질문: "{question}"
-"""
+    purpose_map = {
+        "summary":{
+            "question_example": "사용자가 정확하게 '요약' 이란 단어를 명시하며 요약을 요청,어떠한 문서를 요약해주어야 한다.",
+            "purpose" : "summary", 
+            } ,
+        "qa_system":{
+            "question_example": "어떠한 질문에 대한 답변을 해주어야 한다.",
+            "purpose" : "qa_system", 
+            } ,
+        "generate_exam":{
+            "question_example": "시험 문제를 생성해주어야 한다.",
+            "purpose" : "generate_exam", 
+            } ,
+        "schedule":{
+            "question_example": "학습 계획을 세워주어야 한다.",
+            "purpose" : "schedule", 
+            } ,
+    }
 
     try:
-        response = llm.invoke(prompt)
+        response = llm.invoke(f"""사용자의 질문 의도를 분석하고 purpose map을 참고하여 eval()을 이용하여 python 문법에 맞게 json형식으로 바로 변환 가능하게 json형식으로 답변해주세요. 
+                         출력 예시는 아래와 같습니다.
+                         1) input : 운영체제 1편을 요약해주세요. 
+                            \noutput : {{
+                                question : "운영체제 1편을 요약해달라 함.",
+                                purpose : "summary", 
+                            }}
+                         2) input : 스파르타 때의 정치는 어떤 것들이 있어요?
+                            \noutput : {{
+                                question : "스파르타 시기의 정치를 물음.",
+                                purpose : "qa_system",
+                            }}
+               질문 : {question}
+               purpose map : {purpose_map}""")
         content = response.content.strip()
 
         if content.startswith("```"):
@@ -47,17 +68,13 @@ def judge_the_purpose_of_the_input(state: AgentState) -> Dict[str, Any]:
 
         parsed = json.loads(content)
         return {
-            **state,
             "purpose": parsed["purpose"],
-            "full_document": parsed["full_document"]
         }
 
     except Exception as e:
         logger.error(f"목적 판단 실패: {str(e)}")
         return {
-            **state,
             "purpose": "qa_system",
-            "full_document": 0
         }
 
 def extract_target_file_from_question(state: AgentState) -> Dict[str, Any]:
@@ -88,37 +105,6 @@ def extract_target_file_from_question(state: AgentState) -> Dict[str, Any]:
 
     except Exception as e:
         logger.warning(f"문서 추출 실패: {str(e)}")
-        return {**state, "folder": "None"}
-
-def select_folder(state: AgentState) -> Dict[str, Any]:
-    """
-    LLM이 사용자 질문과 가장 관련 있는 폴더명을 예측하여 상태에 저장
-    실제 사용하는 폴더가 명시되지 않은 경우 fallback 용도로 사용됨
-    """
-    user_id = state["user_id"]
-    query = state["messages"][-1].content
-    base_path = f"{user_id}/chroma"
-
-    try:
-        folders = [f for f in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, f))]
-        if not folders:
-            return {**state, "folder": "None"}
-
-        prompt = f"""
-다음 폴더 중 사용자 질문과 가장 관련 있는 폴더명을 하나만 선택하세요.
-질문: "{query}"
-폴더 목록: {folders}
-"""
-        response = llm.invoke(prompt)
-        selected = response.content.strip()
-
-        if selected not in folders:
-            selected = folders[0]
-
-        return {**state, "folder": selected}
-
-    except Exception as e:
-        logger.warning(f"폴더 추론 실패: {str(e)}")
         return {**state, "folder": "None"}
 
 def router(state: AgentState) -> str:
