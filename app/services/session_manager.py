@@ -143,7 +143,11 @@ class SessionManager:
             if "message_history" not in session_data:
                 session_data["message_history"] = []
             
-            session_data["message_history"].append(message_dict)
+            message_dict = {
+                "type": message.__class__.__name__,
+                "content": message.content,
+                "timestamp": datetime.now().isoformat()
+            }
             
             # 히스토리 길이 제한 (최근 50개만 유지)
             if len(session_data["message_history"]) > 50:

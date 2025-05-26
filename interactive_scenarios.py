@@ -1,3 +1,4 @@
+
 # interactive_scenarios.py - 체계적인 대화형 테스트 시나리오
 
 import asyncio
@@ -294,16 +295,41 @@ async def run_all_scenarios():
     
     return success_count == total_count
 
+async def run_single_scenario():
+    """단일 시나리오 선택 실행"""
+    scenarios = {
+        "1": ("QA", QA_SCENARIO),
+        "2": ("Summary", SUMMARY_SCENARIO),
+        "3": ("Exam", EXAM_SCENARIO),
+        "4": ("Scheduler", SCHEDULER_SCENARIO)
+    }
+    
+    print("🎭 시나리오 선택:")
+    for key, (name, _) in scenarios.items():
+        print(f"  {key}: {name} 테스트")
+    print("  5: 모든 시나리오 실행")
+    
+    choice = input("\n선택 (1-5): ").strip()
+    
+    if choice == "5":
+        return await run_all_scenarios()
+    elif choice in scenarios:
+        name, steps = scenarios[choice]
+        return await run_scenario_test(name, steps)
+    else:
+        print("❌ 잘못된 선택입니다.")
+        return False
+
 if __name__ == "__main__":
     print("🎭 WebSocket 대화형 시나리오 테스트")
     print("각 기능별로 실제 대화 플로우를 테스트합니다.")
     
     try:
-        result = asyncio.run(run_all_scenarios())
+        result = asyncio.run(run_single_scenario())
         if result:
-            print("\n🎉 모든 시나리오 테스트 성공!")
+            print("\n🎉 시나리오 테스트 성공!")
         else:
-            print("\n💥 일부 시나리오 테스트 실패!")
+            print("\n💥 시나리오 테스트 실패!")
     except KeyboardInterrupt:
         print("\n🛑 사용자에 의해 중단됨")
     except Exception as e:

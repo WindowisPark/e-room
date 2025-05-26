@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from langchain_core.messages import HumanMessage, AIMessage
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from app.services.session_manager import SessionManager
@@ -464,7 +465,7 @@ async def websocket_endpoint(
             data = await websocket.receive_text()
             message_data = json.loads(data)           
             message_type = message_data.get("type")
-            
+
             if not message_type:
                 logger.warning("⚠️ message_type 누락됨")
                 await manager.send_error(session_id, "메시지 타입이 지정되지 않았습니다.")
