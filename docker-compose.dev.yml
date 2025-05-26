@@ -29,12 +29,6 @@ services:
       - db
       - redis
     restart: always
-    # ✅ 로그 확인을 위한 설정
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   db:
     image: pgvector/pgvector:pg16
@@ -77,22 +71,16 @@ services:
     container_name: ai_agent_nginx
     ports:
       - "80:80"
-      - "443:443"
+      - "443:443"      # ✅ 여기를 추가해야 외부에서 HTTPS 접근 가능
     volumes:
       - ./static:/usr/share/nginx/html
       - ./ssl:/etc/nginx/ssl
-      - nginx_logs:/var/log/nginx  # ✅ 로그 볼륨 추가
     depends_on:
       - api
     restart: always
-    # ✅ 로그 확인을 위한 설정
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 volumes:
   postgres_data:
   redis_data:
-  nginx_logs:  # ✅ Nginx 로그 볼륨 추가
+
+
