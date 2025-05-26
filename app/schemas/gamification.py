@@ -17,6 +17,13 @@ class PointActionType(str, Enum):
     EVENT = "event"
     QUEST = "quest"
 
+    # ✅ 새로운 값 추가
+    SIGNUP_BONUS = "signup_bonus"
+    INVITE_CODE = "invite_code"
+    DAILY_LOGIN = "daily_login"
+    LEVEL_UP_BONUS = "level_up_bonus"
+    SPECIAL_EVENT = "special_event"
+
 class PointHistoryBase(BaseModel):
     action_type: PointActionType
     points: int

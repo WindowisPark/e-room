@@ -5,12 +5,11 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from dotenv import load_dotenv
-from app.services.pdf_agent.tools import get_all_docs  # ✅ ChromaDBService 제거하고 tools 기반으로 교체
+from app.services.pdf_agent.tools import search_documents_for_summary  # ✅ ChromaDBService 제거하고 tools 기반으로 교체
+from app.services.pdf_agent.utils.file_utils import save_output_file, get_file_info, cleanup_old_files
 import json
 import os
 import logging
-from tqdm import tqdm
-from datetime import datetime
 
 load_dotenv()
 llm = ChatOpenAI(model="gpt-4.1-mini")
@@ -19,115 +18,189 @@ logger = logging.getLogger(__name__)
 def start_point_of_summary(state: AgentState):
     print("요약 그래프 시작")
 
-def get_related_pdf(state : AgentState):
-    pdf_path = state["pdf_path"]
-    pdf = get_all_docs(pdf_path)
-    return {"pdf_content":pdf}
+def get_related_pdf(state: AgentState):
+    messages = state["messages"]
+    request = messages.pop().content
+    user_id = state["user_id"]
+    folder = state.get("folder", "default")
+
+    refined_query = llm.invoke(f"""
+    사용자의 요청은 문서 요약입니다.
+    이 요청에서 핵심 키워드를 한두 단어로 추출하세요.
+
+    요청: "{request}"
+    """).content.strip()
+
+    pdfs = search_documents_for_summary(
+        user_id=user_id,
+        folder=folder,
+        query=refined_query,
+        k=5
+    )
+
+    if not pdfs:
+        raise ValueError(f"관련 문서를 찾을 수 없습니다. refined_query='{refined_query}'")
+
+    full_text = "\n".join(p.page_content for p in pdfs)
+    return {"pdf_content": {"text": full_text}}
 
 def pdf_parsing(state: AgentState):
     pdf_content = state["pdf_content"]
-    if len(pdf_content)>=15000 :
-        text_splitter = RecursiveCharacterTextSplitter( # 3000자 단위로 split
-            chunk_size=3000,
-            chunk_overlap=100,
-            length_function=len,
-            is_separator_regex=False,
-        )
-    else : 
-        chunk_size = len(pdf_content)/5
-        text_splitter = RecursiveCharacterTextSplitter( # 3000자 단위로 split
-            chunk_size=int(chunk_size),
-            chunk_overlap=100,
-            length_function=len,
-            is_separator_regex=False,
-        )
-    pdfs = text_splitter.split_text(pdf_content)
-    return {"pdfs":pdfs}
+    text = pdf_content.get("text", "") if isinstance(pdf_content, dict) else str(pdf_content)
 
-def summary_pdf(state:AgentState):
-    pdfs = state["pdfs"]
-    summaries = ""
-    for pdf in tqdm(pdfs) :
-        result = llm.invoke(f"""다음 내용 중 중요한 내용 위주로 상세하게  요약해주세요. 
-                            이때 요약은 마크다운을 활용하여, 학습자료로서 보기 좋게 구성하여 학습자가 정리된 자료만 보고도 학습이 가능하도록 해야합니다.
-                            개념만 간단하게 작성하는 것이 아닌, 요약된 내용만 보고도 전체 원본의 내용을 이해할 수 있을 정도로 상세하게 요약해주셔야 합니다. 
-                            
-                            내용 : {pdf}""").content
-        summaries += result
-    return {"result":summaries}
+    print(f"PDF 파싱: 텍스트 길이 = {len(text)}")
+    doc = Document(page_content=text)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=4000, chunk_overlap=400)
 
+    try:
+        chunks = text_splitter.split_documents([doc])
+        print(f"텍스트 분할 완료: {len(chunks)}개 청크 생성됨")
+        return {"pdfs": chunks, "pdf_step": 0}
+    except Exception as e:
+        print(f"텍스트 분할 오류: {str(e)}")
+        return {"pdfs": [], "pdf_step": 0, "error": str(e)}
 
-# 배경지식 설명 필요한거 찾기
-def get_need_to_explain(state : AgentState) :
+def check_summary_completion(state: AgentState):
+    pdfs = state.get("pdfs", [])
+    now_step = state.get("pdf_step", 0)
+
+    print(f"요약 진행 상황: {now_step}/{len(pdfs)}")
+
+    if not isinstance(pdfs, list) or len(pdfs) == 0:
+        print("[check_completion] pdfs가 없어서 종료")
+        return "completion"
+
+    if now_step >= len(pdfs):
+        return "completion"
+
+    return "continue"
+
+def summary_pdf(state: AgentState):
+    pdfs = state.get("pdfs", [])
+    step = state.get("pdf_step", 0)
+    summaries = state.get("summaries", "")
+
+    if not isinstance(pdfs, list) or step >= len(pdfs):
+        print(f"[summary_pdf] 스킵: step={step}, pdfs 길이={len(pdfs)}")
+        return {"pdf_step": step, "summaries": summaries}
+
+    try:
+        pdf = pdfs[step]
+        text = pdf.page_content
+        print(f"요약 시작: 청크 {step}, 길이 {len(text)}")
+        result = llm.invoke(f"다음 내용을 빠짐없이 요약해주세요.\n\n내용 : {text}")
+        summaries += result.content
+    except Exception as e:
+        print(f"요약 오류: {str(e)}")
+        summaries += f"[요약 실패: {str(e)}]"
+
+    return {"pdf_step": step + 1, "summaries": summaries}
+
+def refine_textbook(state: AgentState):
+    summaries = state["summaries"]
+    result = llm.invoke(f"""
+    다음 내용을 기반으로 마크다운 학습자료를 만들어주세요. 삭제 없이 보기 좋게 정리해주세요.
+    내용 : {summaries}
+    """).content
+    return {"result": result}
+
+def get_need_to_explain(state: AgentState):
     result = state["result"]
-    example = '{"단어 1":"단어 1 설명이 필요한 이유",...}'
-    need_to_explain = llm.invoke(f"다음 내용 중 배경 지식이 필요한 요소를 이유와 함께 예시와 같은 json 형식으로만 정리해주세요. 다른 백틱이나 용어가 들어가면 안 됩니다. 바로 json으로 이용할 수 있도록 json형식으로만 출력해주세요. \nex) {example} \n 내용 : {result}")
-    return { "need_to_explain" :json.loads(need_to_explain.content)}
+    prompt = (
+        "다음 내용에서 배경지식이 필요한 단어를 예시와 같은 json 형식으로 정리해주세요. "
+        '예: {"단어1": "이유", ...}'
+    )
+
+    response = llm.invoke(f"{prompt}\n내용: {result}")
+    content = response.content.strip()
+
+    try:
+        if content.startswith("```") and content.endswith("```"):
+            content = content.strip("```").strip()
+        if content.startswith("json"):
+            content = content[4:].strip()
+
+        parsed = json.loads(content)
+
+        return {
+            "need_to_explain": parsed,
+            "explain_step": 0
+        }
+
+    except Exception as e:
+        logger.error(f"[요약] JSON 파싱 실패: {e} / 응답: {content}")
+        return {"need_to_explain": {}}
+
+def check_explain_completion(state: AgentState):
+    total = len(state["need_to_explain"])
+    now = state["explain_step"]
+    return "continue" if now < total else "completion"
 
 def explain(state: AgentState):
     need_to_explain = state["need_to_explain"]
-    result_map = {}
-    for key,value in tqdm(need_to_explain.items()):
-        question = f"{value}를 위해 {key}에 대한 설명이 필요합니다. {key}에 대해서 간단히 설명해주세요."
-        explanation = llm.invoke(question).content
-        result_map[key] = explanation
+    now = state["explain_step"]
 
-    return {"need_to_explain" : result_map}
-    
-# 설명 본문에 추가
-def add_explaination(state : AgentState):
+    if not need_to_explain or now >= len(need_to_explain):
+        return {"explain_step": now, "need_to_explain": need_to_explain}
+
+    key = list(need_to_explain.keys())[now]
+    reason = list(need_to_explain.values())[now]
+
+    question = f"{reason}를 고려하여 '{key}'를 간단히 설명해주세요."
+    explanation = llm.invoke(question).content
+    need_to_explain[key] = explanation
+
+    return {"explain_step": now + 1, "need_to_explain": need_to_explain}
+
+def add_explaination(state: AgentState):
     result = state["result"]
-    need_to_explain = state["need_to_explain"]
-    if len(result) < 20000 :
-        chunk_size = len(result)/5
-        text_splitter = RecursiveCharacterTextSplitter( # 3000자 단위로 split
-                chunk_size=int(chunk_size),
-                chunk_overlap=0,
-                length_function=len,
-                is_separator_regex=False,
-        )
-    else :
-        text_splitter = RecursiveCharacterTextSplitter( # 3000자 단위로 split
-                chunk_size=4000,
-                chunk_overlap=0,
-                length_function=len,
-                is_separator_regex=False,
-        )
-    divided_results = text_splitter.split_text(result)
-    final_result = ""
-    for divided_result in tqdm(divided_results) :    
-        final_result += llm.invoke(f"""이전 내용, 원문, 참고자료를 이용하여 설명을 추가한 최종 내용을 작성해주세요. 
-                                조건은 다음과 같습니다.
-                                   
-                                1. 이전 내용의 말미와 원문의 도입부가 자연스럽게 이어지도록 작성 (EX, 이전 내용의 말미가 4번으로 끝났다면, 원문이 1번부터 시작해도 5번으로 변경하여 작성)
-                                2. 1번 상황외의 경우 기존 내용은 삭제하거나 변경해서는 안 됨 원문을 그대로 보존해야만 함.
-                                3. 각주 설명은 설명이 필요한 용어가 포함된 헤더 단락 바로 아래에 추가 
-                                
-                                1,2,3을 반드시 준수하여 원문을 작성해주시길 바랍니다.
+    references = state["need_to_explain"]
+    response = llm.invoke(f"""
+    아래 내용에 참고자료(각주)를 markdown 형식으로 추가해주세요.
+    내용: {result}
+    참고자료: {references}
+    """).content
+    return {"result": response}
 
-                                원문 : {divided_result}
-                                참고자료 : {need_to_explain}""").content
-    
-    user_id = state["user_id"]
-    title = os.path.basename(state["pdf_path"])
-    user_dir = f"{user_id}/summary" 
-    os.makedirs(user_dir, exist_ok=True)
-    with open(os.path.join(user_dir,f"{title}_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"), "w", encoding="utf-8") as md_file:
-        md_file.write(result)
-
-    return {"result": final_result}
-
-# 학습 테스트용 문제 생성
-def gen_sample_question(state:AgentState):
+def gen_sample_question(state: AgentState):
     result = state["result"]
-    exam = llm.invoke(f"다음 내용은 제가 제작한 학습 자료입니다. 마크다운을 활용하여 학생들이 학습 자료를 잘 공부하였는지 확인하기 위한 간단한 주관식 문제를 제작해주세요. 전반적으로 모든 내용을 검사할 수 있도록 제작해주세요. 내용 : {result}")
-    return {"result":result+exam.content}
+    exam = llm.invoke(f"다음 내용을 잘 이해했는지 확인할 수 있는 간단한 주관식 문제를 만들어주세요.\n\n내용: {result}").content
+    return {"result": result + "\n\n" + exam}
 
-def save_file(state:AgentState):
+def save_file(state: AgentState):
+    """개선된 파일 저장 함수"""
     result = state["result"]
     user_id = state["user_id"]
-    title = os.path.basename(state["pdf_path"])
-    user_dir = f"{user_id}/summary" 
-    os.makedirs(user_dir, exist_ok=True)
-    with open(os.path.join(user_dir,f"{title}_final_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"), "w", encoding="utf-8") as md_file:
-        md_file.write(result)
+    
+    try:
+        # ✅ 새로운 유틸리티 사용
+        file_path, filename = save_output_file(
+            user_id=user_id,
+            task_type="summary",
+            content=result,
+            file_format="md"
+        )
+        
+        # 파일 정보 가져오기
+        file_info = get_file_info(file_path)
+        
+        # 오래된 파일 정리 (최신 5개만 유지)
+        deleted_count = cleanup_old_files(user_id, "summary", keep_count=5)
+        if deleted_count > 0:
+            logger.info(f"요약 파일 {deleted_count}개 정리됨 (사용자: {user_id})")
+        
+        logger.info(f"요약 파일 저장 완료: {file_path}")
+        
+        return {
+            **state,
+            "saved_path": file_path,
+            "saved_filename": filename,
+            "file_info": file_info
+        }
+        
+    except Exception as e:
+        logger.error(f"요약 파일 저장 실패: {str(e)}")
+        return {
+            **state,
+            "error": f"파일 저장 실패: {str(e)}"
+        }
