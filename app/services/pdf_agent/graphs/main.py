@@ -26,4 +26,3 @@ def intergrate_graph() :
     chain = graph.compile()
     
     return chain
-

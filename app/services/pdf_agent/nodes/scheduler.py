@@ -1,18 +1,15 @@
 # app/services/pdf_agent/nodes/scheduler.py
 
 from dotenv import dotenv_values
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 from datetime import date
 import os
 import json
 
 from app.services.pdf_agent.states import AgentState
-from app.services.pdf_agent.tools import search_documents_for_scheduler  # ✅ ChromaDBService 대체
-from app.services.pdf_agent.utils.file_utils import save_output_file, get_file_info, cleanup_old_files
-import logging
+from app.services.pdf_agent.tools import get_all_docs  # ✅ ChromaDBService 대체
 
-logger = logging.getLogger(__name__)
 envs = dotenv_values(".env")
 api_key = envs["OPENAI_API_KEY"]
 llm = ChatOpenAI(model="gpt-4.1-mini")
@@ -28,157 +25,93 @@ def select_importance(state: AgentState):
 
 def select_deadlines(state: AgentState):
     return {}
-
-def select_folder_for_schedule(state: AgentState):
-    """
-    과목에 해당하는 폴더를 LLM으로 선택합니다.
-    'subjects'가 없을 경우 명확한 에러를 발생시킵니다.
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-
-    user_id = state["user_id"]
-    subject_index = state.get("subject_index", 0)
-
-    if "subjects" not in state:
-        logger.error(f"[스케줄러] 상태에 'subjects' 키가 없습니다. 현재 상태 키: {list(state.keys())}")
-        raise KeyError("'subjects' 키가 상태에 존재하지 않습니다. select_subjects 노드가 실행되지 않았을 수 있습니다.")
-
+def get_all_document(state : AgentState):
     subjects = state["subjects"]
+    docs=[]
+    for subject in subjects: #
+        docs.append(get_all_docs(subject))
 
-    if not subjects:
-        raise ValueError("subjects 필드가 비어 있습니다. select_subjects 노드가 올바르게 과목을 추출하지 못했을 수 있습니다.")
-
-    user_folder_path = f"{user_id}/chroma"
-    folders = os.listdir(user_folder_path) if os.path.exists(user_folder_path) else []
-
-    if not folders:
-        raise ValueError(f"사용자 폴더가 존재하지 않음: {user_folder_path}")
-
-    folder = llm.invoke(
-        f"다음 폴더 중 '{subjects[subject_index]}' 과목과 가장 관련 있는 폴더명을 1개만 말해주세요.\n"
-        f"폴더 목록: {folders}"
-    ).content.strip()
-
-    return {
-        "folder": folder,
-        "subject_index": subject_index + 1
-    }
-
-def get_all_document(state: AgentState):
-    folder = state["folder"]
-    user_id = state["user_id"]
-
-    chunks = search_documents_for_scheduler(user_id=user_id, folder=folder, k=20)
-    docs = [chunk.page_content if hasattr(chunk, 'page_content') else chunk.get("text", "") for chunk in chunks]
-
-    return {"docs": docs}
+    return {"docs":docs}
 
 def define_final_index(state: AgentState):
     docs = state["docs"]
-    final_index = state["final_index"]
+    final_index = []
+    
+    for doc in docs:
+        final_index.append(
+            llm.invoke(f"다음 내용은 여러 파일에 대한 목차들을 합친 내용입니다.\n다음 내용을 정리하여 전체 내용을 포함하는 목차를 생성해주세요. \n전체 내용 : {doc}").content)
 
-    full_text = "\n".join(docs)
-    summary = llm.invoke(
-        f"다음은 여러 문서의 목차 내용입니다. 전체 내용을 정리하여 학습 계획 수립을 위한 통합 목차를 생성해주세요.\n\n{full_text}"
-    ).content
-
-    final_index.append(summary)
-    return {"final_index": final_index}
+    return {"final_index":final_index}
 
 def check_sub_count(state: AgentState):
-    if state["subject_index"] >= len(state["subjects"]):
+    subject_index = state["subject_index"]
+    
+    if subject_index == len(state["subjects"]):
         return "completion"
-    return "continue"
-
+    else:
+        return "continue"
+    
 def make_plans(state: AgentState):
     subjects = state["subjects"]
     final_index = state["final_index"]
     importances = state["importance"]
-    deadlines = state["deadlines"]
     today = date.today()
-
-    subject_data = {
-        sub: {
-            "목차": idx,
-            "중요도": imp,
-            "마감일": dl
+    deadlines = state["deadlines"]
+    
+    total_file = {}
+    for sub,idx,importance,deadline in zip(subjects,final_index,importances,deadlines):
+        total_file[sub]={
+            "목차" : idx,
+            "중요도" : importance,
+            "마감일" : deadline
         }
-        for sub, idx, imp, dl in zip(subjects, final_index, importances, deadlines)
-    }
-
-    example_format = {
-        "2025-06-01": {
-            "과목1": {
-                "학습할 범위": "1~2단원",
-                "예상 학습 시간": "3시간"
-            }
-        }
+    example = {
+        "날짜" : {
+            "과목" : {
+                "학습할 범위" : "~~~",
+                "예상 학습 시간" : "~~",
+            },
+            "과목2" :{
+            },
+        },	
     }
 
     result = llm.invoke(
-        f"""
-        아래는 과목별 학습 정보입니다.
-        각 과목의 목차 양, 중요도, 마감일, 현재 날짜를 고려하여 학습 계획표를 JSON 형식으로 만들어주세요.
-        최대 학습 시간: 하루 9시간.
-        마감일 전날은 해당 과목 학습에 더 많은 시간을 할당해주세요.
+        f"""다음 제공된 내용을 보고 시험기간 학습 계획표를 작성해주세요\n
+        다음 내용은 과목별 목차, 중요도, 마감일 정보를 가집니다.\n
+        학습 계획은 3가지를 고려해야 합니다.\n
+        1. 각 과목 목차의 양\n
+        2. 각 과목의 중요도\n
+        3. 오늘 날짜로부터 마감일까지의 기간\n
 
-        반환 형식은 다음을 따라주세요:
-        {example_format}
+        최대 가용시간 9시간을 모두 활용하도록 적절하게 학습 계획을 세워주시고, 그 내용은 자세하게 어떤 내용을 어떻게 공부해야 하는지 안내해주셔야 합니다.\n
+        목차만 간단하게 말하는 것이 아니라 이 부분을 어떤식으로 학습한다는 것을 알려주시면 좋을 것 같습니다.
 
-        오늘 날짜: {today}
-        내용: {json.dumps(subject_data, ensure_ascii=False)}
+        시험 전날(마감일)에는 다음날 시험인 과목의 비중을 높여주어야 합니다.
+
+        학습 계획은 다른 내용없이 오로지 다음과 같은 json 구조로 출력하여 즉시 json으로 이용이 가능하도록 출력해주셔야 합니다.
+
+        구조 : {example}
+
+        내용 : {total_file}
         """
     ).content
+
+    print("[result]\t"+"=="*40)
+    print(result)
 
     return {"schedule": result}
 
 def save_plan(state: AgentState):
-    """개선된 학습 계획 저장"""
     schedule = state["schedule"]
     user_id = state["user_id"]
+    user_dir = f"{user_id}/schedule" 
+    os.makedirs(user_dir, exist_ok=True)
+    number_of_files = len(os.listdir(user_dir))
+    schedule_data = json.loads(schedule)
+    with open(os.path.join(user_dir, f"schedule_{number_of_files+1}.json"), "w", encoding="utf-8") as json_file:
+        json.dump(schedule_data, json_file, ensure_ascii=False, indent=4)
     
-    try:
-        # ✅ 새로운 유틸리티 사용
-        file_path, filename = save_output_file(
-            user_id=user_id,
-            task_type="schedule",
-            content=schedule,  # JSON 형식으로 자동 저장됨
-            file_format="json"
-        )
-        
-        # 파일 정보 가져오기
-        file_info = get_file_info(file_path)
-        
-        # 오래된 파일 정리 (최신 3개만 유지)
-        deleted_count = cleanup_old_files(user_id, "schedule", keep_count=3)
-        if deleted_count > 0:
-            logger.info(f"스케줄 파일 {deleted_count}개 정리됨 (사용자: {user_id})")
-        
-        logger.info(f"스케줄 파일 저장 완료: {file_path}")
-        
-        # 메시지에 스케줄 내용 추가
-        messages = state["messages"]
-        schedule_summary = f"학습 계획이 생성되었습니다!\n파일 위치: {filename}"
-        messages.append(HumanMessage(content=schedule_summary))
-        
-        return {
-            "messages": messages,
-            "saved_path": file_path,
-            "saved_filename": filename,
-            "file_info": file_info,
-            "schedule_file_path": file_path  # 호환성을 위해 유지
-        }
-        
-    except Exception as e:
-        logger.error(f"스케줄 파일 저장 실패: {str(e)}")
-        
-        # 실패시에도 메시지는 업데이트
-        messages = state["messages"]
-        error_message = f"학습 계획 생성은 완료되었으나 파일 저장에 실패했습니다: {str(e)}"
-        messages.append(HumanMessage(content=error_message))
-        
-        return {
-            "messages": messages,
-            "error": f"파일 저장 실패: {str(e)}"
-        }
+    messages = state["messages"]
+    messages.append(AIMessage(content=schedule))
+    return {"message":messages}
