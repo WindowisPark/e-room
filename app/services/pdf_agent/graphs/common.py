@@ -8,13 +8,11 @@ from langgraph.graph import StateGraph
 def add_common_node_on_graph(graph: StateGraph) -> StateGraph:
     graph.add_node("input_question",common.input_question)
     graph.add_node("judge_the_purpose_of_the_input",common.judge_the_purpose_of_the_input)
-    graph.add_node("select_folder",common.select_folder)
     return graph
 
 def add_common_edge_on_graph(graph: StateGraph) -> StateGraph:
     graph.set_entry_point("input_question")
-    graph.add_edge("input_question","select_folder")
-    graph.add_edge("select_folder","judge_the_purpose_of_the_input")
+    graph.add_edge("input_question","judge_the_purpose_of_the_input")
     graph.add_conditional_edges(
         "judge_the_purpose_of_the_input",
         common.router,
