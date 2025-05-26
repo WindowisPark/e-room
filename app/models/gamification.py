@@ -47,10 +47,16 @@ class PointHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    action_type = Column(PgEnum(PointActionType, native_enum=False), nullable=False)
-    points = Column(Integer, nullable=False)  # 양수: 적립, 음수: 차감
+    
+    # 🔥 이 부분을 수정
+    action_type = Column(
+        Enum(PointActionType, name='pointactiontype', create_type=False),
+        nullable=False
+    )
+    
+    points = Column(Integer, nullable=False)
     description = Column(String(255), nullable=False)
-    reference_id = Column(Integer, nullable=True)  # 관련 엔티티 ID (예: 주석 ID)
+    reference_id = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 관계 설정
