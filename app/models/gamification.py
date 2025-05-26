@@ -10,22 +10,26 @@ import enum
 
 class PointActionType(str, enum.Enum):
     """포인트 적립/차감 액션 타입"""
-    ATTENDANCE = "attendance"       # 출석 체크
-    ANNOTATION = "annotation"       # PDF 주석 작성
-    PDF_UPLOAD = "pdf_upload"       # PDF 업로드
-    TEAM_CREATE = "team_create"     # 팀 생성
-    TEAM_JOIN = "team_join"         # 팀 가입
-    LEVEL_UP = "level_up"           # 레벨업 보너스
-    ADMIN = "admin"                 # 관리자 부여/차감
-    EVENT = "event"                 # 이벤트 보상
-    QUEST = "quest"                 # 퀘스트 완료
+    ATTENDANCE = "ATTENDANCE"           # 대문자로 맞춤
+    ANNOTATION = "ANNOTATION"
+    PDF_UPLOAD = "PDF_UPLOAD"
+    TEAM_CREATE = "TEAM_CREATE"
+    TEAM_JOIN = "TEAM_JOIN"
+    LEVEL_UP = "LEVEL_UP"
+    ADMIN = "ADMIN"
+    EVENT = "EVENT"
+    QUEST = "QUEST"
     
-    # 🎉 새로 추가되는 이벤트 관련 액션들
-    SIGNUP_EVENT = "signup_event"   # 신규가입 이벤트
-    INVITE_SENT = "invite_sent"     # 초대 코드 발송 보상
-    INVITE_USED = "invite_used"     # 초대 코드 사용 보상
-    DAILY_LOGIN_EVENT = "daily_login_event"  # 일일 로그인 이벤트
-    SPECIAL_EVENT = "special_event"  # 특별 이벤트
+    # 🔥 데이터베이스와 일치하도록 추가
+    SIGNUP_EVENT = "signup_event"
+    INVITE_SENT = "invite_sent"
+    INVITE_USED = "invite_used"
+    DAILY_LOGIN_EVENT = "daily_login_event"
+    SPECIAL_EVENT = "special_event"
+    SIGNUP_BONUS = "signup_bonus"        # ✅ 추가
+    INVITE_CODE = "invite_code"          # ✅ 추가
+    DAILY_LOGIN = "daily_login"          # ✅ 추가
+    LEVEL_UP_BONUS = "level_up_bonus"    # ✅ 추가
 
 class BadgeType(str, enum.Enum):
     """배지 타입 구분"""

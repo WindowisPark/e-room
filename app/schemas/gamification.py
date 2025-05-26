@@ -7,22 +7,26 @@ from enum import Enum
 
 # Point-related schemas
 class PointActionType(str, Enum):
-    ATTENDANCE = "attendance"
-    ANNOTATION = "annotation"
-    PDF_UPLOAD = "pdf_upload"
-    TEAM_CREATE = "team_create"
-    TEAM_JOIN = "team_join"
-    LEVEL_UP = "level_up"
-    ADMIN = "admin"
-    EVENT = "event"
-    QUEST = "quest"
-
-    # ✅ 새로운 값 추가
-    SIGNUP_BONUS = "signup_bonus"  # ✅ EventType과 일치시킴
+    ATTENDANCE = "ATTENDANCE"
+    ANNOTATION = "ANNOTATION"
+    PDF_UPLOAD = "PDF_UPLOAD"
+    TEAM_CREATE = "TEAM_CREATE"
+    TEAM_JOIN = "TEAM_JOIN"
+    LEVEL_UP = "LEVEL_UP"
+    ADMIN = "ADMIN"
+    EVENT = "EVENT"
+    QUEST = "QUEST"
+    
+    # ✅ 데이터베이스와 일치하도록 추가
+    SIGNUP_EVENT = "signup_event"
+    INVITE_SENT = "invite_sent"
+    INVITE_USED = "invite_used"
+    DAILY_LOGIN_EVENT = "daily_login_event"
+    SPECIAL_EVENT = "special_event"
+    SIGNUP_BONUS = "signup_bonus"
     INVITE_CODE = "invite_code"
     DAILY_LOGIN = "daily_login"
     LEVEL_UP_BONUS = "level_up_bonus"
-    SPECIAL_EVENT = "special_event"
 
 class PointHistoryBase(BaseModel):
     action_type: PointActionType
