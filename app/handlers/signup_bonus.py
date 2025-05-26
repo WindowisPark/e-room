@@ -17,7 +17,7 @@ def handle_signup_bonus(
     if not event:
         raise ValueError("이벤트를 찾을 수 없습니다.")
 
-    add_points(db, user.id, PointActionType.SIGNUP_EVENT, points=event.reward_points)
+    add_points(db, user.id, PointActionType.SIGNUP_BONUS, points=event.reward_points)
 
     user_event = UserEvent(
         user_id=user.id,
