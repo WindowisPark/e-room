@@ -18,7 +18,7 @@ class PointActionType(str, Enum):
     QUEST = "quest"
 
     # ✅ 새로운 값 추가
-    SIGNUP_BONUS = "signup_bonus"
+    SIGNUP_BONUS = "signup_bonus"  # ✅ EventType과 일치시킴
     INVITE_CODE = "invite_code"
     DAILY_LOGIN = "daily_login"
     LEVEL_UP_BONUS = "level_up_bonus"
