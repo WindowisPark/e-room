@@ -608,3 +608,39 @@ async def get_pdf_file_info(
             status_code=500, 
             detail="파일 정보 조회 중 오류가 발생했습니다."
         )
+    
+@router.get(
+    "/users/{user_id}/files-with-paths",
+    summary="사용자의 모든 PDF 파일과 경로 조회",
+    description="사용자의 모든 폴더를 순회하며 PDF 파일 정보를 name, folder, path 형태로 반환합니다."
+)
+async def list_all_files_with_paths(
+    user_id: int,
+    current_user: User = Depends(deps.get_current_user),
+    storage = Depends(deps.get_storage_manager)
+):
+    """
+    사용자의 모든 PDF 파일을 folder 단위로 순회하며 path 포함 정보 반환
+    """
+    try:
+        if current_user.id != user_id and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        folders = storage.list_folders(user_id)
+        results = []
+
+        for folder in folders:
+            files = storage.list_files(user_id, folder.name)
+            for file in files:
+                if file.lower().endswith(".pdf"):
+                    results.append({
+                        "name": file,
+                        "folder": folder.name,
+                        "path": f"users/{user_id}/{folder.name}/{file}"
+                    })
+
+        return results
+    
+    except Exception as e:
+        logger.error(f"모든 파일 경로 조회 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail="파일 경로 목록을 불러오지 못했습니다.")
