@@ -2,7 +2,7 @@
 """
 기존 chat.py를 개선한 버전
 WebSocket 어댑터 패턴을 활용하여 Graph/Node와 연결
-JSON 파싱 오류 수정 버전
+JSON 파싱 오류 및 연결 해제 오류 완전 수정 버전
 """
 
 import json
@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from sqlalchemy.orm import Session
+from starlette.websockets import WebSocketState
 
 from app.services.session_manager import SessionManager
 from app.services.pdf_agent.tools import get_initial_state
@@ -400,6 +401,35 @@ class ImprovedWebSocketManager:
         """현재 타임스탬프 반환"""
         return datetime.now().isoformat()
 
+
+def repair_json(data: str) -> str:
+    """손상된 JSON 데이터를 자동으로 복구"""
+    data = data.strip()
+    
+    # 1. 맨 앞 중괄호 누락 확인 및 복구
+    if not data.startswith('{') and data.startswith('"'):
+        data = '{' + data
+        logger.info("JSON 시작 중괄호 추가")
+    
+    # 2. 맨 뒤 중괄호 누락 확인 및 복구
+    if not data.endswith('}') and data.count('{') > data.count('}'):
+        data = data + '}'
+        logger.info("JSON 끝 중괄호 추가")
+    
+    # 3. 개행문자 및 캐리지 리턴 제거
+    data = data.replace('\r\n', '').replace('\r', '').replace('\n', '')
+    
+    # 4. 연속된 공백 제거 (JSON 내부는 유지)
+    import re
+    # JSON 문자열 내부가 아닌 구조적 공백만 정리
+    data = re.sub(r':\s+', ': ', data)  # 콜론 뒤 공백 정리
+    data = re.sub(r',\s+', ', ', data)  # 쉼표 뒤 공백 정리
+    data = re.sub(r'{\s+', '{', data)   # 중괄호 뒤 공백 제거
+    data = re.sub(r'\s+}', '}', data)   # 중괄호 앞 공백 제거
+    
+    return data
+
+
 # ==================== WebSocket 엔드포인트 ====================
 
 # 개선된 WebSocket 매니저 인스턴스
@@ -412,39 +442,66 @@ async def improved_websocket_endpoint(
 ):
     """
     개선된 WebSocket 채팅 엔드포인트
-    어댑터 패턴을 통해 기존 Graph/Node와 연결
+    연결 해제 오류 완전 해결 버전
     """
-    session_id = await improved_manager.connect(websocket, user_id)
+    session_id = None
     
     try:
+        session_id = await improved_manager.connect(websocket, user_id)
+        logger.info(f"WebSocket 연결 성공: session_id={session_id}")
+        
         while True:
-            # 메시지 수신 - JSON 파싱 오류 처리 개선
             try:
-                data = await websocket.receive_text()
-                logger.debug(f"수신된 원본 데이터: {data}")
+                # 📍 핵심 수정: WebSocket 상태를 먼저 확인
+                if websocket.application_state == WebSocketState.DISCONNECTED:
+                    logger.info("WebSocket이 이미 끊어짐 - 루프 종료")
+                    break
                 
-                # 데이터 정리 (앞뒤 공백, 개행 제거)
-                data = data.strip()
+                # 📍 receive_text() 대신 receive() 사용하여 메시지 타입 확인
+                message = await websocket.receive()
                 
-                # 빈 데이터 체크
-                if not data:
-                    logger.warning("빈 데이터 수신됨")
-                    await improved_manager.send_error(session_id, "빈 메시지는 처리할 수 없습니다.")
+                # 📍 연결 해제 메시지 체크
+                if message.get("type") == "websocket.disconnect":
+                    logger.info("연결 해제 메시지 수신")
+                    break
+                
+                # 📍 텍스트 메시지가 아닌 경우 스킵
+                if message.get("type") != "websocket.receive":
+                    logger.warning(f"예상치 못한 메시지 타입: {message.get('type')}")
                     continue
                 
-                # JSON 파싱 시도
+                # 📍 텍스트 데이터 추출
+                data = message.get("text", "")
+                if not data:
+                    logger.warning("빈 텍스트 데이터 수신")
+                    continue
+                
+                logger.debug(f"수신된 원본 데이터: {data}")
+                
+                # 데이터 정리
+                data = data.strip()
+                
+                # JSON 복구 및 파싱
                 try:
                     message_data = json.loads(data)
                 except json.JSONDecodeError as json_error:
-                    logger.error(f"JSON 파싱 실패: {json_error}")
-                    logger.error(f"파싱 실패한 데이터: {repr(data)}")
+                    logger.warning(f"첫 번째 JSON 파싱 실패: {json_error}")
                     
-                    # 클라이언트에게 상세한 오류 정보 전송
-                    await improved_manager.send_error(
-                        session_id, 
-                        f"잘못된 JSON 형식입니다. 오류: {str(json_error)}"
-                    )
-                    continue
+                    # JSON 복구 시도
+                    try:
+                        repaired_data = repair_json(data)
+                        logger.info(f"JSON 복구 시도: {repr(repaired_data)}")
+                        message_data = json.loads(repaired_data)
+                        logger.info("JSON 복구 성공!")
+                    except json.JSONDecodeError as repair_error:
+                        logger.error(f"JSON 복구도 실패: {repair_error}")
+                        logger.error(f"복구 시도한 데이터: {repr(repaired_data)}")
+                        
+                        await improved_manager.send_error(
+                            session_id, 
+                            f"JSON 형식 오류입니다. 원본: {str(json_error)}"
+                        )
+                        continue
                 
                 message_type = message_data.get("type")
                 
@@ -472,12 +529,10 @@ async def improved_websocket_endpoint(
                     await improved_manager.handle_file_selection(session_id, selected_files, skip)
                     
                 elif message_type == "error_choice":
-                    # 에러 처리 선택
                     choice = message_data.get("data", {}).get("choice", "")
                     logger.info(f"에러 처리 선택: {choice}")
                     
                     if choice == "다시 시도":
-                        # 이전 작업 재시도
                         session_data = improved_manager.session_manager.get_session(session_id)
                         if session_data:
                             task_type = session_data.get("task_type")
@@ -495,7 +550,6 @@ async def improved_websocket_endpoint(
                             await improved_manager.send_error(session_id, "세션 정보를 찾을 수 없습니다.")
                             
                     elif choice == "다른 작업 선택":
-                        # 세션 초기화
                         improved_manager.session_manager.update_session(session_id, {
                             "task_type": "qa",
                             "waiting_for": None,
@@ -513,7 +567,6 @@ async def improved_websocket_endpoint(
                         })
                         
                     elif choice == "취소":
-                        # 현재 작업 취소
                         improved_manager.session_manager.update_session(session_id, {
                             "waiting_for": None
                         })
@@ -531,7 +584,6 @@ async def improved_websocket_endpoint(
                         await improved_manager.send_error(session_id, f"알 수 없는 선택: {choice}")
                     
                 elif message_type == "ping":
-                    # 연결 유지용 핑
                     await improved_manager.send_message(session_id, {
                         "type": "pong",
                         "session_id": session_id,
@@ -542,16 +594,49 @@ async def improved_websocket_endpoint(
                     logger.warning(f"알 수 없는 메시지 타입: {message_type}")
                     await improved_manager.send_error(session_id, f"지원하지 않는 메시지 타입: {message_type}")
                     
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket 정상 연결 해제: {session_id}")
+                break
+                
+            except RuntimeError as e:
+                if "disconnect message has been received" in str(e):
+                    logger.info(f"WebSocket 이미 끊어짐: {session_id}")
+                    break
+                else:
+                    logger.error(f"RuntimeError: {e}")
+                    break
+                    
             except Exception as receive_error:
                 logger.error(f"메시지 수신 처리 오류: {str(receive_error)}", exc_info=True)
-                await improved_manager.send_error(session_id, "메시지 처리 중 오류가 발생했습니다.")
+                
+                # 📍 연결 상태 재확인
+                try:
+                    if websocket.application_state == WebSocketState.DISCONNECTED:
+                        logger.info("WebSocket 연결 끊어짐 확인됨")
+                        break
+                    
+                    # 연결이 유효하면 에러 메시지 전송 시도
+                    await improved_manager.send_error(session_id, "메시지 처리 중 오류가 발생했습니다.")
+                    
+                except Exception as send_error:
+                    logger.warning(f"에러 메시지 전송 실패: {send_error}")
+                    break
                 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket 정상 연결 해제: {session_id}")
-        await improved_manager.disconnect(session_id)
+        logger.info(f"WebSocket 연결 해제: {session_id}")
+        
     except Exception as e:
-        logger.error(f"WebSocket 오류: {str(e)}", exc_info=True)
-        await improved_manager.disconnect(session_id)
+        logger.error(f"WebSocket 전체 오류: {str(e)}", exc_info=True)
+        
+    finally:
+        # 📍 안전한 정리 작업
+        try:
+            if session_id:
+                await improved_manager.disconnect(session_id)
+                logger.info(f"WebSocket 정리 완료: {session_id}")
+        except Exception as cleanup_error:
+            logger.error(f"정리 작업 오류: {cleanup_error}")
+
 
 # ==================== REST API 엔드포인트들 ====================
 
