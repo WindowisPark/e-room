@@ -47,7 +47,7 @@ class ImprovedWebSocketManager:
         logger.info(f"WebSocket 연결 해제: session_id={session_id}")
     
     async def send_message(self, session_id: str, message: dict):
-        """메시지 전송 및 DB 저장"""
+        """클라이언트에게 메시지 전송 + DB 저장"""
         if session_id in self.active_connections:
             websocket = self.active_connections[session_id]
             try:
@@ -56,14 +56,16 @@ class ImprovedWebSocketManager:
                 # 🆕 AI 응답을 DB에 저장
                 if message.get("type") == "ai_response":
                     content = message.get("data", {}).get("message", "")
-                    metadata = {
+                    extra_data = {  # ✅ metadata → extra_data
                         "task_type": message.get("data", {}).get("task_type"),
                         "is_final": message.get("data", {}).get("is_final")
                     }
                     self.session_manager.add_message_to_history(
-                        session_id, content, metadata
+                        session_id, 
+                        type("AIMessage", (), {"content": content})(),
+                        extra_data  # ✅ 수정
                     )
-                
+                    
             except Exception as e:
                 logger.error(f"메시지 전송 실패: {session_id}, {str(e)}")
                 await self.disconnect(session_id)

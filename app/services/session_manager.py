@@ -195,7 +195,7 @@ class SessionManager:
         
         return True
     
-    def add_message_to_history(self, session_id: str, message, metadata: Optional[Dict] = None):
+    def add_message_to_history(self, session_id: str, message, extra_data: Optional[Dict] = None):  # ✅ 수정
         """메시지 영구 저장"""
         with SessionLocal() as db:
             if hasattr(message, 'content'):
@@ -206,7 +206,7 @@ class SessionManager:
                 content = str(message)
             
             PersistentChatService.add_message(
-                db, session_id, message_type, content, metadata
+                db, session_id, message_type, content, extra_data  # ✅ 수정
             )
     
     def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:

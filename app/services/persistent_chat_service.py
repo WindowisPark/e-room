@@ -64,14 +64,14 @@ class PersistentChatService:
         session_id: str, 
         message_type: str, 
         content: str, 
-        metadata: Optional[Dict] = None
+        extra_data: Optional[Dict] = None  # ✅ metadata → extra_data
     ):
         """메시지 추가"""
         message = ChatMessage(
             session_id=session_id,
             message_type=message_type,
             content=content,
-            metadata=metadata
+            extra_data=extra_data  # ✅ 수정
         )
         
         db.add(message)
@@ -100,7 +100,7 @@ class PersistentChatService:
                 "id": msg.id,
                 "type": msg.message_type,
                 "content": msg.content,
-                "metadata": msg.metadata,
+                "extra_data": msg.extra_data,  # ✅ 수정
                 "timestamp": msg.created_at.isoformat()
             }
             for msg in messages
