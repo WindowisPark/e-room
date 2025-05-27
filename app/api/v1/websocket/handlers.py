@@ -73,6 +73,8 @@ class TaskHandlers:
             for step_name, message, progress in steps:
                 await self.manager.send_status(session_id, "processing", message, progress)
                 result = await self.manager.run_agent_step(result, step_name)
+            # ✅ 여기서 문제 content 생성해 넣기
+            result["result"] = "\n".join(result.get("problems", []))  # 🔥 핵심 수                
             
             # 결과 전송
             summary_content = result.get("result", "요약을 생성할 수 없습니다.")
