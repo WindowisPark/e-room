@@ -301,7 +301,7 @@ def save_file(state: AgentState):
             filename = filename[:-4]  # .pdf 제거
         
         # 저장 디렉토리 생성
-        user_dir = f"{user_id}/summary"
+        user_dir = f"storage/{user_id}/summary"
         os.makedirs(user_dir, exist_ok=True)
         
         # 파일 저장

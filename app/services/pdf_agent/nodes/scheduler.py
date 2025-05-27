@@ -232,7 +232,7 @@ def save_plan(state: AgentState):
             return {**state, "schedule_file_path": "", "error": "저장할 계획이 없습니다."}
         
         # 저장 디렉토리 생성
-        user_dir = f"{user_id}/schedule"
+        user_dir = f"storage/{user_id}/schedule"
         os.makedirs(user_dir, exist_ok=True)
         
         # 파일명 생성
@@ -255,7 +255,8 @@ def save_plan(state: AgentState):
         return {
             **state,
             "messages": messages,
-            "schedule_file_path": file_path
+            "schedule_file_path": file_path,
+            "schedule": schedule  # ✅ 즉시 전송용 JSON 포함
         }
         
     except Exception as e:

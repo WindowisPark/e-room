@@ -225,8 +225,8 @@ def save_exam(state: AgentState):
         if title.endswith('.pdf'):
             title = title[:-4]
         
-        # 저장 디렉토리 생성
-        user_dir = f"{user_id}/exam"
+        # ✅ 수정 (통일된 경로)
+        user_dir = f"storage/{user_id}/exam/"
         os.makedirs(user_dir, exist_ok=True)
         
         # 모든 문제를 하나의 파일로 합치기
