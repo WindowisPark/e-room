@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from app.core.config import settings
 from app.schemas.file import FolderResponse
 from datetime import datetime
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -299,3 +300,21 @@ class S3StorageManager:
             logger.error(f"S3 폴더 이동 실패: {str(e)}")
             raise
 
+    def download_to_tempfile(self, s3_key: str) -> str:
+        """
+        S3에서 PDF 파일을 로컬 임시 파일로 다운로드하고 경로 반환
+
+        Args:
+            s3_key: S3 내부 객체 경로 (예: users/2/정보보호/sample.pdf)
+
+        Returns:
+            로컬 임시 파일 경로 (str)
+        """
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                self.s3_client.download_fileobj(self.bucket_name, s3_key, tmp)
+                logger.info(f"📥 S3 -> Temp 다운로드 완료: {s3_key} -> {tmp.name}")
+                return tmp.name
+        except Exception as e:
+            logger.error(f"S3 파일 다운로드 실패: {str(e)}")
+            raise

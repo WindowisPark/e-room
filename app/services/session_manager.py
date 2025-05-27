@@ -1,35 +1,157 @@
-# app/services/session_manager.py
+# app/services/session_manager.py (JSON 직렬화 문제 해결)
 
-import redis
 import json
+import redis
 import uuid
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-import logging
-from app.core.config import settings  # 추가
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+class MessageEncoder(json.JSONEncoder):
+    """LangChain 메시지 객체를 JSON으로 직렬화하는 인코더"""
+    
+    def default(self, obj):
+        if isinstance(obj, BaseMessage):
+            return {
+                "type": obj.__class__.__name__,
+                "content": obj.content,
+                "additional_kwargs": getattr(obj, 'additional_kwargs', {}),
+                "response_metadata": getattr(obj, 'response_metadata', {})
+            }
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
+class MessageDecoder:
+    """JSON에서 LangChain 메시지 객체로 역직렬화하는 디코더"""
+    
+    @staticmethod
+    def decode_message(message_dict: Dict) -> BaseMessage:
+        """메시지 딕셔너리를 LangChain 메시지 객체로 변환"""
+        message_type = message_dict.get("type")
+        content = message_dict.get("content", "")
+        additional_kwargs = message_dict.get("additional_kwargs", {})
+        
+        if message_type == "HumanMessage":
+            return HumanMessage(content=content, additional_kwargs=additional_kwargs)
+        elif message_type == "AIMessage":
+            return AIMessage(content=content, additional_kwargs=additional_kwargs)
+        elif message_type == "SystemMessage":
+            return SystemMessage(content=content, additional_kwargs=additional_kwargs)
+        else:
+            # 기본값으로 HumanMessage 반환
+            return HumanMessage(content=content, additional_kwargs=additional_kwargs)
+    
+    @staticmethod
+    def decode_messages(messages_list: List[Dict]) -> List[BaseMessage]:
+        """메시지 리스트를 LangChain 메시지 객체 리스트로 변환"""
+        if not messages_list:
+            return []
+        
+        result = []
+        for msg_dict in messages_list:
+            if isinstance(msg_dict, dict) and "type" in msg_dict:
+                result.append(MessageDecoder.decode_message(msg_dict))
+            elif isinstance(msg_dict, BaseMessage):
+                result.append(msg_dict)  # 이미 메시지 객체인 경우
+        
+        return result
 
 class SessionManager:
-    def __init__(self, redis_url: str = settings.REDIS_URL):  # ✅ 수정된 부분
-        self.redis_client = redis.from_url(redis_url, decode_responses=True)
-        self.session_ttl = 3600 * 2
-        
-    def create_session(self, user_id: str, task_type: str = None) -> str:
-        """
-        새 세션 생성
-        
-        Args:
-            user_id: 사용자 ID
-            task_type: 작업 타입 (qa, summary, exam, scheduler)
+    """Redis 기반 세션 관리자 (JSON 직렬화 지원)"""
+    
+    def __init__(self, redis_url: str = settings.REDIS_URL, default_ttl: int = 3600):
+        try:
+            self.redis_client = redis.from_url(redis_url, decode_responses=True)
+            self.redis_client.ping()  # 연결 테스트
+            self.default_ttl = default_ttl
+            self.encoder = MessageEncoder()
+            self.decoder = MessageDecoder()
+            logger.info("✅ Redis 연결 성공")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 연결 실패: {str(e)}, 메모리 기반으로 대체")
+            self.redis_client = None
+            self.memory_store = {}  # 메모리 기반 대체 저장소
+            self.default_ttl = default_ttl
+            self.encoder = MessageEncoder()
+            self.decoder = MessageDecoder()
+    
+    def _safe_serialize(self, data: Any) -> str:
+        """안전한 JSON 직렬화 (LangChain 메시지 지원)"""
+        try:
+            return json.dumps(data, cls=MessageEncoder, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"JSON 직렬화 실패: {str(e)}")
+            # 실패 시 기본 정보만 저장
+            simplified_data = self._simplify_data(data)
+            return json.dumps(simplified_data, ensure_ascii=False)
+    
+    def _safe_deserialize(self, data_str: str) -> Any:
+        """안전한 JSON 역직렬화 (LangChain 메시지 지원)"""
+        try:
+            data = json.loads(data_str)
+            return self._restore_messages(data)
+        except Exception as e:
+            logger.error(f"JSON 역직렬화 실패: {str(e)}")
+            return {}
+    
+    def _simplify_data(self, data: Any) -> Any:
+        """복잡한 객체를 단순한 형태로 변환"""
+        if isinstance(data, dict):
+            simplified = {}
+            for key, value in data.items():
+                try:
+                    if isinstance(value, BaseMessage):
+                        simplified[key] = {
+                            "type": value.__class__.__name__,
+                            "content": value.content
+                        }
+                    elif isinstance(value, list):
+                        simplified[key] = [self._simplify_data(item) for item in value]
+                    elif isinstance(value, dict):
+                        simplified[key] = self._simplify_data(value)
+                    else:
+                        simplified[key] = value
+                except:
+                    simplified[key] = str(value)  # 최후의 수단
+            return simplified
+        elif isinstance(data, list):
+            return [self._simplify_data(item) for item in data]
+        elif isinstance(data, BaseMessage):
+            return {
+                "type": data.__class__.__name__,
+                "content": data.content
+            }
+        else:
+            return data
+    
+    def _restore_messages(self, data: Any) -> Any:
+        """데이터에서 메시지 객체들을 복원"""
+        if isinstance(data, dict):
+            # messages 키가 있고 리스트인 경우 메시지 객체로 복원
+            if "messages" in data and isinstance(data["messages"], list):
+                data["messages"] = self.decoder.decode_messages(data["messages"])
             
-        Returns:
-            session_id: 생성된 세션 ID
-        """
-        session_id = f"session:{user_id}:{uuid.uuid4().hex[:8]}"
+            # agent_state 내부의 messages도 처리
+            if "agent_state" in data and isinstance(data["agent_state"], dict):
+                agent_state = data["agent_state"]
+                if "messages" in agent_state and isinstance(agent_state["messages"], list):
+                    agent_state["messages"] = self.decoder.decode_messages(agent_state["messages"])
+            
+            # 재귀적으로 다른 딕셔너리도 처리
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    data[key] = self._restore_messages(value)
+        
+        return data
+    
+    def create_session(self, user_id: str, task_type: str = "qa") -> str:
+        """새 세션 생성"""
+        session_id = f"{user_id}:{uuid.uuid4().hex[:8]}"
         
         session_data = {
             "session_id": session_id,
@@ -37,302 +159,239 @@ class SessionManager:
             "task_type": task_type,
             "created_at": datetime.now().isoformat(),
             "last_activity": datetime.now().isoformat(),
+            "chat_title": "새 채팅",
+            "message_history": [],
             "agent_state": {},
             "waiting_for": None,
-            "chat_title": None,  # QA 채팅의 소제목
-            "message_history": [],  # QA 대화 히스토리
-            "current_request_type": None,
-            "selected_files": [],
-            "processing_status": "idle"
+            "current_request_type": None
         }
         
-        # Redis에 저장
-        self.redis_client.setex(
-            session_id,
-            self.session_ttl,
-            json.dumps(session_data, ensure_ascii=False)
-        )
+        key = f"session:{session_id}"
         
-        # 사용자별 세션 목록에 추가 (QA 채팅 목록용)
-        if task_type == "qa":
-            user_sessions_key = f"user_sessions:{user_id}"
-            self.redis_client.lpush(user_sessions_key, session_id)
-            self.redis_client.expire(user_sessions_key, self.session_ttl)
-        
-        logger.info(f"새 세션 생성: {session_id}")
-        return session_id
-    
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """
-        세션 데이터 조회
-        
-        Args:
-            session_id: 세션 ID
-            
-        Returns:
-            세션 데이터 또는 None
-        """
         try:
-            data = self.redis_client.get(session_id)
-            if data:
-                session_data = json.loads(data)
-                # TTL 갱신
-                self.redis_client.expire(session_id, self.session_ttl)
-                return session_data
-            return None
+            serialized_data = self._safe_serialize(session_data)
+            
+            if self.redis_client:
+                self.redis_client.setex(key, self.default_ttl, serialized_data)
+            else:
+                self.memory_store[key] = {
+                    "data": serialized_data,
+                    "expires_at": datetime.now() + timedelta(seconds=self.default_ttl)
+                }
+            
+            logger.info(f"✅ 세션 생성: {session_id}")
+            return session_id
+            
         except Exception as e:
-            logger.error(f"세션 조회 실패: {session_id}, {str(e)}")
+            logger.error(f"❌ 세션 생성 실패: {str(e)}")
+            raise
+    
+    def get_session(self, session_id: str) -> Optional[Dict]:
+        """세션 데이터 조회"""
+        key = f"session:{session_id}"
+        
+        try:
+            if self.redis_client:
+                data_str = self.redis_client.get(key)
+                if data_str:
+                    return self._safe_deserialize(data_str)
+            else:
+                if key in self.memory_store:
+                    stored = self.memory_store[key]
+                    if datetime.now() < stored["expires_at"]:
+                        return self._safe_deserialize(stored["data"])
+                    else:
+                        del self.memory_store[key]  # 만료된 데이터 삭제
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ 세션 조회 실패: {str(e)}")
             return None
     
-    def update_session(self, session_id: str, data: Dict[str, Any]) -> bool:
-        """
-        세션 데이터 업데이트
-        
-        Args:
-            session_id: 세션 ID
-            data: 업데이트할 데이터
-            
-        Returns:
-            성공 여부
-        """
+    def update_session(self, session_id: str, update_data: Dict) -> bool:
+        """세션 데이터 업데이트"""
         try:
             current_data = self.get_session(session_id)
             if not current_data:
+                logger.warning(f"⚠️ 세션을 찾을 수 없음: {session_id}")
                 return False
             
-            # 기존 데이터와 병합
-            current_data.update(data)
+            # 데이터 병합
+            current_data.update(update_data)
             current_data["last_activity"] = datetime.now().isoformat()
             
-            # Redis에 저장
-            self.redis_client.setex(
-                session_id,
-                self.session_ttl,
-                json.dumps(current_data, ensure_ascii=False)
-            )
+            # 저장
+            key = f"session:{session_id}"
+            serialized_data = self._safe_serialize(current_data)
             
+            if self.redis_client:
+                self.redis_client.setex(key, self.default_ttl, serialized_data)
+            else:
+                self.memory_store[key] = {
+                    "data": serialized_data,
+                    "expires_at": datetime.now() + timedelta(seconds=self.default_ttl)
+                }
+            
+            logger.debug(f"✅ 세션 업데이트: {session_id}")
             return True
+            
         except Exception as e:
-            logger.error(f"세션 업데이트 실패: {session_id}, {str(e)}")
+            logger.error(f"❌ 세션 업데이트 실패: {session_id}, {str(e)}")
             return False
     
     def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:
-        """
-        QA 대화 히스토리에 메시지 추가
-        
-        Args:
-            session_id: 세션 ID
-            message: 추가할 메시지
-            
-        Returns:
-            성공 여부
-        """
+        """메시지 히스토리에 메시지 추가"""
         try:
-            session_data = self.get_session(session_id)
-            if not session_data:
-                return False
-            
             # 메시지를 직렬화 가능한 형태로 변환
             message_dict = {
                 "type": message.__class__.__name__,
                 "content": message.content,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "additional_kwargs": getattr(message, 'additional_kwargs', {})
             }
             
-            # 히스토리에 추가
-            if "message_history" not in session_data:
-                session_data["message_history"] = []
+            current_data = self.get_session(session_id)
+            if not current_data:
+                return False
             
-            message_dict = {
-                "type": message.__class__.__name__,
-                "content": message.content,
-                "timestamp": datetime.now().isoformat()
-            }
+            if "message_history" not in current_data:
+                current_data["message_history"] = []
             
-            # 히스토리 길이 제한 (최근 50개만 유지)
-            if len(session_data["message_history"]) > 50:
-                session_data["message_history"] = session_data["message_history"][-50:]
+            current_data["message_history"].append(message_dict)
             
-            # 첫 번째 사용자 메시지면 채팅 제목 생성
-            if (session_data.get("chat_title") is None and 
-                isinstance(message, HumanMessage) and 
-                len(session_data["message_history"]) == 1):
-                
-                # 제목 생성 (나중에 LLM으로 처리)
-                title = self.generate_chat_title(message.content)
-                session_data["chat_title"] = title
+            # 메시지 히스토리 길이 제한 (최대 100개)
+            if len(current_data["message_history"]) > 100:
+                current_data["message_history"] = current_data["message_history"][-100:]
             
-            return self.update_session(session_id, session_data)
+            return self.update_session(session_id, current_data)
             
         except Exception as e:
-            logger.error(f"메시지 히스토리 추가 실패: {session_id}, {str(e)}")
+            logger.error(f"❌ 메시지 히스토리 추가 실패: {str(e)}")
             return False
     
-    def generate_chat_title(self, first_message: str) -> str:
-        """
-        첫 메시지를 바탕으로 채팅 제목 생성
-        
-        Args:
-            first_message: 첫 번째 사용자 메시지
-            
-        Returns:
-            생성된 제목
-        """
-        # 간단한 제목 생성 로직 (추후 LLM으로 개선 가능)
-        title = first_message[:30].strip()
-        if len(first_message) > 30:
-            title += "..."
-        
-        # 특수문자 제거
-        import re
-        title = re.sub(r'[^\w\s가-힣]', '', title)
-        
-        return title or "새 채팅"
-    
-    def get_user_chat_sessions(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """
-        사용자의 QA 채팅 세션 목록 조회
-        
-        Args:
-            user_id: 사용자 ID
-            limit: 최대 조회 개수
-            
-        Returns:
-            채팅 세션 목록
-        """
-        try:
-            user_sessions_key = f"user_sessions:{user_id}"
-            session_ids = self.redis_client.lrange(user_sessions_key, 0, limit - 1)
-            
-            chat_sessions = []
-            for session_id in session_ids:
-                session_data = self.get_session(session_id)
-                if session_data and session_data.get("task_type") == "qa":
-                    # 채팅 목록용 요약 정보만 추출
-                    chat_info = {
-                        "session_id": session_id,
-                        "title": session_data.get("chat_title", "새 채팅"),
-                        "created_at": session_data.get("created_at"),
-                        "last_activity": session_data.get("last_activity"),
-                        "message_count": len(session_data.get("message_history", []))
-                    }
-                    chat_sessions.append(chat_info)
-            
-            # 최근 활동 순으로 정렬
-            chat_sessions.sort(key=lambda x: x["last_activity"], reverse=True)
-            return chat_sessions
-            
-        except Exception as e:
-            logger.error(f"사용자 채팅 세션 조회 실패: {user_id}, {str(e)}")
-            return []
-    
-    def get_chat_history(self, session_id: str) -> List[Dict[str, Any]]:
-        """
-        특정 채팅의 메시지 히스토리 조회
-        
-        Args:
-            session_id: 세션 ID
-            
-        Returns:
-            메시지 히스토리
-        """
+    def get_chat_history(self, session_id: str) -> List[Dict]:
+        """채팅 히스토리 조회"""
         try:
             session_data = self.get_session(session_id)
             if session_data:
                 return session_data.get("message_history", [])
             return []
         except Exception as e:
-            logger.error(f"채팅 히스토리 조회 실패: {session_id}, {str(e)}")
+            logger.error(f"❌ 채팅 히스토리 조회 실패: {str(e)}")
             return []
     
     def cleanup_session(self, session_id: str) -> bool:
-        """
-        세션 정리
-        
-        Args:
-            session_id: 세션 ID
-            
-        Returns:
-            성공 여부
-        """
+        """세션 삭제"""
         try:
-            # 세션 데이터 조회
-            session_data = self.get_session(session_id)
-            if session_data:
-                user_id = session_data.get("user_id")
+            key = f"session:{session_id}"
+            
+            if self.redis_client:
+                result = self.redis_client.delete(key)
+                success = result > 0
+            else:
+                success = key in self.memory_store
+                if success:
+                    del self.memory_store[key]
+            
+            if success:
+                logger.info(f"✅ 세션 삭제: {session_id}")
+            else:
+                logger.warning(f"⚠️ 삭제할 세션이 없음: {session_id}")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"❌ 세션 삭제 실패: {str(e)}")
+            return False
+    
+    def extend_session_ttl(self, session_id: str, ttl: Optional[int] = None) -> bool:
+        """세션 만료 시간 연장"""
+        try:
+            ttl = ttl or self.default_ttl
+            key = f"session:{session_id}"
+            
+            if self.redis_client:
+                result = self.redis_client.expire(key, ttl)
+                return result
+            else:
+                if key in self.memory_store:
+                    self.memory_store[key]["expires_at"] = datetime.now() + timedelta(seconds=ttl)
+                    return True
+                return False
                 
-                # 사용자 세션 목록에서 제거
-                if user_id:
-                    user_sessions_key = f"user_sessions:{user_id}"
-                    self.redis_client.lrem(user_sessions_key, 0, session_id)
-            
-            # 세션 삭제
-            self.redis_client.delete(session_id)
-            logger.info(f"세션 정리 완료: {session_id}")
-            return True
-            
         except Exception as e:
-            logger.error(f"세션 정리 실패: {session_id}, {str(e)}")
+            logger.error(f"❌ 세션 TTL 연장 실패: {str(e)}")
             return False
     
-    def extend_session_ttl(self, session_id: str) -> bool:
-        """
-        세션 TTL 연장
-        
-        Args:
-            session_id: 세션 ID
-            
-        Returns:
-            성공 여부
-        """
+    def get_user_chat_sessions(self, user_id: str, limit: int = 20) -> List[Dict]:
+        """사용자의 채팅 세션 목록 조회"""
         try:
-            return self.redis_client.expire(session_id, self.session_ttl)
+            sessions = []
+            pattern = f"session:{user_id}:*"
+            
+            if self.redis_client:
+                keys = self.redis_client.keys(pattern)
+                for key in keys[:limit]:
+                    session_data = self.get_session(key.replace("session:", ""))
+                    if session_data:
+                        sessions.append({
+                            "session_id": session_data.get("session_id"),
+                            "title": session_data.get("chat_title", "새 채팅"),
+                            "created_at": session_data.get("created_at"),
+                            "last_activity": session_data.get("last_activity"),
+                            "task_type": session_data.get("task_type", "qa"),
+                            "message_count": len(session_data.get("message_history", []))
+                        })
+            else:
+                # 메모리 스토어에서 검색
+                for key, stored in self.memory_store.items():
+                    if key.startswith(f"session:{user_id}:") and datetime.now() < stored["expires_at"]:
+                        session_data = self._safe_deserialize(stored["data"])
+                        if session_data:
+                            sessions.append({
+                                "session_id": session_data.get("session_id"),
+                                "title": session_data.get("chat_title", "새 채팅"),
+                                "created_at": session_data.get("created_at"),
+                                "last_activity": session_data.get("last_activity"),
+                                "task_type": session_data.get("task_type", "qa"),
+                                "message_count": len(session_data.get("message_history", []))
+                            })
+            
+            # 마지막 활동 시간 기준 정렬
+            sessions.sort(key=lambda x: x.get("last_activity", ""), reverse=True)
+            return sessions[:limit]
+            
         except Exception as e:
-            logger.error(f"세션 TTL 연장 실패: {session_id}, {str(e)}")
-            return False
+            logger.error(f"❌ 사용자 세션 목록 조회 실패: {str(e)}")
+            return []
     
-    def cleanup_expired_sessions(self):
-        """
-        만료된 세션들 정리 (백그라운드 작업용)
-        """
+    def get_session_stats(self, user_id: str) -> Dict:
+        """사용자 세션 통계"""
         try:
-            # 만료된 세션들은 Redis TTL에 의해 자동 삭제됨
-            # 필요시 추가 정리 로직 구현
-            logger.info("만료된 세션 정리 완료")
-        except Exception as e:
-            logger.error(f"세션 정리 중 오류: {str(e)}")
-    
-    def get_session_stats(self, user_id: str) -> Dict[str, Any]:
-        """
-        사용자 세션 통계 조회
-        
-        Args:
-            user_id: 사용자 ID
+            sessions = self.get_user_chat_sessions(user_id, limit=100)
             
-        Returns:
-            세션 통계
-        """
-        try:
-            user_sessions_key = f"user_sessions:{user_id}"
-            total_sessions = self.redis_client.llen(user_sessions_key)
+            total_sessions = len(sessions)
+            total_messages = sum(s.get("message_count", 0) for s in sessions)
             
-            # 활성 세션 수 계산
-            active_sessions = 0
-            session_ids = self.redis_client.lrange(user_sessions_key, 0, -1)
-            for session_id in session_ids:
-                if self.redis_client.exists(session_id):
-                    active_sessions += 1
+            # 작업 타입별 통계
+            task_stats = {}
+            for session in sessions:
+                task_type = session.get("task_type", "qa")
+                task_stats[task_type] = task_stats.get(task_type, 0) + 1
             
             return {
                 "total_sessions": total_sessions,
-                "active_sessions": active_sessions,
-                "user_id": user_id
+                "total_messages": total_messages,
+                "task_type_stats": task_stats,
+                "recent_sessions": sessions[:5]
             }
             
         except Exception as e:
-            logger.error(f"세션 통계 조회 실패: {user_id}, {str(e)}")
+            logger.error(f"❌ 세션 통계 조회 실패: {str(e)}")
             return {
                 "total_sessions": 0,
-                "active_sessions": 0,
-                "user_id": user_id
+                "total_messages": 0,
+                "task_type_stats": {},
+                "recent_sessions": []
             }

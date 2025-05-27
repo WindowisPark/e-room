@@ -4,7 +4,7 @@ from app.api.v1 import auth
 from app.api.v1.endpoints import (
     attendance, notifications, payments, question, tags, teams,
     phone_verification, team_pdf, team_activity, gamification, badges,
-    pdf_agent, user, events  # ✅ 추가
+    user, events  # ✅ 추가
 )
 
 api_router = APIRouter()
@@ -12,7 +12,6 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 api_router.include_router(user.router, prefix="/users", tags=["사용자 정보"])
 api_router.include_router(phone_verification.router, prefix="/phone-verification", tags=["전화번호 인증"])
-api_router.include_router(pdf_agent.router, prefix="/pdf-agent", tags=["PDF Agent"])
 api_router.include_router(teams.router, prefix="/teams", tags=["팀 관리"])
 api_router.include_router(team_pdf.router, prefix="/teams", tags=["팀 PDF 관리"])
 api_router.include_router(team_activity.router, prefix="/teams", tags=["팀 활동 로그"])

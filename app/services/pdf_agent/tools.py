@@ -1,4 +1,4 @@
-# app/services/pdf_agent/tools.py
+# app/services/pdf_agent/tools.py (완전 수정 버전)
 
 from typing import Dict, Any, Optional
 from langchain_core.messages import SystemMessage
@@ -6,7 +6,11 @@ from dotenv import dotenv_values
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import PDFPlumberLoader
+from app.core.config import settings
+import logging
+import os
 
+logger = logging.getLogger(__name__)
 
 def get_initial_state(
     user_id: str,
@@ -46,43 +50,75 @@ def get_initial_state(
         "personality": [],
         "final_personality": "",
         "embedding_stored": False,
-        "error": None
+        "error": None,
+        "subjects": [],
+        "importance": {},
+        "deadlines": {},
+        "schedule": {},
+        "exam_step": "start",
+        "scheduler_step": "start",
+        "selected_files": [],
+        "previous_exam_path": [],
+        "exam_docs_path": "",
+        "exam_docs": "",
+        "concepts_for_exam": [],
+        "problems": [],
+        "docs": [],
+        "pdf_content": "",
+        "pdfs": []
     }
 
-def get_all_docs(file_path: str):
-    loader = PDFPlumberLoader(file_path=file_path)
-    docs = loader.load()
-    full_text = ""
-    for doc in docs:
-        full_text += doc.page_content
-    return full_text
+from app.services.s3_file_service import S3StorageManager
 
-def search_documents_for_qa(user_id: str, query: str, k: int = 10):
+def get_all_docs(file_path: str):
+    """PDF 파일에서 모든 텍스트 추출 (로컬 + S3 지원)"""
+    try:
+        local_path = file_path
+
+        if not os.path.exists(file_path):
+            if file_path.startswith("users/"):
+                s3 = S3StorageManager()
+                local_path = s3.download_to_tempfile(file_path)
+            else:
+                raise FileNotFoundError(f"지원되지 않는 경로: {file_path}")
+
+        loader = PDFPlumberLoader(file_path=local_path)
+        docs = loader.load()
+        return "".join(doc.page_content for doc in docs)
+
+    except Exception as e:
+        logger.error(f"PDF 로드 실패: {str(e)}")
+        return ""
+
+def search_documents_for_qa(user_id: str, query: str, k: int = 5):
     """
     질문을 위해 사용자의 ChromaDB에서 쿼리와 관련된 문서를 검색하는 함수
-    
-    Args:
-        user_id: 사용자 ID
-        query: 검색 쿼리
-        k: 반환할 결과 수
-    
-    Returns:
-        검색 결과 문서 리스트
     """
-    # 환경 변수 로드
-    envs = dotenv_values(".env")
-    api_key = envs["OPENAI_API_KEY"]
-    # 사용자 ChromaDB 경로
-    user_dir = f"{user_id}/chroma"
-    print(user_dir)
-    # user_dir = f"{user_id}/chroma/{folder}"
-    # 임베딩 모델 초기화
-    embeddings = OpenAIEmbeddings(api_key=api_key)
-    
-    # ChromaDB 로드
-    vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
-    
-    # 유사도 검색 실행
-    results = vectorstore.similarity_search_with_score(query, k=5)
-    
-    return results
+    try:
+        # 환경 변수 로드
+        envs = dotenv_values(".env")
+        api_key = envs.get("OPENAI_API_KEY") or settings.AI_API_KEY
+        
+        if not api_key:
+            logger.error("OpenAI API 키가 설정되지 않음")
+            return []
+        
+        # ChromaDB 경로
+        user_dir = f"{settings.CHROMADB_STORAGE_PATH}/{user_id}"
+        logger.info(f"ChromaDB 검색 경로: {user_dir}")
+        
+        # 임베딩 모델 초기화
+        embeddings = OpenAIEmbeddings(api_key=api_key)
+        
+        # ChromaDB 로드
+        vectorstore = Chroma(persist_directory=user_dir, embedding_function=embeddings)
+        
+        # 유사도 검색 실행
+        results = vectorstore.similarity_search_with_score(query, k=k)
+        
+        logger.info(f"검색 결과: {len(results)}개 문서 발견")
+        return results
+        
+    except Exception as e:
+        logger.error(f"ChromaDB 검색 실패: {str(e)}")
+        return []

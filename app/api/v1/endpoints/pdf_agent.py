@@ -1,5 +1,10 @@
 # app/api/v1/endpoints/pdf_agent.py
 
+# 🚫 이 라우터는 현재 사용되지 않으므로 비활성화 처리 (2025-05-27 기준)
+raise ImportError("pdf_agent router is temporarily disabled")
+
+# 아래 코드는 추후 다시 사용할 경우 주석 해제
+"""
 from fastapi import APIRouter, Body, HTTPException, Depends
 from typing import Dict, Any
 import logging
@@ -11,8 +16,7 @@ from app.services.pdf_agent.tools import get_initial_state
 from app.services.pdf_agent.nodes.common import (
     input_question_api,
     judge_the_purpose_of_the_input,
-    extract_target_file_from_question,
-    select_folder,
+    extract_target_file_from_question
 )
 
 router = APIRouter()
@@ -63,3 +67,4 @@ async def ask_question(
             "message": f"질문 처리 중 오류 발생: {str(e)}",
             "query": query
         }
+"""

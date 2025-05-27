@@ -36,7 +36,7 @@ async def upload_pdf(
     user_id: int,
     folder_name: str = Path(..., min_length=1, description="업로드할 폴더명"),
     files: List[UploadFile] = File(..., description="업로드할 PDF 파일들"),
-    storage = Depends(deps.get_storage_manager),  # ✅ deps에서 가져옴
+    storage = Depends(deps.get_storage_manager),
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -60,32 +60,38 @@ async def upload_pdf(
 
         # 성공한 파일들에 대해 후속 처리
         for file_info in results["success"]:
-            # 포인트 적립
-            await add_points(
-                db=db,
-                user_id=user_id,
-                action_type=PointActionType.PDF_UPLOAD,
-                description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
-            )
-
-            # DB에 파일 정보 기록
-            create_pdf_file(
-                db=db,
-                filename=file_info["saved_name"],
-                file_path=file_info["path"],  # S3 URL 또는 로컬 경로
-                owner_id=user_id
-            )
-
-            # 자동 파싱 및 ChromaDB 저장
             try:
-                process_pdf_upload(
-                    pdf_path=file_info["path"],  # S3 URL 또는 로컬 경로 처리
-                    user_id=str(user_id),
-                    folder_name=folder_name
+                # ✅ 포인트 적립 부분 주석 처리
+                # await add_points(
+                #     db=db,
+                #     user_id=user_id,
+                #     action_type=PointActionType.PDF_UPLOAD,
+                #     description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
+                # )
+
+                # DB에 파일 정보 기록
+                create_pdf_file(
+                    db=db,
+                    filename=file_info["saved_name"],
+                    file_path=file_info["path"],
+                    owner_id=user_id
                 )
-                logger.info(f"PDF 파싱 및 저장 성공: {file_info['path']}")
+
+                # ✅ 자동 파싱 및 ChromaDB 저장 (이제 실행될 거예요!)
+                process_result = process_pdf_upload(
+                    pdf_path=file_info["path"],
+                    user_id=str(user_id),
+                    folder_name=folder_name,
+                    docs_explanation=""
+                )
+                
+                if process_result["status"] == "success":
+                    logger.info(f"PDF 파싱 및 저장 성공: {file_info['path']}")
+                else:
+                    logger.error(f"PDF 파싱 실패: {process_result.get('message', 'Unknown error')}")
+                    
             except Exception as e:
-                logger.error(f"PDF 파싱 실패: {e}")
+                logger.error(f"PDF 후속 처리 실패: {e}")
                 # 파싱 실패해도 업로드 자체는 성공으로 처리
 
         return MultiUploadResult(**results)
