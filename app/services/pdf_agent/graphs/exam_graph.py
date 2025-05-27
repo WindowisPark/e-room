@@ -39,7 +39,7 @@ def add_exam_edge_on_graph(graph: StateGraph) -> StateGraph:
     graph.add_edge("get_all_files","get_concept_for_exam")
     graph.add_edge("get_concept_for_exam","refine_problems")
     graph.add_edge("refine_problems","save_exam")
-    graph.add_edge("save_exam","input_question")
+    graph.add_edge("save_exam", "finish")  # input_question 대신 finish로
     return graph
 
 def get_exam_graph(graph: StateGraph) -> StateGraph:

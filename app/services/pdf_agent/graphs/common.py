@@ -6,8 +6,9 @@ from app.services.pdf_agent.nodes import summary
 from langgraph.graph import StateGraph
 
 def add_common_node_on_graph(graph: StateGraph) -> StateGraph:
-    graph.add_node("input_question",common.input_question)
-    graph.add_node("judge_the_purpose_of_the_input",common.judge_the_purpose_of_the_input)
+    graph.add_node("input_question", common.input_question)
+    graph.add_node("judge_the_purpose_of_the_input", common.judge_the_purpose_of_the_input)
+    graph.add_node("finish", lambda state: state)  # ✅ 종료 노드 추가
     return graph
 
 def add_common_edge_on_graph(graph: StateGraph) -> StateGraph:

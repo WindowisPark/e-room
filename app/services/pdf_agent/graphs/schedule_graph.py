@@ -29,7 +29,7 @@ def add_schedule_edge_on_graph(graph: StateGraph) -> StateGraph:
         }
     )
     graph.add_edge("make_plans","save_plan")
-    graph.add_edge("save_plan","input_question")
+    graph.add_edge("save_plan", "finish")  # input_question 대신 finish로
 
     return graph
 

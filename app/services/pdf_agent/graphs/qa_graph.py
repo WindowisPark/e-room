@@ -11,7 +11,7 @@ def add_qa_node_on_graph(graph: StateGraph) -> StateGraph:
 
 
 def add_qa_edge_on_graph(graph: StateGraph) -> StateGraph:
-    graph.add_edge("start_point_of_qa_system","input_question")
+    graph.add_edge("start_point_of_qa_system", "finish")
     return graph
 
 

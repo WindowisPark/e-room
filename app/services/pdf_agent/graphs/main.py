@@ -23,9 +23,8 @@ def intergrate_graph() :
     graph = add_exam_edge_on_graph(graph)
     graph = add_qa_edge_on_graph(graph)
     graph = add_schedule_edge_on_graph(graph)
-    # ✅ recursion_limit 설정 추가
-    chain = graph.compile(
-        config={"recursion_limit": 100}  # 기본 25 → 100으로 증가
-    )
+    chain = graph.compile()
+
+    
     
     return chain
