@@ -100,8 +100,12 @@ class ImprovedWebSocketManager:
     async def handle_user_message(self, session_id: str, message: str):
         """사용자 메시지 처리 - 어댑터 패턴 활용 + DB 저장"""
         try:
-            # 🆕 사용자 메시지를 DB에 즉시 저장
-            self.session_manager.add_message_to_history(session_id, message)
+            # 🔧 수정: 문자열을 HumanMessage 객체로 변환해서 저장
+            from langchain_core.messages import HumanMessage
+            
+            # 사용자 메시지를 DB에 저장 (HumanMessage 객체로)
+            human_message = HumanMessage(content=message)
+            self.session_manager.add_message_to_history(session_id, human_message)
             
             session_data = self.session_manager.get_session(session_id)
             if not session_data:

@@ -204,19 +204,35 @@ class SessionManager:
             logger.error(f"❌ 세션 업데이트 실패: {str(e)}")
             return False
     
-    def add_message_to_history(self, session_id: str, message, extra_data: Optional[Dict] = None):  # ✅ 수정
-        """메시지 영구 저장"""
-        with SessionLocal() as db:
-            if hasattr(message, 'content'):
-                message_type = "user" if "HumanMessage" in str(type(message)) else "ai"
-                content = message.content
-            else:
-                message_type = "system"
-                content = str(message)
-            
-            PersistentChatService.add_message(
-                db, session_id, message_type, content, extra_data  # ✅ 수정
-            )
+    def add_message_to_history(self, session_id: str, message, extra_data: Optional[Dict] = None):
+        """메시지 영구 저장 - content 속성 오류 수정"""
+        try:
+            with SessionLocal() as db:
+                # 메시지 타입과 내용 추출
+                if hasattr(message, 'content'):
+                    # LangChain 메시지 객체
+                    message_type = "user" if "HumanMessage" in str(type(message)) else "ai"
+                    content = message.content
+                elif isinstance(message, str):
+                    # 문자열로 직접 전달된 경우
+                    message_type = "user"
+                    content = message
+                elif isinstance(message, dict) and "content" in message:
+                    # dict 형태로 전달된 경우
+                    message_type = message.get("type", "user")
+                    content = message["content"]
+                else:
+                    # 기타 경우
+                    message_type = "system"
+                    content = str(message)
+                
+                PersistentChatService.add_message(
+                    db, session_id, message_type, content, extra_data
+                )
+                logger.debug(f"✅ 메시지 저장 성공: {session_id}, type: {message_type}")
+                
+        except Exception as e:
+            logger.error(f"❌ 메시지 히스토리 추가 실패: {str(e)}")
     
     def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:
         """메시지 히스토리에 메시지 추가"""
