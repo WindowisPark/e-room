@@ -67,9 +67,8 @@ class SessionManager:
     """Redis 기반 세션 관리자 (JSON 직렬화 지원)"""
     
     def __init__(self):
-        # 메모리 캐시 (빠른 접근용)
         self.memory_sessions: Dict[str, Dict] = {}
-        self.connection_ttl = 3600  # 1시간
+        self.connection_ttl = 3600
       
     
     def _safe_serialize(self, data: Any) -> str:
@@ -159,41 +158,51 @@ class SessionManager:
             return session_id
     
     def get_session(self, session_id: str) -> Optional[Dict]:
-        """세션 조회 (메모리 우선, DB 백업)"""
-        # 1. 메모리에서 먼저 찾기
-        if session_id in self.memory_sessions:
-            return self.memory_sessions[session_id]
-        
-        # 2. DB에서 찾아서 메모리에 로드
-        with SessionLocal() as db:
-            db_session = PersistentChatService.get_session(db, session_id)
-            if db_session:
-                session_data = {
-                    "user_id": str(db_session.user_id),
-                    "task_type": db_session.task_type,
-                    "created_at": db_session.created_at.isoformat(),
-                    "agent_state": db_session.agent_state or {},
-                    "waiting_for": db_session.waiting_for,
-                    "current_request_type": db_session.current_request_type
-                }
-                
-                # 메모리에 캐시
-                self.memory_sessions[session_id] = session_data
-                return session_data
-        
-        return None
+        """세션 조회 - 역직렬화 처리"""
+        try:
+            # 1. 메모리에서 먼저 찾기
+            if session_id in self.memory_sessions:
+                return self.memory_sessions[session_id]
+            
+            # 2. DB에서 찾아서 메모리에 로드
+            with SessionLocal() as db:
+                db_session = PersistentChatService.get_session(db, session_id)
+                if db_session:
+                    session_data = {
+                        "user_id": str(db_session.user_id),
+                        "task_type": db_session.task_type,
+                        "created_at": db_session.created_at.isoformat(),
+                        "agent_state": db_session.agent_state or {},
+                        "waiting_for": db_session.waiting_for,
+                        "current_request_type": db_session.current_request_type
+                    }
+                    
+                    # 메모리에 캐시
+                    self.memory_sessions[session_id] = session_data
+                    return session_data
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ 세션 조회 실패: {str(e)}")
+            return None
     
     def update_session(self, session_id: str, data: Dict[str, Any]) -> bool:
-        """세션 업데이트 (메모리 + DB 동기화)"""
-        # 1. 메모리 업데이트
-        if session_id in self.memory_sessions:
-            self.memory_sessions[session_id].update(data)
-        
-        # 2. DB 업데이트
-        with SessionLocal() as db:
-            PersistentChatService.update_session_state(db, session_id, data)
-        
-        return True
+        """세션 업데이트 - JSON 직렬화 오류 방지"""
+        try:
+            # 1. 메모리 업데이트
+            if session_id in self.memory_sessions:
+                self.memory_sessions[session_id].update(data)
+            
+            # 2. DB 업데이트 (직렬화 처리됨)
+            with SessionLocal() as db:
+                PersistentChatService.update_session_state(db, session_id, data)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 세션 업데이트 실패: {str(e)}")
+            return False
     
     def add_message_to_history(self, session_id: str, message, extra_data: Optional[Dict] = None):  # ✅ 수정
         """메시지 영구 저장"""

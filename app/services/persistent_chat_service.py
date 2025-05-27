@@ -7,9 +7,84 @@ from app.models.user import User
 import uuid
 import json
 from datetime import datetime
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+
 
 class PersistentChatService:
     """영구 채팅 세션 관리 서비스"""
+
+    @staticmethod
+    def _serialize_agent_state(state_data: Dict[str, Any]) -> Dict[str, Any]:
+        """LangChain 메시지를 JSON 직렬화 가능한 형태로 변환"""
+        if not state_data:
+            return state_data
+            
+        # 깊은 복사로 원본 보존
+        serialized_state = {}
+        
+        for key, value in state_data.items():
+            if key == "messages" and isinstance(value, list):
+                # LangChain 메시지들을 dict로 변환
+                serialized_messages = []
+                for msg in value:
+                    if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                        msg_dict = {
+                            "type": msg.__class__.__name__,
+                            "content": msg.content
+                        }
+                        # 추가 속성이 있다면 포함
+                        if hasattr(msg, 'additional_kwargs'):
+                            msg_dict["additional_kwargs"] = msg.additional_kwargs
+                        serialized_messages.append(msg_dict)
+                    else:
+                        # 이미 dict 형태라면 그대로
+                        serialized_messages.append(msg)
+                serialized_state[key] = serialized_messages
+            elif key == "agent_state":
+                # 중첩된 agent_state 재귀 처리
+                serialized_state[key] = PersistentChatService._serialize_agent_state(value)
+            else:
+                # 기본 직렬화 가능한 타입들
+                try:
+                    json.dumps(value)  # 직렬화 테스트
+                    serialized_state[key] = value
+                except (TypeError, ValueError):
+                    # 직렬화 불가능한 객체는 문자열로 변환
+                    serialized_state[key] = str(value)
+        
+        return serialized_state    
+    
+    def _deserialize_agent_state(state_data: Dict[str, Any]) -> Dict[str, Any]:
+        """직렬화된 state를 LangChain 메시지로 복원"""
+        if not state_data or "messages" not in state_data:
+            return state_data
+            
+        deserialized_state = state_data.copy()
+        
+        if "messages" in state_data and isinstance(state_data["messages"], list):
+            restored_messages = []
+            for msg_dict in state_data["messages"]:
+                if isinstance(msg_dict, dict) and "type" in msg_dict and "content" in msg_dict:
+                    # dict에서 LangChain 메시지로 복원
+                    msg_type = msg_dict["type"]
+                    content = msg_dict["content"]
+                    
+                    if msg_type == "HumanMessage":
+                        restored_messages.append(HumanMessage(content=content))
+                    elif msg_type == "AIMessage":
+                        restored_messages.append(AIMessage(content=content))
+                    elif msg_type == "SystemMessage":
+                        restored_messages.append(SystemMessage(content=content))
+                    else:
+                        # 알 수 없는 타입은 HumanMessage로 기본값
+                        restored_messages.append(HumanMessage(content=content))
+                else:
+                    # 이미 메시지 객체거나 다른 형태
+                    restored_messages.append(msg_dict)
+            
+            deserialized_state["messages"] = restored_messages
+        
+        return deserialized_state    
     
     @staticmethod
     def create_session(db: Session, user_id: int, task_type: str = "qa") -> str:
@@ -31,11 +106,19 @@ class PersistentChatService:
     
     @staticmethod
     def get_session(db: Session, session_id: str) -> Optional[ChatSession]:
-        """세션 조회"""
-        return db.query(ChatSession).filter(
+        """세션 조회 - 역직렬화 처리"""
+        session = db.query(ChatSession).filter(
             ChatSession.session_id == session_id,
             ChatSession.is_active == True
         ).first()
+        
+        if session and session.agent_state:
+            # 저장된 agent_state를 LangChain 메시지로 복원
+            session.agent_state = PersistentChatService._deserialize_agent_state(
+                session.agent_state
+            )
+        
+        return session
     
     @staticmethod
     def update_session_title(db: Session, session_id: str, title: str):
@@ -48,10 +131,17 @@ class PersistentChatService:
     
     @staticmethod
     def update_session_state(db: Session, session_id: str, state_data: Dict[str, Any]):
-        """세션 상태 업데이트"""
+        """세션 상태 업데이트 - 직렬화 처리"""
         session = db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
         if session:
-            session.agent_state = state_data.get("agent_state")
+            # LangChain 메시지들을 직렬화
+            serialized_agent_state = None
+            if state_data.get("agent_state"):
+                serialized_agent_state = PersistentChatService._serialize_agent_state(
+                    state_data["agent_state"]
+                )
+            
+            session.agent_state = serialized_agent_state
             session.waiting_for = state_data.get("waiting_for")
             session.current_request_type = state_data.get("current_request_type")
             session.task_type = state_data.get("task_type", session.task_type)
