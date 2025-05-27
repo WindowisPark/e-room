@@ -711,3 +711,279 @@ async def create_improved_chat_session(
     except Exception as e:
         logger.error(f"새 개선된 채팅 세션 생성 오류: {str(e)}")
         raise HTTPException(status_code=500, detail="세션 생성 중 오류가 발생했습니다.")
+    
+@router.get(
+    "/improved-chat/sessions/{session_id}/history",
+    summary="개선된 채팅 히스토리 조회",
+    description="특정 세션의 모든 메시지 기록을 시간순으로 조회"
+)
+async def get_improved_chat_history(
+    session_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """세션의 전체 채팅 기록 조회 (메시지 목록, 타임스탬프, 메타데이터 포함)"""
+    try:
+        # 세션 소유자 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        history = improved_manager.session_manager.get_chat_history(session_id)
+        
+        return {
+            "session_id": session_id,
+            "title": session_data.get("chat_title", "새 채팅"),
+            "created_at": session_data.get("created_at"),
+            "message_history": history,
+            "message_count": len(history),
+            "manager_type": "improved"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 채팅 히스토리 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="히스토리 조회 중 오류가 발생했습니다.")
+
+
+@router.delete(
+    "/improved-chat/sessions/{session_id}",
+    summary="개선된 채팅 세션 삭제",
+    description="특정 세션과 관련된 모든 데이터를 영구 삭제 (복구 불가)"
+)
+async def delete_improved_chat_session(
+    session_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """세션 및 관련 메시지 완전 삭제 (DB에서 soft delete 처리)"""
+    try:
+        # 세션 소유자 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        # 세션 삭제 (실제로는 soft delete)
+        success = improved_manager.session_manager.cleanup_session(session_id)
+        
+        if success:
+            return {
+                "session_id": session_id,
+                "message": "개선된 채팅 세션이 삭제되었습니다.",
+                "manager_type": "improved"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="세션 삭제에 실패했습니다.")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 채팅 세션 삭제 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="세션 삭제 중 오류가 발생했습니다.")
+
+
+@router.patch(
+    "/improved-chat/sessions/{session_id}/title",
+    summary="개선된 채팅 제목 수정",
+    description="사용자가 채팅방 이름을 직접 변경할 수 있도록 제목 업데이트"
+)
+async def update_improved_chat_title(
+    session_id: str,
+    title_data: dict,  # {"title": "새로운 제목"}
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """채팅방 제목 변경 (100자 제한, 특수문자 필터링)"""
+    try:
+        # 세션 소유자 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        new_title = title_data.get("title", "").strip()
+        if not new_title:
+            raise HTTPException(status_code=400, detail="제목을 입력해주세요.")
+        
+        # 제목 길이 제한 및 정제
+        if len(new_title) > 100:
+            new_title = new_title[:100]
+        
+        success = improved_manager.session_manager.update_session(session_id, {"chat_title": new_title})
+        
+        if success:
+            return {
+                "session_id": session_id,
+                "title": new_title,
+                "message": "개선된 채팅 제목이 변경되었습니다.",
+                "manager_type": "improved"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="제목 변경에 실패했습니다.")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 채팅 제목 변경 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="제목 변경 중 오류가 발생했습니다.")
+
+
+@router.get(
+    "/improved-chat/sessions/{user_id}/stats",
+    summary="개선된 채팅 사용 통계",
+    description="사용자의 채팅 활동 통계 (총 세션 수, 메시지 수, 작업 타입별 분포)"
+)
+async def get_improved_chat_stats(
+    user_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """사용자 채팅 통계 (세션 수, 메시지 수, 작업 타입별 분포, 최근 활동)"""
+    try:
+        # 권한 확인
+        if current_user.id != int(user_id) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        stats = improved_manager.session_manager.get_session_stats(user_id)
+        stats["manager_type"] = "improved"
+        
+        return stats
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 채팅 통계 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="통계 조회 중 오류가 발생했습니다.")
+
+
+@router.post(
+    "/improved-chat/sessions/{session_id}/reconnect",
+    summary="개선된 채팅 세션 재연결",
+    description="기존 세션에 다시 연결 (세션 만료 시간 연장, 상태 복원)"
+)
+async def reconnect_improved_chat_session(
+    session_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """기존 세션 재활성화 (TTL 연장, 상태 검증, 메타데이터 갱신)"""
+    try:
+        # 세션 존재 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        # 세션 소유자 확인
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        # TTL 연장
+        improved_manager.session_manager.extend_session_ttl(session_id)
+        
+        return {
+            "session_id": session_id,
+            "title": session_data.get("chat_title", "새 채팅"),
+            "task_type": session_data.get("task_type", "qa"),
+            "waiting_for": session_data.get("waiting_for"),
+            "message": "개선된 세션에 재연결되었습니다.",
+            "manager_type": "improved"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 세션 재연결 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="재연결 중 오류가 발생했습니다.")
+
+
+@router.get(
+    "/improved-chat/sessions/{session_id}/status",
+    summary="개선된 채팅 세션 상태 조회",  
+    description="현재 세션의 작업 진행 상황 및 대기 중인 입력 확인"
+)
+async def get_improved_chat_session_status(
+    session_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """세션 현재 상태 조회 (작업 타입, 대기 입력, 진행 단계 등)"""
+    try:
+        # 세션 소유자 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        return {
+            "session_id": session_id,
+            "task_type": session_data.get("task_type", "qa"),
+            "waiting_for": session_data.get("waiting_for"),
+            "current_request_type": session_data.get("current_request_type"),
+            "created_at": session_data.get("created_at"),
+            "is_active": session_id in improved_manager.active_connections,
+            "manager_type": "improved"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 세션 상태 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="상태 조회 중 오류가 발생했습니다.")
+
+
+@router.post(
+    "/improved-chat/sessions/{session_id}/reset",
+    summary="개선된 채팅 세션 초기화",
+    description="현재 진행 중인 작업을 중단하고 QA 모드로 초기화"
+)
+async def reset_improved_chat_session(
+    session_id: str,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """세션 상태 초기화 (진행 중인 작업 중단, QA 모드로 변경)"""
+    try:
+        # 세션 소유자 확인
+        session_data = improved_manager.session_manager.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        
+        if current_user.id != int(session_data["user_id"]) and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+        
+        # 세션 상태 초기화
+        reset_data = {
+            "task_type": "qa",
+            "waiting_for": None,
+            "current_request_type": None,
+            "agent_state": {}
+        }
+        
+        success = improved_manager.session_manager.update_session(session_id, reset_data)
+        
+        if success:
+            return {
+                "session_id": session_id,
+                "task_type": "qa",
+                "message": "세션이 초기화되었습니다. 새로운 작업을 시작할 수 있습니다.",
+                "manager_type": "improved"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="세션 초기화에 실패했습니다.")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"개선된 세션 초기화 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="세션 초기화 중 오류가 발생했습니다.")
