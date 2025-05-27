@@ -27,3 +27,6 @@ from app.models.password_reset import PasswordResetToken
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
 from app.models.team_activity import TeamActivity
 from app.models.event import InviteCode, Event, EventStatus, EventType
+
+# 🆕 채팅 모델 추가
+from app.models.chat import ChatSession, ChatMessage

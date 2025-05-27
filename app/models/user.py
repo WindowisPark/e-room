@@ -46,6 +46,9 @@ class User(Base):
     oauth_id = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
 
+    #채팅 세션 관계 추가
+    chat_sessions = relationship("ChatSession", back_populates="user")
+
     # 👥 팀
     owned_teams = relationship("Team", back_populates="owner", foreign_keys="Team.owner_id")
     team_memberships = relationship("TeamMember", back_populates="user")

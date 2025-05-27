@@ -27,6 +27,8 @@ from app.models.tag import PDFFile, PDFTag, PDFTagMention
 # 6. 비밀번호 재설정 모델
 from app.models.password_reset import PasswordResetToken
 
+# 🆕 채팅 모델 추가
+from app.models.chat import ChatSession, ChatMessage
 
 # 모든 모델을 모아서 리스트로 정의 (필요시 사용)
 ALL_MODELS = [
@@ -48,6 +50,9 @@ ALL_MODELS = [
     
     # PDF 관련 모델
     PDFFile, PDFTag, PDFTagMention,
+
+    # 🆕 채팅 모델 추가
+    ChatSession, ChatMessage,
 
     # 비밀번호 재설정 모델
     PasswordResetToken
@@ -76,6 +81,9 @@ __all__ = [
 
     # 비밀번호 재설정 모델
     'PasswordResetToken',
+
+    # 🆕 채팅 모델 추가
+    'ChatSession', 'ChatMessage',
 
     # 모델 컬렉션
     'ALL_MODELS'

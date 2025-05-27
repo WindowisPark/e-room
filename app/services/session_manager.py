@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from app.core.config import settings
+from app.services.persistent_chat_service import PersistentChatService
+from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -64,21 +66,11 @@ class MessageDecoder:
 class SessionManager:
     """Redis 기반 세션 관리자 (JSON 직렬화 지원)"""
     
-    def __init__(self, redis_url: str = settings.REDIS_URL, default_ttl: int = 3600):
-        try:
-            self.redis_client = redis.from_url(redis_url, decode_responses=True)
-            self.redis_client.ping()  # 연결 테스트
-            self.default_ttl = default_ttl
-            self.encoder = MessageEncoder()
-            self.decoder = MessageDecoder()
-            logger.info("✅ Redis 연결 성공")
-        except Exception as e:
-            logger.warning(f"⚠️ Redis 연결 실패: {str(e)}, 메모리 기반으로 대체")
-            self.redis_client = None
-            self.memory_store = {}  # 메모리 기반 대체 저장소
-            self.default_ttl = default_ttl
-            self.encoder = MessageEncoder()
-            self.decoder = MessageDecoder()
+    def __init__(self):
+        # 메모리 캐시 (빠른 접근용)
+        self.memory_sessions: Dict[str, Dict] = {}
+        self.connection_ttl = 3600  # 1시간
+      
     
     def _safe_serialize(self, data: Any) -> str:
         """안전한 JSON 직렬화 (LangChain 메시지 지원)"""
@@ -150,95 +142,72 @@ class SessionManager:
         return data
     
     def create_session(self, user_id: str, task_type: str = "qa") -> str:
-        """새 세션 생성"""
-        session_id = f"{user_id}:{uuid.uuid4().hex[:8]}"
-        
-        session_data = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "task_type": task_type,
-            "created_at": datetime.now().isoformat(),
-            "last_activity": datetime.now().isoformat(),
-            "chat_title": "새 채팅",
-            "message_history": [],
-            "agent_state": {},
-            "waiting_for": None,
-            "current_request_type": None
-        }
-        
-        key = f"session:{session_id}"
-        
-        try:
-            serialized_data = self._safe_serialize(session_data)
+        """영구 세션 생성"""
+        with SessionLocal() as db:
+            session_id = PersistentChatService.create_session(db, int(user_id), task_type)
             
-            if self.redis_client:
-                self.redis_client.setex(key, self.default_ttl, serialized_data)
-            else:
-                self.memory_store[key] = {
-                    "data": serialized_data,
-                    "expires_at": datetime.now() + timedelta(seconds=self.default_ttl)
-                }
+            # 메모리 캐시에도 저장
+            self.memory_sessions[session_id] = {
+                "user_id": user_id,
+                "task_type": task_type,
+                "created_at": datetime.now().isoformat(),
+                "agent_state": {},
+                "waiting_for": None,
+                "current_request_type": None
+            }
             
-            logger.info(f"✅ 세션 생성: {session_id}")
             return session_id
-            
-        except Exception as e:
-            logger.error(f"❌ 세션 생성 실패: {str(e)}")
-            raise
     
     def get_session(self, session_id: str) -> Optional[Dict]:
-        """세션 데이터 조회"""
-        key = f"session:{session_id}"
+        """세션 조회 (메모리 우선, DB 백업)"""
+        # 1. 메모리에서 먼저 찾기
+        if session_id in self.memory_sessions:
+            return self.memory_sessions[session_id]
         
-        try:
-            if self.redis_client:
-                data_str = self.redis_client.get(key)
-                if data_str:
-                    return self._safe_deserialize(data_str)
-            else:
-                if key in self.memory_store:
-                    stored = self.memory_store[key]
-                    if datetime.now() < stored["expires_at"]:
-                        return self._safe_deserialize(stored["data"])
-                    else:
-                        del self.memory_store[key]  # 만료된 데이터 삭제
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"❌ 세션 조회 실패: {str(e)}")
-            return None
-    
-    def update_session(self, session_id: str, update_data: Dict) -> bool:
-        """세션 데이터 업데이트"""
-        try:
-            current_data = self.get_session(session_id)
-            if not current_data:
-                logger.warning(f"⚠️ 세션을 찾을 수 없음: {session_id}")
-                return False
-            
-            # 데이터 병합
-            current_data.update(update_data)
-            current_data["last_activity"] = datetime.now().isoformat()
-            
-            # 저장
-            key = f"session:{session_id}"
-            serialized_data = self._safe_serialize(current_data)
-            
-            if self.redis_client:
-                self.redis_client.setex(key, self.default_ttl, serialized_data)
-            else:
-                self.memory_store[key] = {
-                    "data": serialized_data,
-                    "expires_at": datetime.now() + timedelta(seconds=self.default_ttl)
+        # 2. DB에서 찾아서 메모리에 로드
+        with SessionLocal() as db:
+            db_session = PersistentChatService.get_session(db, session_id)
+            if db_session:
+                session_data = {
+                    "user_id": str(db_session.user_id),
+                    "task_type": db_session.task_type,
+                    "created_at": db_session.created_at.isoformat(),
+                    "agent_state": db_session.agent_state or {},
+                    "waiting_for": db_session.waiting_for,
+                    "current_request_type": db_session.current_request_type
                 }
+                
+                # 메모리에 캐시
+                self.memory_sessions[session_id] = session_data
+                return session_data
+        
+        return None
+    
+    def update_session(self, session_id: str, data: Dict[str, Any]) -> bool:
+        """세션 업데이트 (메모리 + DB 동기화)"""
+        # 1. 메모리 업데이트
+        if session_id in self.memory_sessions:
+            self.memory_sessions[session_id].update(data)
+        
+        # 2. DB 업데이트
+        with SessionLocal() as db:
+            PersistentChatService.update_session_state(db, session_id, data)
+        
+        return True
+    
+    def add_message_to_history(self, session_id: str, message, metadata: Optional[Dict] = None):
+        """메시지 영구 저장"""
+        with SessionLocal() as db:
+            if hasattr(message, 'content'):
+                message_type = "user" if "HumanMessage" in str(type(message)) else "ai"
+                content = message.content
+            else:
+                message_type = "system"
+                content = str(message)
             
-            logger.debug(f"✅ 세션 업데이트: {session_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ 세션 업데이트 실패: {session_id}, {str(e)}")
-            return False
+            PersistentChatService.add_message(
+                db, session_id, message_type, content, metadata
+            )
     
     def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:
         """메시지 히스토리에 메시지 추가"""
@@ -271,15 +240,9 @@ class SessionManager:
             return False
     
     def get_chat_history(self, session_id: str) -> List[Dict]:
-        """채팅 히스토리 조회"""
-        try:
-            session_data = self.get_session(session_id)
-            if session_data:
-                return session_data.get("message_history", [])
-            return []
-        except Exception as e:
-            logger.error(f"❌ 채팅 히스토리 조회 실패: {str(e)}")
-            return []
+        """채팅 기록 조회"""
+        with SessionLocal() as db:
+            return PersistentChatService.get_chat_history(db, session_id)
     
     def cleanup_session(self, session_id: str) -> bool:
         """세션 삭제"""
@@ -325,46 +288,9 @@ class SessionManager:
             return False
     
     def get_user_chat_sessions(self, user_id: str, limit: int = 20) -> List[Dict]:
-        """사용자의 채팅 세션 목록 조회"""
-        try:
-            sessions = []
-            pattern = f"session:{user_id}:*"
-            
-            if self.redis_client:
-                keys = self.redis_client.keys(pattern)
-                for key in keys[:limit]:
-                    session_data = self.get_session(key.replace("session:", ""))
-                    if session_data:
-                        sessions.append({
-                            "session_id": session_data.get("session_id"),
-                            "title": session_data.get("chat_title", "새 채팅"),
-                            "created_at": session_data.get("created_at"),
-                            "last_activity": session_data.get("last_activity"),
-                            "task_type": session_data.get("task_type", "qa"),
-                            "message_count": len(session_data.get("message_history", []))
-                        })
-            else:
-                # 메모리 스토어에서 검색
-                for key, stored in self.memory_store.items():
-                    if key.startswith(f"session:{user_id}:") and datetime.now() < stored["expires_at"]:
-                        session_data = self._safe_deserialize(stored["data"])
-                        if session_data:
-                            sessions.append({
-                                "session_id": session_data.get("session_id"),
-                                "title": session_data.get("chat_title", "새 채팅"),
-                                "created_at": session_data.get("created_at"),
-                                "last_activity": session_data.get("last_activity"),
-                                "task_type": session_data.get("task_type", "qa"),
-                                "message_count": len(session_data.get("message_history", []))
-                            })
-            
-            # 마지막 활동 시간 기준 정렬
-            sessions.sort(key=lambda x: x.get("last_activity", ""), reverse=True)
-            return sessions[:limit]
-            
-        except Exception as e:
-            logger.error(f"❌ 사용자 세션 목록 조회 실패: {str(e)}")
-            return []
+        """사용자 채팅 세션 목록"""
+        with SessionLocal() as db:
+            return PersistentChatService.get_user_sessions(db, int(user_id), limit)
     
     def get_session_stats(self, user_id: str) -> Dict:
         """사용자 세션 통계"""
