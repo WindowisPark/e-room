@@ -1,10 +1,12 @@
+# ===== 2. app/api/v1/__init__.py 수정 =====
+
 from fastapi import APIRouter
 
 from app.api.v1 import auth
 from app.api.v1.endpoints import (
     attendance, notifications, payments, question, tags, teams,
     phone_verification, team_pdf, team_activity, gamification, badges,
-    user, events  # ✅ 추가
+    user, events, generated_files  # ✅ generated_files 추가
 )
 
 api_router = APIRouter()
@@ -22,4 +24,5 @@ api_router.include_router(badges.router, prefix="/gamification", tags=["배지"]
 api_router.include_router(question.router, prefix="/questions", tags=["질문"])
 api_router.include_router(tags.router, prefix="/tags", tags=["태그"])
 api_router.include_router(payments.router, prefix="/payments", tags=["결제"])
-api_router.include_router(events.router, prefix="/events", tags=["이벤트"])  # ✅ 다음 줄 추가!
+api_router.include_router(events.router, prefix="/events", tags=["이벤트"])
+api_router.include_router(generated_files.router, prefix="/files", tags=["생성된 파일"])  # ✅ 추가!
