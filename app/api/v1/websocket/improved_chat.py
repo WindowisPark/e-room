@@ -615,8 +615,23 @@ async def improved_websocket_endpoint(
                     })
 
                 elif message_type in ["importance_input", "deadline_input"]:
-                    # 텍스트 메시지로 처리
-                    content = message_data.get("data", {}).get("message", "")
+                    # 텍스트 메시지로 처리 - 다양한 데이터 구조 지원
+                    data = message_data.get("data", {})
+                    
+                    # 데이터 구조에 따라 content 추출
+                    if isinstance(data, str):
+                        content = data  # data가 바로 문자열인 경우
+                    elif isinstance(data, dict):
+                        content = data.get("message", "") or data.get("content", "") or data.get("text", "")
+                    else:
+                        content = str(data)  # 기타 타입은 문자열로 변환
+                    
+                    logger.info(f"추출된 content: '{content}'")  # 디버깅용 로그
+                    
+                    if not content.strip():
+                        await improved_manager.send_error(session_id, "입력 내용이 비어있습니다.")
+                        continue
+                        
                     await improved_manager.handle_user_message(session_id, content)
                     
                 else:
