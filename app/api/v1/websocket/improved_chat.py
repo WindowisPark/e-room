@@ -63,7 +63,6 @@ class ImprovedWebSocketManager:
                     self.session_manager.add_message_to_history(
                         session_id, 
                         content,  # ← 그냥 문자열로
-                        extra_data
                     )
                     
             except Exception as e:
@@ -615,18 +614,10 @@ async def improved_websocket_endpoint(
                         "timestamp": improved_manager.get_timestamp()
                     })
 
-                elif message_type == "importance_input":
-                    # 스케줄러 중요도 입력
-                    await improved_manager.handle_importance_input(
-                        session_id,
-                        message_data["data"]
-                    )
-                elif message_type == "deadline_input":
-                    # 스케줄러 마감일 입력  
-                    await improved_manager.handle_deadline_input(
-                        session_id,
-                        message_data["data"]
-                    )
+                elif message_type in ["importance_input", "deadline_input"]:
+                    # 텍스트 메시지로 처리
+                    content = message_data.get("data", {}).get("message", "")
+                    await improved_manager.handle_user_message(session_id, content)
                     
                 else:
                     logger.warning(f"알 수 없는 메시지 타입: {message_type}")

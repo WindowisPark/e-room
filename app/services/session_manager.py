@@ -234,35 +234,6 @@ class SessionManager:
         except Exception as e:
             logger.error(f"❌ 메시지 히스토리 추가 실패: {str(e)}")
     
-    def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:
-        """메시지 히스토리에 메시지 추가"""
-        try:
-            # 메시지를 직렬화 가능한 형태로 변환
-            message_dict = {
-                "type": message.__class__.__name__,
-                "content": message.content,
-                "timestamp": datetime.now().isoformat(),
-                "additional_kwargs": getattr(message, 'additional_kwargs', {})
-            }
-            
-            current_data = self.get_session(session_id)
-            if not current_data:
-                return False
-            
-            if "message_history" not in current_data:
-                current_data["message_history"] = []
-            
-            current_data["message_history"].append(message_dict)
-            
-            # 메시지 히스토리 길이 제한 (최대 100개)
-            if len(current_data["message_history"]) > 100:
-                current_data["message_history"] = current_data["message_history"][-100:]
-            
-            return self.update_session(session_id, current_data)
-            
-        except Exception as e:
-            logger.error(f"❌ 메시지 히스토리 추가 실패: {str(e)}")
-            return False
     
     def get_chat_history(self, session_id: str) -> List[Dict]:
         """채팅 기록 조회"""
