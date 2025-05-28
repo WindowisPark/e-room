@@ -176,11 +176,14 @@ class ImprovedWebSocketManager:
             state = session_data.get("agent_state", {})
             
             logger.info(f"대기 입력 처리: waiting_for={waiting_for}, task_type={task_type}")
-            
+            logger.info(f"입력 메시지: {message}")
+
             if waiting_for == "importance_input":
                 # 스케줄러 중요도 입력 파싱
                 importance = self.parse_importance_input(message, state.get("subjects", []))
+                subjects = state.get("subjects", []) 
                 logger.info(f"중요도 파싱 결과: {importance}")
+                logger.info(f"현재 subjects: {subjects}")  # ← 추가
                 
                 state["importance"] = importance
                 state["scheduler_step"] = "importance_set"
@@ -189,6 +192,8 @@ class ImprovedWebSocketManager:
                     "agent_state": state,
                     "waiting_for": None
                 })
+                logger.info("세션 업데이트 완료")  # ← 이렇게 변경
+                
                 
                 await self.adapter.adapt_schedule_flow(session_id, state)
                 

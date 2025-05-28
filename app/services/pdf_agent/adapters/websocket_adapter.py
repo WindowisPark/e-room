@@ -167,6 +167,10 @@ class WebSocketNodeAdapter:
         try:
             schedule_step = state.get("scheduler_step", "start")
             logger.info(f"Schedule 플로우 단계: {schedule_step}")
+
+            # 전체 상태 로그 (민감한 정보 제외)
+            state_keys = list(state.keys())
+            logger.info(f"현재 state 키들: {state_keys}")
             
             if schedule_step == "start":
                 # 학습자료 다중 선택 요청
