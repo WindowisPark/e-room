@@ -17,7 +17,8 @@ llm = ChatOpenAI(model="gpt-4.1-mini")
 logger = logging.getLogger(__name__)
 
 def start_point_of_summary(state: AgentState):
-    print("요약 그래프 시작")
+    pdf_path = input("요약하고 싶은 파일의 경로를 입력해주세요.")
+    return {"pdf_path":pdf_path}
 
 def get_related_pdf(state : AgentState):
     pdf_path = state["pdf_path"]
