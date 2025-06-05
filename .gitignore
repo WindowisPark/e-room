@@ -285,3 +285,23 @@ temp/
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+# Sensitive files (중요!)
+.env*
+*_backup*
+*.backup
+.env.backup
+
+# Large files
+*.sqlite3-wal
+*.sqlite3-shm
+storage/chromadb/
+*.db
+*.sqlite3
+
+# Build artifacts
+static/assets/
+planova_web/static/assets/
+node_modules/
+dist/
+build/
+
