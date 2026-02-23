@@ -5,82 +5,52 @@ services:
     build:
       context: ./
       dockerfile: docker/backend/Dockerfile.dev
-    container_name: ai_agent_api_dev
+    container_name: planova_api
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./storage:/app/storage
-      - ./static:/app/static:ro
-      - ./app/scripts:/app/scripts
       - ./alembic.ini:/app/alembic.ini
-      - ./Board_Backend/src/main/webapp/resources:/app/Board_Backend/src/main/webapp/resources
     env_file:
       - .env
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
       - POSTGRES_DB=agent_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - ENVIRONMENT=development
     depends_on:
       - db
       - redis
-    restart: always
+    restart: unless-stopped
 
   db:
     image: pgvector/pgvector:pg16
-    container_name: ai_agent_postgres
+    container_name: planova_postgres
     ports:
       - "5433:5432"
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password123
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=agent_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations/init.sql:/docker-entrypoint-initdb.d/10-init.sql
       - ./migrations/init_pgvector.sql:/docker-entrypoint-initdb.d/20-init_pgvector.sql
-    restart: always
+    restart: unless-stopped
 
   redis:
     image: redis:alpine
-    container_name: ai_agent_redis
+    container_name: planova_redis
     ports:
       - "6380:6379"
     volumes:
       - redis_data:/data
-    restart: always
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: ai_agent_redis_ui
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
-    restart: always
-
-  nginx:
-    build:
-      context: ./nginx
-    container_name: ai_agent_nginx
-    ports:
-      - "80:80"
-      - "443:443"      # ✅ 여기를 추가해야 외부에서 HTTPS 접근 가능
-    volumes:
-      - ./static:/usr/share/nginx/html
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - api
-    restart: always
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
-
-

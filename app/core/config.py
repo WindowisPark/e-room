@@ -1,121 +1,111 @@
-# app/core/config.py
-
 import os
 from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
-    # ✅ 프로젝트 기본 설정
     PROJECT_NAME: str = "AI-Agent API"
     API_V1_STR: str = "/api/v1"
 
-    # ✅ PostgreSQL 설정
+    # PostgreSQL — 개별 항목 또는 DATABASE_URL(Railway) 둘 다 지원
     POSTGRES_SERVER: str = "localhost"
-    POSTGRES_PORT: int = 5433
+    POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str = "agent_db"
     DATABASE_URI: Optional[str] = None
+    DATABASE_URL: Optional[str] = None  # Railway PostgreSQL이 주입하는 변수명
 
-    # ✅ JWT 설정
+    # JWT
     SECRET_KEY: str
     ACCESS_SECRET_KEY: str
     REFRESH_SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # ✅ Redis 설정
+    # Redis — REDIS_URL(Railway) 직접 지원
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
-    REDIS_URL: Optional[str] = None  # 동적으로 조합
-
-    # ✅ Redis 캐시 설정
-    REDIS_CACHE_HOST: str = "localhost"
-    REDIS_CACHE_PORT: int = 6379
+    REDIS_URL: Optional[str] = None
     REDIS_CACHE_DB: int = 1
     FILE_LIST_CACHE_TTL: int = 300
     FOLDER_LIST_CACHE_TTL: int = 300
 
-    # ✅ S3 설정 추가
-    S3_ENABLED: bool = False  # 기본값은 False로 설정
+    # 파일 저장소 경로 (Railway volume: /app/storage)
+    STORAGE_BASE_PATH: str = "./storage"
+    PDF_STORAGE_PATH: str = "./storage/pdf"
+    CHUNKS_STORAGE_PATH: str = "./storage/chunks"
+    CHROMADB_STORAGE_PATH: str = "./storage/chromadb"
+
+    # Cloudflare R2 (S3 호환, 무료 10GB)
+    # R2_ENDPOINT_URL: https://<account_id>.r2.cloudflarestorage.com
+    R2_ENABLED: bool = False
+    R2_BUCKET_NAME: Optional[str] = None
+    R2_ENDPOINT_URL: Optional[str] = None
+    R2_ACCESS_KEY: Optional[str] = None
+    R2_SECRET_KEY: Optional[str] = None
+
+    # AWS S3 (기존 호환용, R2 미사용 시)
+    S3_ENABLED: bool = False
     S3_BUCKET_NAME: Optional[str] = None
     AWS_ACCESS_KEY: Optional[str] = None
     AWS_SECRET_KEY: Optional[str] = None
-    AWS_REGION: str = "ap-northeast-2"  # 기본 리전 설정 (한국/서울)
+    AWS_REGION: str = "ap-northeast-2"
 
-    # ✅ 프론트엔드 정적 파일 경로 (빌드 결과물 위치)
-    # 로컬: ./frontend/dist  |  Docker: /app/frontend/dist
-    STATIC_DIR: str = os.getenv("STATIC_DIR", "./frontend/dist")
+    # 프론트엔드 정적 파일 경로
+    STATIC_DIR: str = "./frontend/dist"
 
-    # ✅ 스토리지 경로 설정
-    STORAGE_BASE_PATH: str = "./storage"  # 도커 볼륨 마운트 기준점
-    PDF_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}"  # 사용자 ID 폴더 내에 PDF 저장
-    CHUNKS_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chunks"  # 기존 청크 저장 경로
-    CHROMADB_STORAGE_PATH: str = f"{STORAGE_BASE_PATH}/chromadb"  # 새로운 ChromaDB 저장 경로
-    
-    # ✅ PDF Agent 설정
-    PDF_STORAGE_PATH: str = "./storage/pdf"
-    PDF_CHUNK_SIZE: int = 1000
-    PDF_CHUNK_OVERLAP: int = 200
+    # AI 모델
+    AI_API_KEY: str = ""
+    AI_MODEL_NAME: str = "gpt-4.1-mini"
+    AI_EMBEDDING_MODEL: str = "text-embedding-ada-002"
 
-    # ✅ AI 모델 설정
-    AI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gpt-3.5-turbo")
-    AI_EMBEDDING_MODEL: str = os.getenv("AI_EMBEDDING_MODEL", "text-embedding-ada-002")
-
-    # ✅ Kakao OAuth 설정
-    KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
-    KAKAO_CLIENT_SECRET: str = os.getenv("KAKAO_CLIENT_SECRET", "")
+    # Kakao OAuth
+    KAKAO_CLIENT_ID: str = ""
+    KAKAO_CLIENT_SECRET: str = ""
     KAKAO_REDIRECT_URI: str = "https://api.planova.kr/api/v1/auth/kakao/callback"
 
-    # ✅ CORS 설정
-    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000","https://api.planova.kr/"]
+    # CORS
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://planova.kr",
+        "https://api.planova.kr",
+    ]
 
-    # ✅ OAuth 토큰 만료
-    OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+    # OAuth 토큰
+    OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # ✅ 결제/Iamport 설정
+    # 결제/Iamport
     IAMPORT_WEBHOOK_SECRET: Optional[str] = None
-    IAMPORT_API_KEY: str = os.getenv("IAMPORT_API_KEY", "")
-    IAMPORT_API_SECRET: str = os.getenv("IAMPORT_API_SECRET", "")
-    IAMPORT_MERCHANT_ID: str = os.getenv("IAMPORT_MERCHANT_ID", "")
-    IAMPORT_CHANNEL_KEY: str = os.getenv("IAMPORT_CHANNEL_KEY", "")
+    IAMPORT_API_KEY: str = ""
+    IAMPORT_API_SECRET: str = ""
+    IAMPORT_MERCHANT_ID: str = ""
+    IAMPORT_CHANNEL_KEY: str = ""
 
-    # ✅ SMS 인증 설정
+    # SMS
     SMS_API_KEY: Optional[str] = None
     SMS_API_SECRET: Optional[str] = None
     SMS_SENDER_NUMBER: Optional[str] = None
 
-    # ✅ 📧 이메일 서버 설정 
+    # 이메일 (Gmail 앱 비밀번호 사용)
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USERNAME: str = "planova.smtp@gmail.com"
-    SMTP_PASSWORD: str = "tbyf esei gsrm qfbh"  # Gmail 앱 비밀번호 사용 권장
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = "noreply@planova.kr"
-    
-    # ✅ 🌐 프론트엔드 URL 설정
+
+    # 앱 설정
     FRONTEND_URL: str = "https://planova.kr"
-    
-    # ✅ 🔐 비밀번호 재설정 관련 설정
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
-    PASSWORD_RESET_TOKEN_LENGTH: int = 64
-    
-    # ✅ 🌍 환경 설정
-    ENVIRONMENT: str = "testing"  # development, production, testing
-    
-    # ✅ 📧 이메일 템플릿 설정
+    ENVIRONMENT: str = "production"
     EMAIL_TEMPLATES_ENABLED: bool = True
     EMAIL_LOGO_URL: str = "https://planova.kr/logo.png"
-    
-    # ✅ 🔧 Gmail 설정 가이드 (주석)
-    # Gmail 사용 시:
-    # 1. Google 계정 > 보안 > 2단계 인증 활성화
-    # 2. 앱 비밀번호 생성 > SMTP_PASSWORD에 설정
-    # 3. SMTP_USERNAME에 Gmail 주소 설정
 
-    # ✅ Pydantic Settings
+    # 비밀번호 재설정
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_TOKEN_LENGTH: int = 64
 
     model_config = {
         "case_sensitive": True,
@@ -123,20 +113,22 @@ class Settings(BaseSettings):
         "extra": "allow"
     }
 
-    # ✅ DB 및 Redis URL 자동 조립
     @model_validator(mode='before')
     def assemble_connection_strings(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        # PostgreSQL
+        # DATABASE_URL (Railway) → DATABASE_URI 로 통일
         if not values.get("DATABASE_URI"):
-            p_user = values.get("POSTGRES_USER")
-            p_pwd = values.get("POSTGRES_PASSWORD")
-            p_host = values.get("POSTGRES_SERVER")
-            p_db = values.get("POSTGRES_DB")
-            p_port = values.get("POSTGRES_PORT", 5432)
-            if all([p_user, p_pwd, p_host, p_db]):
-                values["DATABASE_URI"] = f"postgresql://{p_user}:{p_pwd}@{p_host}:{p_port}/{p_db}"
+            if values.get("DATABASE_URL"):
+                values["DATABASE_URI"] = values["DATABASE_URL"]
+            else:
+                p_user = values.get("POSTGRES_USER", "postgres")
+                p_pwd = values.get("POSTGRES_PASSWORD", "")
+                p_host = values.get("POSTGRES_SERVER", "localhost")
+                p_port = values.get("POSTGRES_PORT", 5432)
+                p_db = values.get("POSTGRES_DB", "agent_db")
+                if p_pwd:
+                    values["DATABASE_URI"] = f"postgresql://{p_user}:{p_pwd}@{p_host}:{p_port}/{p_db}"
 
-        # Redis
+        # REDIS_URL 조합 (Railway는 직접 주입)
         if not values.get("REDIS_URL"):
             r_host = values.get("REDIS_HOST", "localhost")
             r_port = values.get("REDIS_PORT", 6379)
@@ -145,28 +137,20 @@ class Settings(BaseSettings):
 
         return values
 
-    # ✅ CORS origin 목록 파싱
     @field_validator("BACKEND_CORS_ORIGINS", mode='before')
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+        return v
 
-    # ✅ int로 변환 필요한 항목 처리
     @field_validator(
-        "ACCESS_TOKEN_EXPIRE_MINUTES",
-        "REFRESH_TOKEN_EXPIRE_DAYS",
+        "ACCESS_TOKEN_EXPIRE_MINUTES", "REFRESH_TOKEN_EXPIRE_DAYS",
         "OAUTH_REFRESH_TOKEN_EXPIRE_DAYS",
-        "REDIS_PORT", "REDIS_DB",
-        "REDIS_CACHE_PORT", "REDIS_CACHE_DB",
+        "REDIS_PORT", "REDIS_DB", "REDIS_CACHE_DB",
         "FILE_LIST_CACHE_TTL", "FOLDER_LIST_CACHE_TTL",
-        "POSTGRES_PORT",
-        "SMTP_PORT",  # 📧 새로 추가
-        "PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",  # 🔐 새로 추가
-        "PASSWORD_RESET_TOKEN_LENGTH",  # 🔐 새로 추가
+        "POSTGRES_PORT", "SMTP_PORT",
+        "PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "PASSWORD_RESET_TOKEN_LENGTH",
         mode='before'
     )
     @classmethod

@@ -1,7 +1,13 @@
 #!/bin/bash
+set -e
 
-echo "🚀 Running Alembic migrations..."
+echo "Running Alembic migrations..."
 alembic upgrade head
 
-echo "✅ Alembic migration complete. Starting app..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+echo "Starting server on port ${PORT:-8000}..."
+exec gunicorn app.main:app \
+    -k uvicorn.workers.UvicornWorker \
+    -b "0.0.0.0:${PORT:-8000}" \
+    --workers 2 \
+    --timeout 120 \
+    --keep-alive 5
