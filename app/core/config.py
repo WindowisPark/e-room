@@ -14,14 +14,14 @@ class Settings(BaseSettings):
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5433
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "password123"
+    POSTGRES_PASSWORD: str
     POSTGRES_DB: str = "agent_db"
     DATABASE_URI: Optional[str] = None
 
     # ✅ JWT 설정
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-default-secret-key")
-    ACCESS_SECRET_KEY: str = os.getenv("ACCESS_SECRET_KEY", "access-secret-key-for-jwt")
-    REFRESH_SECRET_KEY: str = os.getenv("REFRESH_SECRET_KEY", "refresh-secret-key-for-jwt")
+    SECRET_KEY: str
+    ACCESS_SECRET_KEY: str
+    REFRESH_SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY: Optional[str] = None
     AWS_SECRET_KEY: Optional[str] = None
     AWS_REGION: str = "ap-northeast-2"  # 기본 리전 설정 (한국/서울)
+
+    # ✅ 프론트엔드 정적 파일 경로 (빌드 결과물 위치)
+    # 로컬: ./frontend/dist  |  Docker: /app/frontend/dist
+    STATIC_DIR: str = os.getenv("STATIC_DIR", "./frontend/dist")
 
     # ✅ 스토리지 경로 설정
     STORAGE_BASE_PATH: str = "./storage"  # 도커 볼륨 마운트 기준점
@@ -73,7 +77,7 @@ class Settings(BaseSettings):
     OAUTH_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("OAUTH_REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
     # ✅ 결제/Iamport 설정
-    IAMPORT_WEBHOOK_SECRET: str = ""
+    IAMPORT_WEBHOOK_SECRET: Optional[str] = None
     IAMPORT_API_KEY: str = os.getenv("IAMPORT_API_KEY", "")
     IAMPORT_API_SECRET: str = os.getenv("IAMPORT_API_SECRET", "")
     IAMPORT_MERCHANT_ID: str = os.getenv("IAMPORT_MERCHANT_ID", "")
@@ -170,10 +174,4 @@ class Settings(BaseSettings):
         return int(v) if isinstance(v, str) else v
 
 
-# ✅ 인스턴스 선언
 settings = Settings()
-
-# ✅ 확인용 출력 (배포 시 제거 가능)
-print(f"Loaded DATABASE_URI: {settings.DATABASE_URI}")
-print(f"Loaded REDIS_URL: {settings.REDIS_URL}")
-print(f"Loaded CORS Origins: {settings.BACKEND_CORS_ORIGINS}")

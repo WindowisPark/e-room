@@ -1,65 +1,207 @@
-# app/api/v1/endpoints/pdf_agent.py
-
-from fastapi import APIRouter, Body, HTTPException, Depends
-from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, UploadFile, File
+from sqlalchemy.orm import Session
+from typing import Dict, Any, Optional, List
+import asyncio
 import logging
+import os
+import tempfile
+from urllib.parse import urlparse
+import boto3
+from botocore.client import Config
 
+from app.core.config import settings
 from app.models.user import User
 from app.api import deps
-from app.services.pdf_agent.graphs.main import intergrate_graph
+from app.services.pdf_agent.graphs.main import get_processing_graph
+from app.services.pdf_agent.graphs.qa_graph import get_qa_graph
+from app.services.pdf_agent.graphs.summary_graph import get_summary_graph
+from app.services.pdf_agent.graphs.exam_graph import get_exam_graph
+from app.services.pdf_agent.graphs.schedule_graph import get_schedule_graph
+from app.services.pdf_agent.chromadb_service import ChromaDBService
+from app.services.pdf_agent.nodes.common import judge_the_purpose_of_the_input
 from app.services.pdf_agent.tools import get_initial_state
-from app.services.pdf_agent.nodes.common import (
-    input_question_api,
-    judge_the_purpose_of_the_input,
-    extract_target_file_from_question,
-    select_folder,
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.post("/ask", summary="사용자 질문 처리 및 목적에 따른 Graph 실행")
-async def ask_question(
-    query: str = Body(..., description="사용자의 자연어 질문"),
-    user_id: int = Body(..., description="사용자 ID"),
-    current_user: User = Depends(deps.get_current_user)
-) -> Dict[str, Any]:
-    try:
-        if current_user.id != user_id and not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="다른 사용자의 질문을 처리할 수 없습니다.")
 
-        # 🛠 get_initial_state는 필수 인자 4개 필요 → 임시값 세팅 후 목적에 따라 갱신됨
+@router.post("/process", response_model=Dict[str, Any])
+async def process_document(
+    document_id: int = Body(..., description="문서 ID"),
+    file_path: str = Body("", description="파일 경로 또는 URL"),
+    upload_file: UploadFile = File(None),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    temp_path = None
+    try:
+        is_http_url = file_path.startswith("http://") or file_path.startswith("https://")
+        parsed_url = urlparse(file_path) if is_http_url else None
+
+        if upload_file:
+            temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+            with open(temp_path, "wb") as f:
+                f.write(await upload_file.read())
+            file_path = temp_path
+        elif is_http_url and "amazonaws.com" in parsed_url.netloc:
+            if not settings.S3_BUCKET_NAME:
+                raise HTTPException(status_code=500, detail="S3 버킷이 설정되지 않았습니다")
+            bucket_name = settings.S3_BUCKET_NAME
+            object_key = parsed_url.path.lstrip('/')
+            temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=settings.AWS_ACCESS_KEY,
+                aws_secret_access_key=settings.AWS_SECRET_KEY,
+                region_name=settings.AWS_REGION,
+                config=Config(signature_version='s3v4')
+            )
+            s3.download_file(bucket_name, object_key, temp_path)
+            file_path = temp_path
+        elif not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
+
+        state = {
+            "user_id": str(current_user.id),
+            "document_id": document_id,
+            "pdf_path": file_path,
+            "folder": "default",
+            "purpose": "preprocessing"
+        }
+
+        logger.info(f"초기 상태: {state}")
+        graph = get_processing_graph()
+        result = await asyncio.to_thread(graph.invoke, state)
+
+        if result.get("error"):
+            raise HTTPException(status_code=500, detail=f"문서 처리 실패: {result['error']}")
+
+        chroma = ChromaDBService()
+        embedding_stored = chroma.check_document_exists(int(current_user.id), document_id)
+        chunks_count = chroma.count_document_chunks(int(current_user.id), document_id)
+
+        return {
+            "success": True,
+            "document_id": document_id,
+            "message": "문서 처리가 완료되었습니다.",
+            "embedding_stored": embedding_stored,
+            "chunks_count": chunks_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"문서 처리 실패: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"문서 처리 중 오류: {str(e)}")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+@router.post("/ask", response_model=Dict[str, Any])
+async def ask_question(
+    query: str = Body(..., description="사용자 질문 또는 요청"),
+    generate_pdf: bool = Body(False, description="요약일 경우 PDF 생성 여부"),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        temp_state = {"user_id": str(current_user.id), "last_user_query": query}
+        purpose_state = await asyncio.to_thread(judge_the_purpose_of_the_input, temp_state)
+        purpose = purpose_state.get("purpose", "qa_system")
+        logger.info(f"판단된 목적: {purpose}")
+
         state = get_initial_state(
-            user_id=str(user_id),
-            document_id=0,
-            pdf_path="",
-            purpose="qa_system",  # 초기 목적, 이후 LLM 판단으로 변경됨
+            user_id=str(current_user.id),
+            purpose=purpose,
             query=query
         )
 
-        state = input_question_api(state, query)
-        state = judge_the_purpose_of_the_input(state)
-
-        if state["purpose"] == "schedule":
-            state = extract_target_file_from_question(state)
+        if purpose == "summary":
+            graph = get_summary_graph()
+        elif purpose == "generate_exam":
+            graph = get_exam_graph()
+        elif purpose == "schedule":
+            graph = get_schedule_graph()
         else:
-            state = select_folder(state)
+            graph = get_qa_graph()
 
-        graph = intergrate_graph()
-        result = graph.invoke(state)
+        result = await asyncio.to_thread(graph.invoke, state)
+        answer = result.get("result") or result.get("last_assistant_response") or "응답 생성 실패"
 
         return {
             "success": True,
             "query": query,
-            "purpose": state.get("purpose"),
-            "folder": state.get("folder"),
-            "answer": result.get("result") or result.get("last_assistant_response") or "응답을 생성하지 못했습니다."
+            "purpose": purpose,
+            "answer": answer,
+            **{k: v for k, v in result.items() if k not in ["answer"]}
         }
 
     except Exception as e:
         logger.error(f"/ask 처리 중 오류: {str(e)}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"질문 처리 중 오류 발생: {str(e)}",
-            "query": query
+        return {"success": False, "message": f"처리 중 오류: {str(e)}", "query": query}
+
+
+@router.post("/exam", response_model=Dict[str, Any])
+async def generate_exam_without_previous(
+    count: int = Query(5, ge=1, le=20),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        state = {
+            "user_id": str(current_user.id),
+            "folder": "default",
+            "purpose": "generate_exam",
+            "query": f"{count}개 시험 문제 생성",
+            "previous_exam_path": [],
+            "previous_exam_index": 0,
+            "personality": {},
+            "question_count": count
         }
+
+        graph = get_exam_graph()
+        result = await asyncio.to_thread(graph.invoke, state)
+
+        return {
+            "success": True,
+            "questions": result.get("result", ""),
+            "personality_analysis": result.get("final_personality", "")
+        }
+
+    except Exception as e:
+        logger.error(f"문제 생성 실패: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="문제 생성 실패")
+
+
+@router.post("/schedule", response_model=Dict[str, Any])
+async def generate_schedule_without_doc(
+    subjects: List[str] = Body(...),
+    importance: List[str] = Body(...),
+    deadlines: List[str] = Body(...),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        state = {
+            "user_id": str(current_user.id),
+            "folder": "default",
+            "subjects": subjects,
+            "importance": importance,
+            "deadlines": deadlines,
+            "subject_index": 0,
+            "final_index": [],
+            "messages": []
+        }
+
+        graph = get_schedule_graph()
+        result = await asyncio.to_thread(graph.invoke, state)
+
+        if "schedule" not in result:
+            raise HTTPException(status_code=500, detail="학습 계획 생성 실패")
+
+        return {"success": True, "schedule": result["schedule"]}
+
+    except Exception as e:
+        logger.error(f"스케줄 생성 실패: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="스케줄 생성 중 오류")

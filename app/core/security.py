@@ -7,10 +7,9 @@ from redis import Redis
 from redis.exceptions import RedisError
 from app.core.config import settings
 from app.models.user import User
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 from sqlalchemy.orm import Session
 
-import os
 import logging
 import hmac
 import hashlib
@@ -26,9 +25,6 @@ ACCESS_SECRET_KEY = settings.ACCESS_SECRET_KEY
 REFRESH_SECRET_KEY = settings.REFRESH_SECRET_KEY
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# 환경 변수에서 REDIS_HOST 가져오기 (Docker Compose에서 설정됨)
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 
 
 def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
@@ -101,10 +97,15 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 async def verify_iamport_webhook(request: Request):
-    signature = request.headers.get("x-imp-signature")
-    body = await request.body()  # await 사용이므로 async 함수 필요
-    secret = settings.IAMPORT_WEBHOOK_SECRET.encode()
+    if not settings.IAMPORT_WEBHOOK_SECRET:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
+    signature = request.headers.get("x-imp-signature")
+    if not signature:
+        raise HTTPException(status_code=403, detail="Missing webhook signature")
+
+    body = await request.body()
+    secret = settings.IAMPORT_WEBHOOK_SECRET.encode()
     generated_signature = hmac.new(secret, body, hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(signature, generated_signature):
@@ -143,8 +144,11 @@ async def get_current_user_ws(websocket: WebSocket) -> Optional[User]:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="잘못된 토큰")
             return None
 
-        db: Session = next(get_db())
-        user = db.query(User).filter(User.id == user_id).first()
+        db: Session = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+        finally:
+            db.close()
 
         if not user or not user.is_active:
             logger.warning(f"⚠️ WebSocket: 유효하지 않거나 비활성화된 사용자 (ID: {token_data.sub})")

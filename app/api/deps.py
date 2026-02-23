@@ -12,7 +12,7 @@ from app import crud, schemas
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.core.redis_helper import redis_client
-from app.core.security import ACCESS_SECRET_KEY, redis_client
+from app.core.security import ACCESS_SECRET_KEY
 from app.models.user import User
 
 # OAuth2 스키마 수정 (카카오 콜백 후 토큰이 반환되므로 여기서는 별도 엔드포인트 필요 없음)

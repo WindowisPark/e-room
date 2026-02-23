@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from sqlalchemy.orm import Session
 
@@ -42,7 +43,7 @@ class PDFAIService:
             state = get_initial_state(user_id=user_id, folder=folder)
             state["purpose"] = "summarize"
             state["summary_level"] = level
-            result = graph.invoke(state)
+            result = await asyncio.to_thread(graph.invoke, state)
             summary_text = result.get("result", "")
 
             await create_system_notification(
@@ -73,7 +74,7 @@ class PDFAIService:
             state = get_initial_state(user_id=user_id, folder=folder)
             state["purpose"] = "generate_questions"
             state["question_count"] = count
-            result = graph.invoke(state)
+            result = await asyncio.to_thread(graph.invoke, state)
             questions = result.get("result", "")
 
             await create_system_notification(
@@ -105,7 +106,7 @@ class PDFAIService:
             state = get_initial_state(user_id=user_id, folder=folder)
             state["purpose"] = "qa"
             state["query"] = query
-            result = graph.invoke(state)
+            result = await asyncio.to_thread(graph.invoke, state)
             answer = result.get("result", "")
 
             await create_system_notification(
