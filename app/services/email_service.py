@@ -44,7 +44,7 @@ class EmailService:
         """
         try:
             # 재설정 링크 생성
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'https://api.planova.kr')
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'https://planova.kr')
             reset_url = f"{frontend_url}/auth/reset-password?token={reset_token}"
             
             # 이메일 제목 및 내용

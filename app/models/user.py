@@ -129,14 +129,14 @@ class User(Base):
 
     # 초대 코드 관련 관계 설정
     generated_invite_codes = relationship(
-        "InviteCode", 
+        "InviteCode",
         foreign_keys="InviteCode.inviter_id",
-        back_populates="inviter", 
+        back_populates="inviter",
         cascade="all, delete-orphan"
     )
 
     used_invite_codes = relationship(
-        "InviteCode", 
+        "InviteCode",
         foreign_keys="InviteCode.used_by_id",
         back_populates="used_by"
     )

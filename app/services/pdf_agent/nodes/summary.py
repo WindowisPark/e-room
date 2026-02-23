@@ -20,10 +20,10 @@ def start_point_of_summary(state: AgentState):
     pdf_path = input("요약하고 싶은 파일의 경로를 입력해주세요.")
     return {"pdf_path":pdf_path}
 
-def get_related_pdf(state : AgentState):
+def get_related_pdf(state: AgentState):
     pdf_path = state["pdf_path"]
     pdf = get_all_docs(pdf_path)
-    return {"pdf_content":pdf}
+    return {"pdf_content": pdf}
 
 def pdf_parsing(state: AgentState):
     pdf_content = state["pdf_content"]

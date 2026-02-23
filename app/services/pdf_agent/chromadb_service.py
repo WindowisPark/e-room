@@ -358,7 +358,7 @@ class ChromaDBService:
                             chunks.append({
                                 "document_id": pdf.id,
                                 "text": f"파일명: {pdf.filename}",
-                                "similarity": 0.5  # 임의의 유사도
+                                "similarity": 0.7  # 임의의 유사도
                             })
                         
                         return chunks

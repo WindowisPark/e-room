@@ -23,6 +23,9 @@ from app.models.team import Team, TeamMember
 # 🔐 비밀번호 재설정 모델 추가 (User 모델 의존)
 from app.models.password_reset import PasswordResetToken
 
+# 🔐 비밀번호 재설정 모델 추가 (User 모델 의존)
+from app.models.password_reset import PasswordResetToken
+
 # 4. 여러 모델을 참조하는 복합 모델
 from app.models.tag import PDFFile, PDFTag, PDFTagMention
 from app.models.team_activity import TeamActivity

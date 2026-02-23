@@ -74,8 +74,10 @@ __all__ = [
     # PDF 관련 모델
     'PDFFile', 'PDFTag', 'PDFTagMention',
 
+
     # 비밀번호 재설정 모델
     'PasswordResetToken',
+
 
     # 모델 컬렉션
     'ALL_MODELS'
