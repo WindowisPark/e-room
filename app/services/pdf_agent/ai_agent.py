@@ -12,12 +12,19 @@ from app.services.pdf_agent.processor import PDFProcessor
 from app.core.config import settings
 
 # AI 서비스 통합
+from openai import AsyncOpenAI
 from app.services.pdf_agent.ai_service import PDFAIService
 
 logger = logging.getLogger(__name__)
 
-# 싱글톤 패턴으로 AI 서비스 초기화
 pdf_ai_service = PDFAIService()
+_openai_client: AsyncOpenAI = None
+
+def get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = AsyncOpenAI(api_key=settings.AI_API_KEY)
+    return _openai_client
 
 class PDFAgent:
     """
@@ -38,10 +45,7 @@ class PDFAgent:
             생성된 답변
         """
         try:
-            # 기존 OpenAI API 기반 코드 유지
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=settings.AI_API_KEY)
+            client = get_openai_client()
 
             # 컨텍스트 결합
             combined_context = "\n\n".join([f"청크 {i+1}: {ctx}" for i, ctx in enumerate(contexts)])

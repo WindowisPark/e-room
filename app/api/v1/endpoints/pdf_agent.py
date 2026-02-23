@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body, UploadFile, 
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional, List
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import tempfile
@@ -20,8 +22,11 @@ from app.services.pdf_agent.graphs.schedule_graph import get_schedule_graph
 from app.services.pdf_agent.chromadb_service import ChromaDBService
 from app.services.pdf_agent.nodes.common import judge_the_purpose_of_the_input
 from app.services.pdf_agent.tools import get_initial_state
+from app.services.cache_service import CacheService
 
 router = APIRouter()
+_cache = CacheService()
+_AI_ASK_TTL = 3600
 logger = logging.getLogger(__name__)
 
 
@@ -105,6 +110,12 @@ async def ask_question(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
+    cache_key = hashlib.sha256(f"{current_user.id}:{query}".encode()).hexdigest()
+    cached = _cache.get_json(cache_key, prefix="ai_ask")
+    if cached:
+        logger.info(f"/ask 캐시 히트: user={current_user.id}")
+        return cached
+
     try:
         temp_state = {"user_id": str(current_user.id), "last_user_query": query}
         purpose_state = await asyncio.to_thread(judge_the_purpose_of_the_input, temp_state)
@@ -129,13 +140,15 @@ async def ask_question(
         result = await asyncio.to_thread(graph.invoke, state)
         answer = result.get("result") or result.get("last_assistant_response") or "응답 생성 실패"
 
-        return {
+        response_data = {
             "success": True,
             "query": query,
             "purpose": purpose,
             "answer": answer,
             **{k: v for k, v in result.items() if k not in ["answer"]}
         }
+        _cache.set_json(cache_key, response_data, ttl=_AI_ASK_TTL, prefix="ai_ask")
+        return response_data
 
     except Exception as e:
         logger.error(f"/ask 처리 중 오류: {str(e)}", exc_info=True)

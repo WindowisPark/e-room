@@ -11,7 +11,7 @@
 |---|------|--------|------|
 | 1 | 운영보수용 작업 부재 (헬스체크, 시작/종료 훅, 디버그 파일 잔존 등) | 🟠 높음 | 🔲 대기 |
 | 2 | 보안 문제 (하드코딩 시크릿, 세션 누수, 웹훅 미검증 등) | 🔴 긴급 | ✅ 완료 |
-| 3 | 응답 처리 속도 (커넥션 풀, 클라이언트 싱글톤, 캐싱 부재) | 🟠 높음 | 🔲 대기 |
+| 3 | 응답 처리 속도 (커넥션 풀, 클라이언트 싱글톤, 캐싱 부재) | 🟠 높음 | ✅ 완료 |
 | 4 | 동시 요청 시 API 먹통 (async 함수 내 sync 블로킹 호출) | 🔴 긴급 | ✅ 완료 |
 
 ---
@@ -138,14 +138,34 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ---
 
-## Issue #3 — 응답 처리 속도 (예정)
+## Issue #3 — 응답 처리 속도
 
-### 작업 예정 항목
+### 변경 내용
 
-- [ ] DB 커넥션 풀 설정 추가 (`pool_size`, `max_overflow`, `pool_pre_ping`)
-- [ ] `AsyncOpenAI` 클라이언트 싱글톤화 (매 요청마다 생성 → 앱 기동 시 1회 생성)
-- [ ] `ChromaDBService` 싱글톤화
-- [ ] AI 응답 결과 Redis 캐싱 (동일 쿼리 재요청 시 LLM 호출 생략)
+| 파일 | 수정 항목 |
+|------|----------|
+| `app/db/session.py` | `create_engine`에 `pool_size=10`, `max_overflow=20`, `pool_pre_ping=True`, `pool_recycle=1800` 추가 |
+| `app/services/pdf_agent/ai_agent.py` | `AsyncOpenAI` 클라이언트 모듈 레벨 싱글톤 (`get_openai_client()`)으로 교체 — 매 호출마다 TCP 재연결 제거 |
+| `app/api/v1/endpoints/pdf_agent.py` | `/ask` 엔드포인트에 Redis 캐싱 적용 — 동일 쿼리 재요청 시 LLM 호출 생략 (TTL 1시간) |
+
+> `ChromaDBService`는 이미 `__new__` 싱글톤이 구현되어 있어 변경 불필요.
+
+### 커넥션 풀 설정 근거
+
+| 옵션 | 값 | 의미 |
+|------|-----|------|
+| `pool_size` | 10 | 상시 유지 커넥션 수 (기본값 5 → 2배) |
+| `max_overflow` | 20 | 피크 시 최대 추가 커넥션 (총 30개) |
+| `pool_pre_ping` | True | 사용 전 커넥션 유효성 검사 (stale connection 방지) |
+| `pool_recycle` | 1800 | 30분마다 커넥션 재생성 (DB 타임아웃 방지) |
+
+### 캐시 키 설계
+
+```
+ai_ask:{sha256(user_id:query)}   TTL=3600s
+```
+- 사용자별로 분리되어 다른 사용자의 응답과 섞이지 않음
+- TTL 만료 후 자동 재처리
 
 ---
 
@@ -156,3 +176,4 @@ python -c "import secrets; print(secrets.token_hex(32))"
 | 2026-02-23 | Issue #4 graph.invoke() 블로킹 수정 | Claude Code |
 | 2026-02-23 | Static 파일 경로 수정 + 프론트엔드 구조 생성 | Claude Code |
 | 2026-02-23 | Issue #2 보안 문제 수정 | Claude Code |
+| 2026-02-23 | Issue #3 응답 속도 개선 | Claude Code |
