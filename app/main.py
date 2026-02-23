@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.utils import get_openapi
+from sqlalchemy import text
 import os
 import logging
 
@@ -18,13 +20,33 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1 import api_router
 from app.api.v1.websocket import ws_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.db.session import engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        _logger.info("DB 연결 확인 완료")
+    except Exception as e:
+        _logger.critical(f"DB 연결 실패: {e}")
+        raise
+
+    _logger.info("서버 기동 완료")
+    yield
+
+    engine.dispose()
+    _logger.info("DB 커넥션 풀 정리 완료")
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="AI-Agent API with Authentication, PDF Management, and Team Collaboration",
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc"
+    redoc_url=f"{settings.API_V1_STR}/redoc",
+    lifespan=lifespan,
 )
 
 _static_dir = os.path.abspath(settings.STATIC_DIR)

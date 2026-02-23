@@ -9,7 +9,7 @@
 
 | # | 문제 | 심각도 | 상태 |
 |---|------|--------|------|
-| 1 | 운영보수용 작업 부재 (헬스체크, 시작/종료 훅, 디버그 파일 잔존 등) | 🟠 높음 | 🔲 대기 |
+| 1 | 운영보수용 작업 부재 (헬스체크, 시작/종료 훅, 디버그 파일 잔존 등) | 🟠 높음 | ✅ 완료 |
 | 2 | 보안 문제 (하드코딩 시크릿, 세션 누수, 웹훅 미검증 등) | 🔴 긴급 | ✅ 완료 |
 | 3 | 응답 처리 속도 (커넥션 풀, 클라이언트 싱글톤, 캐싱 부재) | 🟠 높음 | ✅ 완료 |
 | 4 | 동시 요청 시 API 먹통 (async 함수 내 sync 블로킹 호출) | 🔴 긴급 | ✅ 완료 |
@@ -93,17 +93,31 @@ STATIC_DIR=./frontend/dist
 
 ---
 
-## Issue #1 — 운영보수 작업 부재 (예정)
+## Issue #1 — 운영보수 작업
 
-### 작업 예정 항목
+### 변경 내용
 
-- [ ] `@app.on_event("startup")` — DB / Redis / ChromaDB 연결 검증
-- [ ] `@app.on_event("shutdown")` — DB 커넥션 풀 정리
-- [ ] `app/debug_redis.py` 삭제
-- [ ] `app/db/base_models_fix.py` 검토 후 제거 또는 통합
-- [ ] `app/scripts/` 내 test_*, simple_* 스크립트 정리
-- [ ] `config.py` 시작 시 크리덴셜 stdout 출력 제거
-- [ ] 루트 디렉토리 잔재 파일 (`tatus`, `.patch`) 제거
+| 파일 | 수정 항목 |
+|------|----------|
+| `app/main.py` | `lifespan` 컨텍스트 매니저 추가 — 기동 시 DB 연결 검증, 종료 시 커넥션 풀 정리 |
+| `app/debug_redis.py` | 삭제 |
+| `app/db/base_models_fix.py` | 삭제 (`base_models.py`가 최신 버전) |
+| `tatus`, `*.patch` | 루트 잔재 파일 삭제 |
+| `app/scripts/` | test_*, simple_*, fix_*, patch_* 13개 스크립트 삭제 |
+
+**유지한 스크립트**: `app/scripts/init_badges.py` — 초기 배지 데이터 세팅용
+
+### lifespan 동작
+
+```
+서버 기동
+ └─ DB SELECT 1 실행 → 실패 시 critical 로그 + 기동 중단
+ └─ "서버 기동 완료" 로그
+
+서버 종료
+ └─ engine.dispose() → 커넥션 풀 전체 반환
+ └─ "DB 커넥션 풀 정리 완료" 로그
+```
 
 ---
 
@@ -177,3 +191,4 @@ ai_ask:{sha256(user_id:query)}   TTL=3600s
 | 2026-02-23 | Static 파일 경로 수정 + 프론트엔드 구조 생성 | Claude Code |
 | 2026-02-23 | Issue #2 보안 문제 수정 | Claude Code |
 | 2026-02-23 | Issue #3 응답 속도 개선 | Claude Code |
+| 2026-02-23 | Issue #1 운영보수 작업 | Claude Code |
