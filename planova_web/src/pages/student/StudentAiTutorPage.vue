@@ -69,6 +69,7 @@
             >
               {{ message.content }}
             </div>
+            <div v-if="statusMessage" class="status-message">{{ statusMessage }}</div>
             <div v-if="isLoading" class="loading-indicator">
               <div class="typing-indicator">
                 <span></span>
@@ -139,10 +140,28 @@
         </div>
       </div>
     </div>
+
+    <!-- 파일 선택 모달 -->
+    <div v-if="showFileSelector" class="file-selector-modal">
+      <div class="modal-content">
+        <p>{{ pendingFileRequest?.message }}</p>
+        <div v-for="file in pendingFileRequest?.available_files" :key="file.path" class="file-item">
+          <input type="checkbox" :value="file.path" v-model="selectedFilePaths" />
+          <span>{{ file.folder }} / {{ file.name }}</span>
+        </div>
+        <div class="modal-actions">
+          <button @click="submitFileSelection(selectedFilePaths)">선택</button>
+          <button v-if="pendingFileRequest?.optional" @click="submitFileSelection([], true)">건너뛰기</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
   
 <script>
+  import { useAuthStore } from '@/stores/auth'
+  import apiClient from '@/api/index.js'
+
   export default {
     name: 'StudentAiTutorPage',
     data() {
@@ -152,16 +171,33 @@
         currentChatId: null,
         currentChat: null,
         isLoading: false,
-        
+
         // 검색 및 필터링
         searchQuery: '',
-        
+
         // 입력 관련 상태
         selectedFile: null,
         userQuestion: '',
         questionRows: 1,
         minRows: 1,
         maxRows: 5,
+
+        // WebSocket 관련 상태
+        ws: null,
+        sessionId: null,
+        pingInterval: null,
+        pendingFileRequest: null,
+        showFileSelector: false,
+        statusMessage: '',
+        selectedFilePaths: [],
+
+        // 퀵 액션
+        quickActions: [
+          { icon: '📚', text: '요약하기' },
+          { icon: '💬', text: '질의응답' },
+          { icon: '📝', text: '시험 문제 생성' },
+          { icon: '📅', text: '학습 계획 세우기' },
+        ],
       }
     },
     computed: {
@@ -266,6 +302,13 @@
       },
       
       startNewChat() {
+        clearInterval(this.pingInterval)
+        if (this.ws) {
+          this.ws.close()
+          this.ws = null
+        }
+        this.sessionId = null
+
         const newChatId = `chat_${Date.now()}`;
         this.currentChatId = newChatId;
         this.currentChat = {
@@ -275,7 +318,7 @@
           createdAt: new Date().toISOString()
         };
         this.chatHistory.push(this.currentChat);
-        this.saveChats();
+        this.connectWebSocket();
       },
       
       startQuickAction(action) {
@@ -284,139 +327,170 @@
         this.sendQuestion();
       },
       
-      loadChat(chatId) {
-        this.currentChatId = chatId;
-        this.currentChat = this.chatHistory.find(chat => chat.id === chatId);
-        this.scrollToBottom();
+      async loadChat(chatId) {
+        const chat = this.chatHistory.find(c => c.id === chatId)
+        if (!chat) return
+        if (chat.messages.length === 0) {
+          try {
+            const res = await apiClient.get(`/ws/chat/sessions/${chatId}/history`)
+            chat.messages = res.data.message_history.map(m => ({
+              role: m.type === 'HumanMessage' ? 'user' : 'assistant',
+              type: 'text',
+              content: m.content,
+              timestamp: m.timestamp
+            }))
+          } catch (e) { /* 로드 실패 시 빈 메시지 */ }
+        }
+        this.currentChatId = chatId
+        this.currentChat = chat
+        this.scrollToBottom()
       },
       
       // 삭제 기능: 채팅 삭제
-      deleteChat(chatId) {
+      async deleteChat(chatId) {
         if (confirm('이 대화를 삭제하시겠습니까?')) {
+          try {
+            await apiClient.delete(`/ws/chat/sessions/${chatId}`)
+          } catch (e) { /* API 삭제 실패해도 로컬에서는 제거 */ }
           this.chatHistory = this.chatHistory.filter(chat => chat.id !== chatId);
           if (this.currentChatId === chatId) {
             this.currentChatId = null;
             this.currentChat = null;
           }
-          this.saveChats();
         }
-      },
-      
-      async getAIResponse(userMessage) {
-        return new Promise((resolve, reject) => {
-          setTimeout(() => {
-            // 미리 정의된 응답 목록에서 랜덤 선택
-            const defaultResponses = [
-              "안녕하세요! 무엇을 도와드릴까요?",
-              "질문해주셔서 감사합니다. 답변드리겠습니다.",
-              "흥미로운 질문이네요. 제가 알아본 바로는...",
-              "도움이 필요하신 부분을 좀 더 자세히 설명해주실 수 있을까요?",
-              "이 주제에 대해 더 알고 싶으시다면 추가 질문을 해주세요."
-            ];
-            
-            const response = defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
-            
-            this.isLoading = false;
-            this.selectedFile = null;
-            if (this.$refs.fileInput) {
-              this.$refs.fileInput.value = '';
-            }
-            this.userQuestion = '';
-            this.questionRows = 1;
-            if (this.$refs.questionTextarea) {
-              this.$refs.questionTextarea.style.height = 'auto';
-            }
-            
-            resolve(response);
-          }, 1500);
-        });
       },
       
       async sendQuestion() {
-        if ((this.userQuestion.trim().length === 0) && !this.selectedFile) {
-          return;
-        }
-        
-        if (!this.currentChat) {
-          this.startNewChat();
-        }
-        
-        // 콘솔에 디버깅 정보 출력
-        console.log('Sending message:', {
-          question: this.userQuestion,
-          file: this.selectedFile ? this.selectedFile.name : 'No file'
-        });
-        
-        const userMessage = {
-          role: 'user',
-          type: this.selectedFile ? 'file' : 'text',
-          content: this.userQuestion,
-          fileName: this.selectedFile?.name,
-          fileSize: this.selectedFile?.size,
-          timestamp: new Date().toISOString()
-        };
-        this.currentChat.messages.push(userMessage);
-        
-        this.isLoading = true;
-        this.scrollToBottom();
-        
-        try {
-          const response = await this.getAIResponse(userMessage);
-          
-          this.currentChat.messages.push({
-            role: 'assistant',
-            type: 'text',
-            content: response,
-            timestamp: new Date().toISOString()
-          });
-          
-          if (this.currentChat.messages.length <= 2) {
-            this.currentChat.title = this.truncateText(this.userQuestion, 20);
-          }
+        if (!this.userQuestion.trim() && !this.selectedFile) return
+        if (!this.currentChat) this.startNewChat()
 
-          this.saveChats();
-          this.scrollToBottom();
-        } catch (error) {
-          console.error('AI 응답 오류:', error);
-          this.currentChat.messages.push({
-            role: 'assistant',
-            type: 'text',
-            content: '죄송합니다. 현재 AI 서비스에 문제가 있습니다. 잠시 후 다시 시도해주세요.',
-            timestamp: new Date().toISOString()
-          });
-          
-          this.isLoading = false;
-          this.selectedFile = null;
-          if (this.$refs.fileInput) {
-            this.$refs.fileInput.value = '';
-          }
-          this.userQuestion = '';
-          this.questionRows = 1;
-          if (this.$refs.questionTextarea) {
-            this.$refs.questionTextarea.style.height = 'auto';
+        const text = this.userQuestion.trim()
+        this.currentChat.messages.push({
+          role: 'user',
+          type: 'text',
+          content: text,
+          timestamp: new Date().toISOString()
+        })
+        this.userQuestion = ''
+        this.isLoading = true
+        this.scrollToBottom()
+
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'user_message', data: { message: text } }))
+        } else {
+          this.connectWebSocket()
+          this.ws.onopen = () => {
+            this.ws.send(JSON.stringify({ type: 'user_message', data: { message: text } }))
           }
         }
       },
       
-      saveChats() {
+      connectWebSocket() {
+        const authStore = useAuthStore()
+        const token = authStore.token
+        const userId = authStore.userId
+        if (!token || !userId) return
+
+        const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+        const wsBase = baseURL.replace(/^http/, 'ws')
+        this.ws = new WebSocket(`${wsBase}/api/v1/ws/chat/${userId}?token=${token}`)
+
+        this.ws.onopen = () => {
+          this.pingInterval = setInterval(() => {
+            if (this.ws?.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({ type: 'ping' }))
+            }
+          }, 30000)
+        }
+        this.ws.onmessage = (event) => this.handleWSMessage(JSON.parse(event.data))
+        this.ws.onclose = () => { clearInterval(this.pingInterval); this.sessionId = null }
+        this.ws.onerror = () => { this.isLoading = false; this.statusMessage = '' }
+      },
+
+      handleWSMessage(msg) {
+        this.sessionId = msg.session_id || this.sessionId
+        switch (msg.type) {
+          case 'session_connected':
+            // 백엔드 세션 ID를 로컬 임시 ID에 동기화 (삭제/이력 API 정상화)
+            if (this.currentChat && this.currentChat.id !== msg.session_id) {
+              const oldId = this.currentChat.id
+              const idx = this.chatHistory.findIndex(c => c.id === oldId)
+              if (idx !== -1) this.chatHistory[idx].id = msg.session_id
+              this.currentChat.id = msg.session_id
+              this.currentChatId = msg.session_id
+            }
+            break
+          case 'ai_response':
+          case 'result':
+            this.currentChat.messages.push({
+              role: 'assistant',
+              type: 'text',
+              content: msg.data.message,
+              timestamp: new Date().toISOString()
+            })
+            this.isLoading = false
+            this.statusMessage = ''
+            this.scrollToBottom()
+            this.syncCurrentChatToHistory()
+            break
+          case 'status_update':
+            this.statusMessage = msg.data.message
+            break
+          case 'file_request':
+            this.pendingFileRequest = msg.data
+            this.showFileSelector = true
+            this.isLoading = false
+            break
+          case 'error':
+            this.currentChat.messages.push({
+              role: 'assistant',
+              type: 'error',
+              content: msg.data.message,
+              timestamp: new Date().toISOString()
+            })
+            this.isLoading = false
+            this.statusMessage = ''
+            break
+        }
+      },
+
+      submitFileSelection(selectedPaths, skip = false) {
+        this.showFileSelector = false
+        this.pendingFileRequest = null
+        this.isLoading = true
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({
+            type: 'file_selection',
+            data: { selected_files: selectedPaths, skip }
+          }))
+        }
+      },
+
+      async loadSessions() {
+        const authStore = useAuthStore()
+        const userId = authStore.userId
+        if (!userId) return
         try {
-          localStorage.setItem('aiChatHistory', JSON.stringify(this.chatHistory));
-        } catch (error) {
-          console.error('대화 저장 중 오류:', error);
-        }
+          const res = await apiClient.get(`/ws/chat/sessions/${userId}`)
+          this.chatHistory = res.data.sessions.map(s => ({
+            id: s.session_id,
+            title: s.title || '새 대화',
+            messages: [],
+            createdAt: s.created_at
+          }))
+        } catch (e) { /* 실패 시 빈 목록 */ }
       },
-      
-      loadChats() {
-        try {
-          const savedChats = localStorage.getItem('aiChatHistory');
-          if (savedChats) {
-            this.chatHistory = JSON.parse(savedChats);
+
+      syncCurrentChatToHistory() {
+        if (!this.currentChat) return
+        if (this.currentChat.title === '새 대화' && this.currentChat.messages.length > 0) {
+          const firstUserMsg = this.currentChat.messages.find(m => m.role === 'user')
+          if (firstUserMsg) {
+            this.currentChat.title = this.truncateText(firstUserMsg.content, 20)
           }
-        } catch (error) {
-          console.error('대화 불러오기 중 오류:', error);
         }
       },
-      
+
       scrollToBottom() {
         this.$nextTick(() => {
           const container = this.$refs.chatMessagesContainer;
@@ -427,22 +501,20 @@
       }
     },
     mounted() {
-      this.loadChats();
-      
+      this.loadSessions()
+      // connectWebSocket()은 startNewChat() / sendQuestion()에서 필요 시 호출
+
       this.$nextTick(() => {
         if (this.$refs.questionTextarea) {
           this.adjustTextareaHeight();
         }
       });
     },
+    beforeUnmount() {
+      clearInterval(this.pingInterval)
+      this.ws?.close()
+    },
     watch: {
-      chatHistory: {
-        deep: true,
-        handler() {
-          this.saveChats();
-        }
-      },
-      
       currentChat() {
         this.scrollToBottom();
       }
@@ -1038,6 +1110,91 @@
 .background-logo {
     max-width: 500px;
     opacity: 0.2;
+}
+
+.status-message {
+  align-self: flex-start;
+  font-size: 13px;
+  color: #888;
+  padding: 4px 8px;
+  font-style: italic;
+}
+
+.file-selector-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 28px;
+  min-width: 360px;
+  max-width: 480px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.modal-content p {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #444;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.file-item input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.modal-actions button:first-child {
+  background-color: #f1883c;
+  color: white;
+}
+
+.modal-actions button:first-child:hover {
+  background-color: #e07020;
+}
+
+.modal-actions button:last-child:not(:first-child) {
+  background-color: #f5f5f7;
+  color: #555;
+}
+
+.modal-actions button:last-child:not(:first-child):hover {
+  background-color: #eaeaea;
 }
 
 </style>

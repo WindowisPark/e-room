@@ -14,10 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 class SessionManager:
+    QA_SESSION_TTL = 3600 * 24 * 30   # QA 채팅 이력 30일 보존
+    TASK_SESSION_TTL = 3600 * 2        # summary/exam/schedule은 2시간 유지
+
     def __init__(self, redis_url: str = settings.REDIS_URL):  # ✅ 수정된 부분
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
-        self.session_ttl = 3600 * 2
-        
+
+    def _get_ttl(self, task_type: str) -> int:
+        return self.QA_SESSION_TTL if task_type == "qa" else self.TASK_SESSION_TTL
+
     def create_session(self, user_id: str, task_type: str = None) -> str:
         """
         새 세션 생성
@@ -47,17 +52,18 @@ class SessionManager:
         }
         
         # Redis에 저장
+        ttl = self._get_ttl(task_type)
         self.redis_client.setex(
             session_id,
-            self.session_ttl,
+            ttl,
             json.dumps(session_data, ensure_ascii=False)
         )
-        
+
         # 사용자별 세션 목록에 추가 (QA 채팅 목록용)
         if task_type == "qa":
             user_sessions_key = f"user_sessions:{user_id}"
             self.redis_client.lpush(user_sessions_key, session_id)
-            self.redis_client.expire(user_sessions_key, self.session_ttl)
+            self.redis_client.expire(user_sessions_key, self.QA_SESSION_TTL)
         
         logger.info(f"새 세션 생성: {session_id}")
         return session_id
@@ -77,7 +83,8 @@ class SessionManager:
             if data:
                 session_data = json.loads(data)
                 # TTL 갱신
-                self.redis_client.expire(session_id, self.session_ttl)
+                ttl = self._get_ttl(session_data.get("task_type", "qa"))
+                self.redis_client.expire(session_id, ttl)
                 return session_data
             return None
         except Exception as e:
@@ -105,12 +112,13 @@ class SessionManager:
             current_data["last_activity"] = datetime.now().isoformat()
             
             # Redis에 저장
+            ttl = self._get_ttl(current_data.get("task_type", "qa"))
             self.redis_client.setex(
                 session_id,
-                self.session_ttl,
+                ttl,
                 json.dumps(current_data, ensure_ascii=False)
             )
-            
+
             return True
         except Exception as e:
             logger.error(f"세션 업데이트 실패: {session_id}, {str(e)}")
@@ -132,33 +140,26 @@ class SessionManager:
             if not session_data:
                 return False
             
-            # 메시지를 직렬화 가능한 형태로 변환
-            message_dict = {
-                "type": message.__class__.__name__,
-                "content": message.content,
-                "timestamp": datetime.now().isoformat()
-            }
-            
             # 히스토리에 추가
             if "message_history" not in session_data:
                 session_data["message_history"] = []
-            
+
             message_dict = {
                 "type": message.__class__.__name__,
                 "content": message.content,
                 "timestamp": datetime.now().isoformat()
             }
-            
+            session_data["message_history"].append(message_dict)
+
             # 히스토리 길이 제한 (최근 50개만 유지)
             if len(session_data["message_history"]) > 50:
                 session_data["message_history"] = session_data["message_history"][-50:]
-            
+
             # 첫 번째 사용자 메시지면 채팅 제목 생성
-            if (session_data.get("chat_title") is None and 
-                isinstance(message, HumanMessage) and 
+            if (session_data.get("chat_title") is None and
+                isinstance(message, HumanMessage) and
                 len(session_data["message_history"]) == 1):
-                
-                # 제목 생성 (나중에 LLM으로 처리)
+
                 title = self.generate_chat_title(message.content)
                 session_data["chat_title"] = title
             
@@ -286,7 +287,11 @@ class SessionManager:
             성공 여부
         """
         try:
-            return self.redis_client.expire(session_id, self.session_ttl)
+            session_data = self.get_session(session_id)
+            if not session_data:
+                return False
+            ttl = self._get_ttl(session_data.get("task_type", "qa"))
+            return self.redis_client.expire(session_id, ttl)
         except Exception as e:
             logger.error(f"세션 TTL 연장 실패: {session_id}, {str(e)}")
             return False

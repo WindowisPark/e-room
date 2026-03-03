@@ -12,6 +12,7 @@ from app.api import deps
 from app.models.user import User
 from app.api.v1.websocket.handlers import TaskHandlers
 from app.services.s3_file_service import S3StorageManager
+from app.core.config import settings
 import json
 import asyncio
 import logging
@@ -34,7 +35,14 @@ class WebSocketManager:
         # QA 타입으로 기본 세션 생성
         session_id = self.session_manager.create_session(user_id, task_type="qa")
         self.active_connections[session_id] = websocket
-        
+
+        # 프론트엔드에 세션 ID 즉시 통보 (로컬 임시 ID와 동기화용)
+        await websocket.send_text(json.dumps({
+            "type": "session_connected",
+            "session_id": session_id,
+            "timestamp": self.get_timestamp()
+        }, ensure_ascii=False))
+
         logger.info(f"WebSocket 연결: user_id={user_id}, session_id={session_id}")
         return session_id
 
@@ -133,10 +141,11 @@ class WebSocketManager:
         """QA 처리 - 바로 응답"""
         try:
             await self.send_status(session_id, "processing", "답변을 생성하고 있습니다...")
-            
+
             # QA 에이전트 실행
             result = await self.run_agent_step(state, "start_point_of_qa_system")
-            response_content = result.get("last_assistant_response", "답변을 생성할 수 없습니다.")
+            messages = result.get("messages", [])
+            response_content = messages[-1].content if messages else "답변을 생성할 수 없습니다."
             
             # AI 응답을 히스토리에 추가
             ai_message = AIMessage(content=response_content)
@@ -185,7 +194,8 @@ class WebSocketManager:
             
             # QA 에이전트 재실행
             result = await self.run_agent_step(current_state, "start_point_of_qa_system")
-            response_content = result.get("last_assistant_response", "답변을 생성할 수 없습니다.")
+            messages = result.get("messages", [])
+            response_content = messages[-1].content if messages else "답변을 생성할 수 없습니다."
             
             # AI 응답을 히스토리에 추가
             ai_message = AIMessage(content=response_content)
@@ -445,18 +455,22 @@ class WebSocketManager:
 manager = WebSocketManager()
 
 @router.websocket("/chat/{user_id}")
-async def websocket_endpoint(
-    websocket: WebSocket, 
-    user_id: str
-    # current_user: User = Depends(deps.get_current_user_ws)  # WebSocket용 인증 필요시
-):
-    """
-    WebSocket 채팅 엔드포인트
-    
-    Args:
-        websocket: WebSocket 연결
-        user_id: 사용자 ID
-    """
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001)
+        return
+    try:
+        from jose import jwt as jose_jwt
+        payload = jose_jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=["HS256"])
+        token_user_id = str(payload.get("sub"))
+        if token_user_id != user_id:
+            await websocket.close(code=4003)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
     session_id = await manager.connect(websocket, user_id)
     
     try:
