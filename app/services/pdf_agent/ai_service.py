@@ -22,12 +22,12 @@ class PDFAIService:
     def __init__(self):
         self.ws = WebSocketManager()
 
-    def run_document_processing(self, db: Session, user_id: str, folder: str) -> dict:
+    async def run_document_processing(self, db: Session, user_id: str, folder: str) -> dict:
         """LangGraph 메인 흐름 실행 (전처리 등)"""
         try:
             graph = intergrate_graph()
             state = get_initial_state(user_id=user_id, folder=folder)
-            result = graph.invoke(state)
+            result = await asyncio.to_thread(graph.invoke, state)
             return {
                 "success": True,
                 "result": result.get("result", "")

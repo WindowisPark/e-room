@@ -1,5 +1,6 @@
 # app/services/email_service.py
 
+import asyncio
 import smtplib
 import logging
 from email.mime.text import MIMEText
@@ -218,12 +219,12 @@ class EmailService:
     async def _send_email(self, to_email: str, subject: str, html_content: str) -> bool:
         """
         실제 이메일 발송 처리
-        
+
         Args:
             to_email: 수신자 이메일
             subject: 제목
             html_content: HTML 내용
-            
+
         Returns:
             발송 성공 여부
         """
@@ -237,28 +238,24 @@ class EmailService:
             logger.info(f"🔗 Reset Link: {self._extract_reset_link(html_content)}")
             logger.info("=" * 60)
             return True
-        
-        # 운영 모드에서는 실제 SMTP 발송
+
+        # 운영 모드에서는 실제 SMTP 발송 (블로킹 I/O를 스레드로 이동)
         try:
             # 이메일 메시지 구성
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = self.from_email
             msg['To'] = to_email
-            
+
             # HTML 파트 추가
             html_part = MIMEText(html_content, 'html', 'utf-8')
             msg.attach(html_part)
-            
-            # SMTP 서버 연결 및 발송
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
-            
+
+            # SMTP 블로킹 호출을 스레드풀에서 실행
+            await asyncio.to_thread(self._smtp_send_sync, msg)
             logger.info(f"✅ 이메일 발송 성공: {to_email}")
             return True
-            
+
         except smtplib.SMTPAuthenticationError:
             logger.error("❌ SMTP 인증 실패: 이메일 계정 정보를 확인하세요")
             return False
@@ -271,6 +268,18 @@ class EmailService:
         except Exception as e:
             logger.error(f"❌ 이메일 발송 실패: {str(e)}")
             return False
+
+    def _smtp_send_sync(self, msg: MIMEMultipart) -> None:
+        """
+        동기 SMTP 호출 (asyncio.to_thread로 감싸져서 실행됨)
+
+        Args:
+            msg: MIME 메시지 객체
+        """
+        with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            server.starttls()
+            server.login(self.smtp_username, self.smtp_password)
+            server.send_message(msg)
 
     def _extract_reset_link(self, html_content: str) -> str:
         """개발 모드 로깅을 위한 재설정 링크 추출"""
