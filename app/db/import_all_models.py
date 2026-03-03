@@ -7,7 +7,7 @@ SQLAlchemy와 Alembic에서 사용되며 순환 참조를 방지합니다.
 # 1. 기본 모델과 독립 모델 (다른 모델을 참조하지 않는 모델)
 from app.models.gamification import PointHistory, Badge, UserBadge, PointActionType, BadgeType
 from app.models.payment import Payment, PaymentStatus
-from app.models.event import Event, InviteCode, EventType, EventStatus  # ✅ 이벤트 관련 추가
+from app.models.event import Event, UserEvent, InviteCode, EventType, EventStatus  # ✅ 이벤트 관련 추가
 
 # 2. 사용자 모델 (다른 모델의 기반이 되는 모델)
 from app.models.user import User
@@ -40,7 +40,7 @@ ALL_MODELS = [
     Payment,
 
     # 이벤트 관련
-    Event, InviteCode,
+    Event, UserEvent, InviteCode,
 
     # 사용자 모델
     User,
@@ -70,7 +70,7 @@ __all__ = [
     'Payment', 'PaymentStatus',
 
     # 이벤트 관련
-    'Event', 'InviteCode', 'EventType', 'EventStatus',
+    'Event', 'UserEvent', 'InviteCode', 'EventType', 'EventStatus',
 
     # 사용자 모델
     'User',
