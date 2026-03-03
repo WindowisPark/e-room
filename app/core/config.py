@@ -107,6 +107,7 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = "noreply@planova.kr"
 
     # 앱 설정
+    API_BASE_URL: Optional[str] = None
     FRONTEND_URL: str = "https://planova.kr"
     ENVIRONMENT: str = "production"
     EMAIL_TEMPLATES_ENABLED: bool = True
