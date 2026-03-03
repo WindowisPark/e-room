@@ -5,7 +5,7 @@ set -e
 echo "Waiting for Redis..."
 python - <<'EOF'
 import os, time, sys
-url = os.getenv("REDIS_URL", f"redis://{os.getenv('REDIS_HOST','localhost')}:{os.getenv('REDIS_PORT','6379')}/0")
+url = os.getenv("REDIS_PRIVATE_URL") or os.getenv("REDIS_URL") or f"redis://{os.getenv('REDIS_HOST','localhost')}:{os.getenv('REDIS_PORT','6379')}/0"
 for i in range(15):
     try:
         import redis
@@ -20,7 +20,7 @@ EOF
 echo "Waiting for PostgreSQL..."
 python - <<'EOF'
 import os, time, sys
-url = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI")
+url = os.getenv("DATABASE_PRIVATE_URL") or os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI")
 if not url:
     host = os.getenv("POSTGRES_SERVER", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")

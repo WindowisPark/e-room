@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str = "agent_db"
     DATABASE_URI: Optional[str] = None
-    DATABASE_URL: Optional[str] = None  # Railway PostgreSQL이 주입하는 변수명
+    DATABASE_URL: Optional[str] = None  # Railway PostgreSQL 공개 URL
+    DATABASE_PRIVATE_URL: Optional[str] = None  # Railway 내부망 URL (egress 없음)
 
     # JWT
     SECRET_KEY: str
@@ -24,11 +25,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Redis — REDIS_URL(Railway) 직접 지원
+    # Redis — REDIS_PRIVATE_URL(Railway 내부망) 우선, 없으면 REDIS_URL
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_URL: Optional[str] = None
+    REDIS_PRIVATE_URL: Optional[str] = None  # Railway 내부망 URL (egress 없음)
     REDIS_CACHE_DB: int = 1
     FILE_LIST_CACHE_TTL: int = 300
     FOLDER_LIST_CACHE_TTL: int = 300
@@ -116,9 +118,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode='before')
     def assemble_connection_strings(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        # DATABASE_URL (Railway) → DATABASE_URI 로 통일
+        # DATABASE_URL (Railway) → DATABASE_URI 로 통일 (내부망 우선)
         if not values.get("DATABASE_URI"):
-            if values.get("DATABASE_URL"):
+            if values.get("DATABASE_PRIVATE_URL"):
+                values["DATABASE_URI"] = values["DATABASE_PRIVATE_URL"]
+            elif values.get("DATABASE_URL"):
                 values["DATABASE_URI"] = values["DATABASE_URL"]
             else:
                 p_user = values.get("POSTGRES_USER", "postgres")
@@ -129,8 +133,10 @@ class Settings(BaseSettings):
                 if p_pwd:
                     values["DATABASE_URI"] = f"postgresql://{p_user}:{p_pwd}@{p_host}:{p_port}/{p_db}"
 
-        # REDIS_URL 조합 (Railway는 직접 주입)
-        if not values.get("REDIS_URL"):
+        # REDIS_URL 조합 (Railway 내부망 우선)
+        if values.get("REDIS_PRIVATE_URL"):
+            values["REDIS_URL"] = values["REDIS_PRIVATE_URL"]
+        elif not values.get("REDIS_URL"):
             r_host = values.get("REDIS_HOST", "localhost")
             r_port = values.get("REDIS_PORT", 6379)
             r_db = values.get("REDIS_DB", 0)
