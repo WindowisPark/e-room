@@ -16,7 +16,7 @@
     "frontend": "file:",
     "moment": "^2.30.1",
     "pdf.js": "^0.1.0",
-    "pdfjs-dist": "^3.4.120",
+    "pdfjs-dist": "^5.5.207",
     "pinia": "^2.3.1",
     "portone": "^2.1.1",
     "qs": "^6.13.0",
