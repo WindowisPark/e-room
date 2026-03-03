@@ -33,11 +33,15 @@ class CacheService:
     def _initialize(self):
         """Redis 연결 초기화"""
         try:
-            # 캐시용 Redis 연결
-            self.redis_client = redis.Redis(
-                host=settings.REDIS_CACHE_HOST,
-                port=settings.REDIS_CACHE_PORT,
-                db=settings.REDIS_CACHE_DB,
+            # 캐시용 Redis 연결 (REDIS_URL 기반, DB만 캐시용으로 변경)
+            base_url = settings.REDIS_URL or "redis://localhost:6379"
+            # URL에서 DB 부분을 캐시 DB로 교체
+            import re
+            cache_url = re.sub(r'/\d+$', f'/{settings.REDIS_CACHE_DB}', base_url)
+            if not re.search(r'/\d+$', base_url):
+                cache_url = base_url.rstrip('/') + f'/{settings.REDIS_CACHE_DB}'
+            self.redis_client = redis.Redis.from_url(
+                cache_url,
                 decode_responses=True,
                 socket_connect_timeout=3,
                 socket_timeout=3

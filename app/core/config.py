@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_URL: Optional[str] = None
     REDIS_PRIVATE_URL: Optional[str] = None  # Railway 내부망 URL (egress 없음)
+    REDIS_CACHE_HOST: str = "localhost"
+    REDIS_CACHE_PORT: int = 6379
     REDIS_CACHE_DB: int = 1
     FILE_LIST_CACHE_TTL: int = 300
     FOLDER_LIST_CACHE_TTL: int = 300
