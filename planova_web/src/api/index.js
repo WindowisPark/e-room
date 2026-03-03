@@ -49,7 +49,7 @@ instance.interceptors.response.use(
     if (error.response?.status === 401) {
       try {
         // 로그아웃 처리를 직접 호출하는 대신 로컬 스토리지에서 토큰을 제거
-        localStorage.removeItem('token');
+        localStorage.removeItem('auth');
         // 또는 이벤트를 통해 로그아웃 처리
         window.dispatchEvent(new CustomEvent('logout'));
       } catch (e) {

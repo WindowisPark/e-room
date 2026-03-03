@@ -1,12 +1,14 @@
 <script setup>
 import { useRouter } from 'vue-router';
 import { ref } from 'vue';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
 const showDropdown = ref(false);
+const authStore = useAuthStore();
 
 const logout = () => {
-  localStorage.removeItem('isAuthenticated');
+  authStore.logout();
   router.push('/auth/login');
 };
 
@@ -42,8 +44,8 @@ const goToPdfPage = () => {
         
         <div v-if="showDropdown" class="mini-dropdown">
           <div class="user-header">
-            <div class="user-name">한가연</div>
-            <div class="user-email">iamgayeonii@gmail.com</div>
+            <div class="user-name">{{ authStore.username }}</div>
+            <div class="user-email">{{ authStore.email }}</div>
           </div>
           
           <div class="menu-items">

@@ -109,6 +109,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import LineChart from '@/components/LineChart.vue';
+import { memberAttendanceApi } from '@/api/memberAttendanceApi.js';
 const currentDay = ref(1);
 const consecutiveDays = ref(1);
 const attendanceStatus = reactive({
@@ -128,23 +129,40 @@ const navigateToPdf = (tabType = 'personal') => {
   router.push({ path: '/student/pdf', query: { tab: tabType } });
 };
 
-const checkAttendance = () => {
+const checkAttendance = async () => {
   if (!attendanceStatus.canCheckToday) {
     showToast("오늘은 이미 출석체크를 완료했습니다!");
     return;
   }
-  
-  const nextDay = currentDay.value + 1;
-  
-  if (nextDay <= 7) {
-    currentDay.value = nextDay;
-    consecutiveDays.value += 1;
-    attendanceStatus.completedDays.push(nextDay);
-    attendanceStatus.lastCheckDate = new Date().toISOString();
-    attendanceStatus.canCheckToday = false;
-    progressFillWidth.value = `${(nextDay - 1) * 16.66}%`;
-      
+
+  isLoading.value = true;
+  try {
+    const res = await memberAttendanceApi.checkAttendance();
+    const data = res.data;
+    consecutiveDays.value = data.current_streak ?? consecutiveDays.value;
+    attendanceStatus.canCheckToday = !data.today_checked;
+    currentDay.value = data.current_streak ?? currentDay.value;
+    attendanceStatus.lastCheckDate = data.today ?? new Date().toISOString();
+    if (!attendanceStatus.completedDays.includes(currentDay.value)) {
+      attendanceStatus.completedDays.push(currentDay.value);
+    }
+    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
     saveAttendanceData();
+    showToast(data.message ?? "출석체크 완료!");
+  } catch (e) {
+    // 오프라인 fallback
+    const nextDay = currentDay.value + 1;
+    if (nextDay <= 7) {
+      currentDay.value = nextDay;
+      consecutiveDays.value += 1;
+      attendanceStatus.completedDays.push(nextDay);
+      attendanceStatus.lastCheckDate = new Date().toISOString();
+      attendanceStatus.canCheckToday = false;
+      progressFillWidth.value = `${(nextDay - 1) * 16.66}%`;
+      saveAttendanceData();
+    }
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -210,8 +228,18 @@ const attendanceBtnClass = computed(() => {
   }
 });
 
-onMounted(() => {
-  loadAttendanceData();
+onMounted(async () => {
+  try {
+    const res = await memberAttendanceApi.getAttendanceStatus();
+    const data = res.data;
+    consecutiveDays.value = data.current_streak ?? consecutiveDays.value;
+    attendanceStatus.canCheckToday = !data.today_checked;
+    currentDay.value = data.current_streak ?? currentDay.value;
+    attendanceStatus.lastCheckDate = data.today ?? null;
+    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
+  } catch (e) {
+    loadAttendanceData();
+  }
 });
 
 const CircleProgress = {
