@@ -18,7 +18,8 @@ instance.interceptors.request.use(
   (config) => {
     // JWT 추출 - Pinia 스토어를 직접 사용하는 대신 함수로 분리하거나 로컬 스토리지에서 직접 가져올 수 있습니다
     try {
-      const token = localStorage.getItem('token'); // 또는 다른 방식으로 토큰 가져오기
+      const auth = localStorage.getItem('auth');
+      const token = auth ? JSON.parse(auth).access_token : null;
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
       }
@@ -28,7 +29,6 @@ instance.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.log(error);
     return Promise.reject(error);
   }
 );

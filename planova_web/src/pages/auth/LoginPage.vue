@@ -2,8 +2,10 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import authApi from '@/api/authApi';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const isLoading = ref(false);
 const activeTab = ref('email'); // 'email' 또는 'kakao'
 
@@ -18,10 +20,6 @@ const KAKAO_KEY = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY ||
                   import.meta.env.VUE_APP_KAKAO_JAVASCRIPT_KEY || 
                   'f4c7f7a5fe0b155d15b0fc65f67f94ec'; // 백업용 키
 
-console.log('환경변수 확인:');
-console.log('VITE_KAKAO_JAVASCRIPT_KEY:', import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY);
-console.log('VUE_APP_KAKAO_JAVASCRIPT_KEY:', import.meta.env.VUE_APP_KAKAO_JAVASCRIPT_KEY);
-console.log('최종 사용 키:', KAKAO_KEY);
 
 // 디버그용 변수
 const debug = ref({
@@ -123,16 +121,8 @@ const emailLogin = async () => {
 
     console.log('✅ 로그인 응답:', response);
 
-    // 로그인 성공 시 정보 저장
-    localStorage.setItem('access_token', response.access_token);
-    localStorage.setItem('refresh_token', response.refresh_token);
-    localStorage.setItem('token_type', response.token_type);
-    localStorage.setItem('user_id', response.user_id);
-    localStorage.setItem('username', response.username);
-    localStorage.setItem('userEmail', response.email);
-    localStorage.setItem('is_admin', response.is_admin);
-    localStorage.setItem('isAuthenticated', 'true');
-    localStorage.setItem('loginMethod', 'email');
+    // 로그인 성공 시 store에 저장 (localStorage는 store에서 관리)
+    authStore.setAuth(response);
 
     if (rememberMe.value) {
       localStorage.setItem('rememberedEmail', email.value);
