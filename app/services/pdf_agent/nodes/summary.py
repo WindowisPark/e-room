@@ -16,17 +16,17 @@ from app.core.config import settings
 import json
 import os
 import logging
-from tqdm import tqdm
 from datetime import datetime
 
 llm = ChatGoogleGenerativeAI(
-    model=settings.AI_MODEL_NAME, google_api_key=settings.GOOGLE_API_KEY
+    model=settings.AI_MODEL_NAME,
+    google_api_key=settings.GOOGLE_API_KEY,
+    request_timeout=settings.AI_LLM_TIMEOUT,
 )
 logger = logging.getLogger(__name__)
 
 def start_point_of_summary(state: AgentState):
-    pdf_path = input("요약하고 싶은 파일의 경로를 입력해주세요.")
-    return {"pdf_path":pdf_path}
+    return {"pdf_path": state["pdf_path"]}
 
 def get_related_pdf(state: AgentState):
     pdf_path = state["pdf_path"]
@@ -55,10 +55,9 @@ def pdf_parsing(state: AgentState):
 
 def summary_pdf(state:AgentState):
     pdfs = state["pdfs"]
-    summaries = ""
-    for pdf in tqdm(pdfs) :
-        result = llm.invoke(SUMMARY_PROMPT.format(pdf=pdf)).content
-        summaries += result
+    prompts = [SUMMARY_PROMPT.format(pdf=pdf) for pdf in pdfs]
+    results = llm.batch(prompts)
+    summaries = "".join(r.content for r in results)
     return {"result":summaries}
 
 
@@ -70,12 +69,10 @@ def get_need_to_explain(state : AgentState) :
 
 def explain(state: AgentState):
     need_to_explain = state["need_to_explain"]
-    result_map = {}
-    for key,value in tqdm(need_to_explain.items()):
-        question = EXPLAIN_TERM_PROMPT.format(value=value, key=key)
-        explanation = llm.invoke(question).content
-        result_map[key] = explanation
-
+    keys = list(need_to_explain.keys())
+    prompts = [EXPLAIN_TERM_PROMPT.format(value=need_to_explain[k], key=k) for k in keys]
+    results = llm.batch(prompts)
+    result_map = {k: r.content for k, r in zip(keys, results)}
     return {"need_to_explain" : result_map}
     
 # 설명 본문에 추가
@@ -98,9 +95,9 @@ def add_explaination(state : AgentState):
                 is_separator_regex=False,
         )
     divided_results = text_splitter.split_text(result)
-    final_result = ""
-    for divided_result in tqdm(divided_results) :
-        final_result += llm.invoke(ADD_EXPLANATION_PROMPT.format(divided_result=divided_result, need_to_explain=need_to_explain)).content
+    prompts = [ADD_EXPLANATION_PROMPT.format(divided_result=dr, need_to_explain=need_to_explain) for dr in divided_results]
+    batch_results = llm.batch(prompts)
+    final_result = "".join(r.content for r in batch_results)
     
     user_id = state["user_id"]
     title = os.path.basename(state["pdf_path"])

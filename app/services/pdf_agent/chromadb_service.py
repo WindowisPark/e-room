@@ -59,26 +59,22 @@ class ChromaDBService:
                 )
                 
                 # API 키 확인
-                api_key = os.getenv("OPENAI_API_KEY", "") or settings.AI_API_KEY
-                logger.info(f"API 키 설정 상태: {'설정됨' if api_key else '설정 안 됨'}")
-                
+                api_key = settings.GOOGLE_API_KEY
+                logger.info(f"Gemini API 키 설정 상태: {'설정됨' if api_key else '설정 안 됨'}")
+
                 if api_key:
-                    # OpenAI 임베딩 함수 설정
+                    # Gemini 임베딩 함수 설정
                     try:
-                        # API 키 마스킹하여 로깅 (보안)
-                        masked_key = api_key[:4] + "..." + api_key[-4:] if len(api_key) > 8 else "***"
-                        logger.info(f"OpenAI API 키: {masked_key}")
-                        
-                        self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                        self.embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
                             api_key=api_key,
-                            model_name="text-embedding-ada-002"
+                            model_name=settings.AI_EMBEDDING_MODEL
                         )
-                        logger.info("OpenAI 임베딩 함수 초기화 성공")
+                        logger.info("Gemini 임베딩 함수 초기화 성공")
                     except Exception as emb_err:
-                        logger.error(f"OpenAI 임베딩 함수 초기화 실패: {str(emb_err)}")
+                        logger.error(f"Gemini 임베딩 함수 초기화 실패: {str(emb_err)}")
                         self.embedding_function = None
                 else:
-                    logger.warning("AI_API_KEY가 설정되지 않았습니다. 임베딩 기능이 제한됩니다.")
+                    logger.warning("GOOGLE_API_KEY가 설정되지 않았습니다. 임베딩 기능이 제한됩니다.")
                     self.embedding_function = None
                 
                 logger.info(f"ChromaDB 초기화 성공: {self.db_path}")

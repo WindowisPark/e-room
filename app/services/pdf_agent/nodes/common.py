@@ -15,7 +15,9 @@ import os
 
 logger = logging.getLogger(__name__)
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", google_api_key=settings.GOOGLE_API_KEY
+    model=settings.AI_MODEL_NAME,
+    google_api_key=settings.GOOGLE_API_KEY,
+    request_timeout=settings.AI_LLM_TIMEOUT,
 )
 
 def input_question_api(state: AgentState, query: str) -> Dict[str, Any]:

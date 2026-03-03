@@ -17,17 +17,21 @@ from datetime import datetime
 import os
 import mimetypes
 import base64
+import logging
 
+logger = logging.getLogger(__name__)
 llm = ChatGoogleGenerativeAI(
-    model=settings.AI_MODEL_NAME, google_api_key=settings.GOOGLE_API_KEY
+    model=settings.AI_MODEL_NAME,
+    google_api_key=settings.GOOGLE_API_KEY,
+    request_timeout=settings.AI_LLM_TIMEOUT,
 )
 
 def start_point_of_exam(state: AgentState):
-    print("시험 그래프 시작")
+    logger.info("시험 그래프 시작")
 
 def select_previous_exam(state : AgentState):
-    previous_exam_path = input("기출 문제 경로를 입력해주세요.(띄어쓰기로 구분)").split() # 파일 경로임
-    return {"previous_exam_path":previous_exam_path}
+    previous_exam_path = state.get("previous_exam_path", [])
+    return {"previous_exam_path": previous_exam_path}
 
 def check_exist_previous_exam(state: AgentState):
     if len(state["previous_exam_path"])==0:
@@ -46,8 +50,7 @@ def analyze_previous_exam(state:AgentState): # 과거 시험 문제 병합 및 �
             full_text += doc.page_content
         result = llm.invoke(ANALYZE_EXAM_PROMPT.format(full_text=full_text)).content
         personality.append(result)
-        print("=====출제자의 성향=====")
-        print(personality)
+        logger.info(f"출제자 성향 분석 완료: {len(personality)}번째")
     
     return {"personality":personality}
 
@@ -57,8 +60,7 @@ def get_final_personality(state: AgentState):
     return {"final_personality" : result}
 
 def select_exam_docs(state: AgentState):
-    exam_docs_path = input("시험 문제 출제를 원하는 자료를 선택해주세요.(경로입력)")
-    return {"exam_docs_path":exam_docs_path}
+    return {"exam_docs_path": state["pdf_path"]}
 
 def get_all_files(state: AgentState):
     exam_docs = get_all_docs(state["exam_docs_path"])
@@ -76,20 +78,17 @@ def get_concept_for_exam(state: AgentState):
         is_separator_regex=False,
     )
     pdfs = text_splitter.create_documents([exam_docs]) # 분할
-    concepts_for_exam = []
-    for pdf in pdfs:
-        concepts_for_exam.append(llm.invoke(CONCEPT_FOR_EXAM_PROMPT.format(personality=personality, page_content=pdf.page_content)).content)
-    print(concepts_for_exam)
-    print("=="*30)
+    prompts = [CONCEPT_FOR_EXAM_PROMPT.format(personality=personality, page_content=pdf.page_content) for pdf in pdfs]
+    results = llm.batch(prompts)
+    concepts_for_exam = [r.content for r in results]
     return {"concepts_for_exam":concepts_for_exam}
 
 def refine_problems(state: AgentState):
     concepts_for_exam = state["concepts_for_exam"]
     personality = state["personality"]
-    problems = []
-    for concept in concepts_for_exam:
-        problems.append(llm.invoke(REFINE_PROBLEMS_PROMPT.format(personality=personality, concept=concept)).content)
-    
+    prompts = [REFINE_PROBLEMS_PROMPT.format(personality=personality, concept=concept) for concept in concepts_for_exam]
+    results = llm.batch(prompts)
+    problems = [r.content for r in results]
     return {"problems":problems}
 
 def save_exam(state: AgentState):
@@ -102,7 +101,6 @@ def save_exam(state: AgentState):
     with open(os.path.join(user_dir,f"{title}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.md"), "w", encoding="utf-8") as md_file:
         md_file.write(problems)
 
-    print(problems)
     messages = state["messages"]
     messages.append(AIMessage(content=problems))
     

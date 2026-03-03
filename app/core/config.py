@@ -63,9 +63,10 @@ class Settings(BaseSettings):
 
     # AI 모델 (Gemini)
     GOOGLE_API_KEY: str = ""
-    AI_API_KEY: str = ""  # OpenAI (임베딩용 유지)
+    AI_API_KEY: str = ""  # deprecated — GOOGLE_API_KEY 사용
     AI_MODEL_NAME: str = "gemini-2.5-flash"
-    AI_EMBEDDING_MODEL: str = "text-embedding-ada-002"
+    AI_EMBEDDING_MODEL: str = "models/text-embedding-004"
+    AI_LLM_TIMEOUT: int = 60  # LLM 요청 타임아웃 (초)
 
     # Kakao OAuth
     KAKAO_CLIENT_ID: str = ""
