@@ -44,6 +44,7 @@ tiktoken>=0.5.1
 langchain-core>=0.3.60  # 최신 코어 버전 사용
 langchain>=0.1.4  # 최신 버전
 langchain-community>=0.0.24
+langchain-text-splitters>=0.3.0
 langgraph>=0.0.24
 langchain-upstage>=0.6.0  # Upstage 최신 버전
 langchain-openai>=0.0.5
