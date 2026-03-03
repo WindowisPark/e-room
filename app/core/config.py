@@ -57,9 +57,10 @@ class Settings(BaseSettings):
     # 프론트엔드 정적 파일 경로
     STATIC_DIR: str = "./frontend/dist"
 
-    # AI 모델
-    AI_API_KEY: str = ""
-    AI_MODEL_NAME: str = "gpt-4.1-mini"
+    # AI 모델 (Gemini)
+    GOOGLE_API_KEY: str = ""
+    AI_API_KEY: str = ""  # OpenAI (임베딩용 유지)
+    AI_MODEL_NAME: str = "gemini-2.5-flash"
     AI_EMBEDDING_MODEL: str = "text-embedding-ada-002"
 
     # Kakao OAuth

@@ -47,6 +47,7 @@ langchain-community>=0.0.24
 langgraph>=0.0.24
 langchain-upstage>=0.6.0  # Upstage 최신 버전
 langchain-openai>=0.0.5
+langchain-google-genai>=2.0.0  # Gemini API
 langchain-chroma>=0.0.5
 chromadb>=0.4.18
 langsmith>=0.1.4  # 최신 버전
