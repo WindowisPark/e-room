@@ -11,6 +11,9 @@ from app.services.pdf_agent.graphs.common import add_common_edge_on_graph,add_co
 def start_graph()->StateGraph:
     return StateGraph(AgentState)
 
+def get_processing_graph():
+    return intergrate_graph()
+
 def intergrate_graph() :
     graph = start_graph()
     graph = add_common_node_on_graph(graph)

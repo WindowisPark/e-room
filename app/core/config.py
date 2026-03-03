@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     IAMPORT_API_SECRET: str = ""
     IAMPORT_MERCHANT_ID: str = ""
     IAMPORT_CHANNEL_KEY: str = ""
+    PORTONE_STORE_ID: Optional[str] = None
+    PORTONE_CHANNEL_KEY: Optional[str] = None
+    PORTONE_API_SECRET: Optional[str] = None
+    PORTONE_CLIENT_KEY: Optional[str] = None
 
     # SMS
     SMS_API_KEY: Optional[str] = None
