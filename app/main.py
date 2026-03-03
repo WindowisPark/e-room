@@ -15,6 +15,7 @@ logging.basicConfig(
 _logger = logging.getLogger(__name__)
 
 from app.core.config import settings
+import app.db.base  # noqa: F401 — 모든 SQLAlchemy 모델을 mapper에 등록
 from app.api.v1.pdf_manager import router as pdf_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1 import api_router
