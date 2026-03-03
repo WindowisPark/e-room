@@ -116,14 +116,10 @@ const showMarketing = () => {
 
 // 카카오 SDK 초기화
 onMounted(async () => {
-  console.log('=== 디버그 정보 ===');
-  console.log('카카오 키:', debug.value.kakaoKey);
-  console.log('window.Kakao 존재 여부:', !!window.Kakao);
-  
   // 카카오 SDK가 로드될 때까지 기다림
   let retryCount = 0;
   const maxRetries = 10;
-  
+
   const waitForKakao = () => {
     return new Promise((resolve) => {
       const checkKakao = () => {
@@ -131,7 +127,6 @@ onMounted(async () => {
           resolve(true);
         } else if (retryCount < maxRetries) {
           retryCount++;
-          console.log(`카카오 SDK 로딩 대기 중... (${retryCount}/${maxRetries})`);
           setTimeout(checkKakao, 100);
         } else {
           resolve(false);
@@ -140,30 +135,23 @@ onMounted(async () => {
       checkKakao();
     });
   };
-  
+
   const kakaoLoaded = await waitForKakao();
-  
+
   if (kakaoLoaded && window.Kakao) {
     debug.value.isKakaoLoaded = true;
-    
-    // 이제 안전하게 isInitialized 호출 가능
+
     if (window.Kakao.isInitialized && !window.Kakao.isInitialized()) {
-      console.log('카카오 SDK 초기화 중... 키:', KAKAO_KEY);
-      
       try {
         window.Kakao.init(KAKAO_KEY);
         debug.value.isInitialized = true;
-        console.log('✅ 카카오 SDK 초기화 성공');
       } catch (error) {
-        console.error('❌ 카카오 SDK 초기화 실패:', error);
+        console.error('카카오 SDK 초기화 실패:', error);
         alert('카카오 SDK 초기화에 실패했습니다. 키를 확인해주세요.');
       }
     } else if (window.Kakao.isInitialized && window.Kakao.isInitialized()) {
       debug.value.isInitialized = true;
-      console.log('✅ 카카오 SDK 이미 초기화됨');
     }
-  } else {
-    console.error('❌ 카카오 SDK가 로드되지 않았습니다.');
   }
 });
 
@@ -186,10 +174,8 @@ const emailSignup = async () => {
       phone_number: phoneNumber.value
     };
 
-    // ✅ 여기를 이렇게 수정
-    const data = await authApi.create(payload);
+    await authApi.create(payload);
 
-    console.log('✅ 회원가입 성공:', data);
     signupSuccess.value = true;
 
     setTimeout(() => {
@@ -208,10 +194,6 @@ const emailSignup = async () => {
 
 // 카카오 회원가입 처리
 const kakaoSignup = async () => {
-  console.log('=== 카카오 회원가입 시도 ===');
-  console.log('카카오 로드 여부:', debug.value.isKakaoLoaded);
-  console.log('카카오 초기화 여부:', debug.value.isInitialized);
-  
   if (!window.Kakao) {
     alert('카카오 SDK가 로드되지 않았습니다.');
     return;
@@ -228,14 +210,10 @@ const kakaoSignup = async () => {
     // 카카오 로그인 실행 (회원가입 목적)
     window.Kakao.Auth.login({
       success: async (authObj) => {
-        console.log('카카오 인증 성공', authObj);
-        
         // 사용자 정보 요청
         window.Kakao.API.request({
           url: '/v2/user/me',
           success: (userData) => {
-            console.log('사용자 정보', userData);
-            
             // 여기서 서버에 카카오 회원가입 API 호출
             // 예: axios.post('/api/kakao-signup', { 
             //   kakaoId: userData.id,

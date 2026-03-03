@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <div class="header">
-      <h1 class="title">플래노바와 <span class="day-count">5</span>일째 함께하는중</h1>
+      <h1 class="title">플래노바와 <span class="day-count">{{ consecutiveDays }}</span>일째 함께하는중</h1>
     </div>
 
     <div class="attendance-card">
@@ -48,11 +48,11 @@
         </div>
         <div class="menu-links">
           <div class="menu-link" @click="navigateToPdf('personal')">
-            <span>생성된 문제(5)</span>
+            <span>생성된 문제({{ quizCount }})</span>
             <span class="arrow">›</span>
           </div>
           <div class="menu-link" @click="navigateToPdf('personal')">
-            <span>생성된 요약 파일(2)</span>
+            <span>생성된 요약 파일({{ summaryCount }})</span>
             <span class="arrow">›</span>
           </div>
         </div>
@@ -65,7 +65,7 @@
         </div>
         <div class="menu-links">
         <div class="menu-link" @click="navigateToPdf('team')">
-            <span>나의 팀스페이스(1)</span>
+            <span>나의 팀스페이스({{ teamspaceCount }})</span>
             <span class="arrow">›</span>
         </div>
         </div>
@@ -112,6 +112,9 @@ import LineChart from '@/components/LineChart.vue';
 import { memberAttendanceApi } from '@/api/memberAttendanceApi.js';
 const currentDay = ref(1);
 const consecutiveDays = ref(1);
+const quizCount = ref(0);
+const summaryCount = ref(0);
+const teamspaceCount = ref(0);
 const attendanceStatus = reactive({
   lastCheckDate: null,
   completedDays: [1],
