@@ -33,9 +33,19 @@ from app.models.notification import Notification
 from app.models.payment import Payment
 from app.models.question import Question
 
+# 취업 준비 기능
+from app.models.resume import ResumeProfile, ResumeItem
+from app.models.job_research import SavedCompany
+from app.models.cover_letter import CoverLetter, CoverLetterItem
+
 # Alembic 설정
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URI)
+
+# asyncpg 드라이버는 alembic sync 마이그레이션과 호환되지 않으므로 제거
+_db_uri = settings.DATABASE_URI or ""
+if "+asyncpg" in _db_uri:
+    _db_uri = _db_uri.replace("+asyncpg", "")
+config.set_main_option("sqlalchemy.url", _db_uri)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -57,7 +67,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.DATABASE_URI
+    configuration["sqlalchemy.url"] = _db_uri
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

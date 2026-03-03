@@ -27,30 +27,40 @@ from app.models.tag import PDFFile, PDFTag, PDFTagMention
 # 6. 비밀번호 재설정 모델
 from app.models.password_reset import PasswordResetToken
 
+# 7. 취업 준비 모델
+from app.models.resume import ResumeProfile, ResumeItem, ItemCategory
+from app.models.job_research import SavedCompany
+from app.models.cover_letter import CoverLetter, CoverLetterItem
+
 
 # 모든 모델을 모아서 리스트로 정의 (필요시 사용)
 ALL_MODELS = [
     # 기본 모델
-    PointHistory, Badge, UserBadge, 
+    PointHistory, Badge, UserBadge,
     Payment,
-    
+
     # 이벤트 관련
     Event, InviteCode,
 
     # 사용자 모델
     User,
-    
+
     # 사용자 관련 독립 모델
     Attendance, Notification, Question,
-    
+
     # 팀 관련 모델
     Team, TeamMember, TeamActivity,
-    
+
     # PDF 관련 모델
     PDFFile, PDFTag, PDFTagMention,
 
     # 비밀번호 재설정 모델
-    PasswordResetToken
+    PasswordResetToken,
+
+    # 취업 준비 모델
+    ResumeProfile, ResumeItem,
+    SavedCompany,
+    CoverLetter, CoverLetterItem,
 ]
 
 # 마이그레이션에 필요한 모든 모델 의존성 제공
@@ -74,10 +84,13 @@ __all__ = [
     # PDF 관련 모델
     'PDFFile', 'PDFTag', 'PDFTagMention',
 
-
     # 비밀번호 재설정 모델
     'PasswordResetToken',
 
+    # 취업 준비 모델
+    'ResumeProfile', 'ResumeItem', 'ItemCategory',
+    'SavedCompany',
+    'CoverLetter', 'CoverLetterItem',
 
     # 모델 컬렉션
     'ALL_MODELS'

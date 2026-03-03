@@ -41,12 +41,30 @@ export default [
         meta: { layout: 'StudentLayout' }
       },
       {
+        path: 'resume',
+        name: 'studentResume',
+        component: () => import('../pages/student/StudentResumePage.vue'),
+        meta: { layout: 'StudentLayout' }
+      },
+      {
+        path: 'jobs',
+        name: 'studentJobs',
+        component: () => import('../pages/student/StudentJobResearchPage.vue'),
+        meta: { layout: 'StudentLayout' }
+      },
+      {
+        path: 'coverletter',
+        name: 'studentCoverLetter',
+        component: () => import('../pages/student/StudentCoverLetterPage.vue'),
+        meta: { layout: 'StudentLayout' }
+      },
+      {
         path: 'support',
         name: 'studentSupport',
         component: () => import('../pages/student/StudentSupportPage.vue'),
         meta: { layout: 'StudentLayout' }
       }
-      
+
     ]
   }
 ];

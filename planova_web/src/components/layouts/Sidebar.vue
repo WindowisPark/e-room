@@ -14,14 +14,17 @@ defineProps({
 
 const currentMenu = computed(() => {
   const path = route.path;
-  
+
   if (path.includes('/student/aitutor')) return 'aitutor';
   if (path.includes('/student/pdf')) return 'pdf';
   if (path.includes('/student/calendar')) return 'calendar';
+  if (path.includes('/student/resume')) return 'resume';
+  if (path.includes('/student/jobs')) return 'jobs';
+  if (path.includes('/student/coverletter')) return 'coverletter';
   if (path.includes('/student/myroom')) return 'myroom';
   if (path.includes('/student/faq')) return 'faq';
   if (path.includes('/student/support')) return 'support';
-  
+
   return 'main';
 });
 
@@ -130,36 +133,69 @@ const clearHovered = () => {
         <div class="nav-text">캘린더</div>
       </div>
       
-      <div 
-        class="nav-item" 
+      <div
+        class="nav-item"
+        :class="{ active: currentMenu === 'resume' }"
+        @click="handleMenuClick('resume')"
+        @mouseenter="setHovered('resume')"
+        @mouseleave="clearHovered"
+      >
+        <div class="nav-icon nav-icon-emoji">📄</div>
+        <div class="nav-text">이력서</div>
+      </div>
+
+      <div
+        class="nav-item"
+        :class="{ active: currentMenu === 'jobs' }"
+        @click="handleMenuClick('jobs')"
+        @mouseenter="setHovered('jobs')"
+        @mouseleave="clearHovered"
+      >
+        <div class="nav-icon nav-icon-emoji">🏢</div>
+        <div class="nav-text">기업 조사</div>
+      </div>
+
+      <div
+        class="nav-item"
+        :class="{ active: currentMenu === 'coverletter' }"
+        @click="handleMenuClick('coverletter')"
+        @mouseenter="setHovered('coverletter')"
+        @mouseleave="clearHovered"
+      >
+        <div class="nav-icon nav-icon-emoji">✍️</div>
+        <div class="nav-text">자소서</div>
+      </div>
+
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'myroom' }"
         @click="handleMenuClick('myroom')"
         @mouseenter="setHovered('myroom')"
         @mouseleave="clearHovered"
       >
       <div class="nav-icon">
-        <img 
+        <img
           :src="currentMenu === 'myroom' || hoveredItem === 'myroom'
-            ? '/sidebar-myroom-click.png' 
-            : '/sidebar-myroom.png'" 
+            ? '/sidebar-myroom-click.png'
+            : '/sidebar-myroom.png'"
           class="icon-image"
         />
       </div>
         <div class="nav-text">마이룸</div>
       </div>
-            
-      <div 
-        class="nav-item" 
+
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'support' }"
         @click="handleMenuClick('support')"
         @mouseenter="setHovered('support')"
         @mouseleave="clearHovered"
       >
       <div class="nav-icon">
-        <img 
+        <img
           :src="currentMenu === 'support' || hoveredItem === 'support'
-            ? '/sidebar-support-click.png' 
-            : '/sidebar-support.png'" 
+            ? '/sidebar-support-click.png'
+            : '/sidebar-support.png'"
           class="icon-image-support"
         />
       </div>
@@ -251,5 +287,10 @@ const clearHovered = () => {
 
 .nav-item:hover .nav-text {
   color: #F76707;
+}
+
+.nav-icon-emoji {
+  font-size: 22px;
+  line-height: 1;
 }
 </style>

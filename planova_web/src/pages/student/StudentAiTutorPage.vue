@@ -194,9 +194,9 @@
         // 퀵 액션
         quickActions: [
           { icon: '📚', text: '요약하기' },
-          { icon: '💬', text: '질의응답' },
           { icon: '📝', text: '시험 문제 생성' },
-          { icon: '📅', text: '학습 계획 세우기' },
+          { icon: '📄', text: '이력서 피드백' },
+          { icon: '✍️', text: '자소서 첨삭' },
         ],
       }
     },
