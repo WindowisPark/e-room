@@ -13,6 +13,14 @@
 | 2 | 보안 문제 (하드코딩 시크릿, 세션 누수, 웹훅 미검증 등) | 🔴 긴급 | ✅ 완료 |
 | 3 | 응답 처리 속도 (커넥션 풀, 클라이언트 싱글톤, 캐싱 부재) | 🟠 높음 | ✅ 완료 |
 | 4 | 동시 요청 시 API 먹통 (async 함수 내 sync 블로킹 호출) | 🔴 긴급 | ✅ 완료 |
+| 5 | [FE] 사용자 정보 하드코딩 + 401 localStorage 키 버그 | 🔴 긴급 | ✅ 완료 |
+| 6 | [FE] 출석체크 API 미연동 (localStorage만 사용) | 🟠 높음 | ✅ 완료 |
+| 7 | [FE] 콘솔에 카카오 API 키 · 인증 토큰 · 사용자 정보 노출 | 🔴 긴급 | ✅ 완료 |
+| 8 | [FE] 마이룸 내 카운트 하드코딩 (문제 5개, 요약 2개, 팀스페이스 1개) | 🟡 보통 | ✅ 완료 |
+| 9 | [FE] npm 의존성 보안 취약점 (critical 1, high 13 포함 22건) | 🔴 긴급 | ✅ 완료 |
+| 10 | [FE] 마이룸 카운트 API 미연동 (quizCount, summaryCount, teamspaceCount) | 🟡 보통 | 🔲 대기 |
+| 11 | [FE] 카카오 로그인 시 authStore 미연동 (localStorage 직접 저장) | 🟠 높음 | 🔲 대기 |
+| 12 | [BE] 캘린더 API 부재 (프론트 캘린더 기능 연동 불가) | 🟡 보통 | 🔲 대기 |
 
 ---
 
@@ -183,6 +191,122 @@ ai_ask:{sha256(user_id:query)}   TTL=3600s
 
 ---
 
+---
+
+## Issue #5 — [FE] 사용자 정보 하드코딩 + 401 localStorage 키 버그
+
+### 원인 분석
+
+- `StudentHeader.vue`에 `한가연`, `iamgayeonii@gmail.com`이 직접 입력되어 있었음
+- `api/index.js` 401 핸들러에서 `localStorage.removeItem('token')` 호출 — 실제 저장 키는 `auth`이므로 토큰이 삭제되지 않던 버그
+
+### 변경 내용
+
+| 파일 | 수정 항목 |
+|------|----------|
+| `planova_web/src/components/layouts/StudentHeader.vue` | `useAuthStore` import, 이름·이메일 → `authStore.username / email`, 로그아웃 → `authStore.logout()` |
+| `planova_web/src/api/index.js` | `removeItem('token')` → `removeItem('auth')` |
+
+---
+
+## Issue #6 — [FE] 출석체크 API 미연동
+
+### 원인 분석
+
+`StudentMyroomPage.vue`의 `checkAttendance()`와 `onMounted()`가 `localStorage`만 사용하고 백엔드 `POST /api/v1/attendance/`를 전혀 호출하지 않았음. 새 기기에서 접속 시 출석 상태가 초기화되는 문제.
+
+### 백엔드 응답 스키마
+
+```
+POST /api/v1/attendance/   → { success, message, current_streak, today_checked, today }
+GET  /api/v1/attendance/   → 동일 구조
+```
+
+### 변경 내용
+
+| 파일 | 수정 항목 |
+|------|----------|
+| `planova_web/src/pages/student/StudentMyroomPage.vue` | `memberAttendanceApi` import, `onMounted`에서 `getAttendanceStatus()` 호출 → `current_streak`/`today_checked` 매핑, `checkAttendance()`에서 API 호출 후 상태 반영, 오프라인 fallback으로 localStorage 유지 |
+
+### 필드 매핑
+
+| 백엔드 응답 | 프론트 상태 |
+|------------|------------|
+| `current_streak` | `consecutiveDays`, `currentDay` |
+| `today_checked` | `!attendanceStatus.canCheckToday` |
+| `today` | `attendanceStatus.lastCheckDate` |
+
+---
+
+## Issue #7 — [FE] 콘솔에 민감 정보 노출
+
+### 원인 분석
+
+`LoginPage.vue`, `SignUpPage.vue` 양쪽에서 아래 정보가 `console.log`로 출력됨:
+- 카카오 JavaScript API 키 (`KAKAO_KEY`) — 브라우저 DevTools에서 누구나 열람 가능
+- 카카오 로그인 성공 시 `authObj` (access_token 포함)
+- `/v2/user/me` 응답 `userData` (이메일, 프로필 등 개인정보)
+- 이메일 로그인 `response` (JWT 토큰 포함)
+
+### 변경 내용
+
+| 파일 | 제거한 로그 |
+|------|------------|
+| `LoginPage.vue` | `=== 디버그 정보 ===` 블록, `카카오 키:`, `SDK 초기화 중... 키:`, `로그인 응답:`, `카카오 로그인 성공 authObj`, `사용자 정보 userData` |
+| `SignUpPage.vue` | 동일 패턴 + `회원가입 성공: data` |
+
+에러 로그 (`console.error`)는 민감 데이터를 포함하지 않는 메시지만 유지.
+
+---
+
+## Issue #8 — [FE] 마이룸 카운트 하드코딩
+
+### 변경 내용
+
+| 파일 | 수정 항목 |
+|------|----------|
+| `planova_web/src/pages/student/StudentMyroomPage.vue` | 타이틀 `5일째` → `{{ consecutiveDays }}일째`, `생성된 문제(5)` → `{{ quizCount }}`, `생성된 요약 파일(2)` → `{{ summaryCount }}`, `나의 팀스페이스(1)` → `{{ teamspaceCount }}` |
+
+`quizCount`, `summaryCount`, `teamspaceCount`는 현재 `ref(0)` 초기화. 해당 API 구현 시 `onMounted`에서 채워야 함 (Issue #10 참조).
+
+---
+
+## Issue #9 — [FE] npm 보안 취약점
+
+### 수정된 취약점
+
+| 패키지 | 심각도 | 내용 |
+|--------|--------|------|
+| `form-data` | 🔴 Critical | unsafe random으로 boundary 생성 |
+| `axios` | 🟠 High | DoS 취약점 2건 |
+| `minimatch` | 🟠 High | ReDoS 3건 |
+| `rollup` | 🟠 High | Path Traversal 파일 쓰기 |
+| `vite` | 🟡 Moderate | `server.fs` 보호 우회 (Windows 포함) |
+| `qs` | 🟡 Moderate | DoS (배열 파싱 우회) |
+| `lodash` | 🟡 Moderate | Prototype Pollution |
+| `pdfjs-dist` | 🟠 High | 악성 PDF 실행 → v3→v5 강제 업그레이드 |
+
+`pdfjs-dist`는 `npm audit fix --force`로 v5로 업그레이드. `PdfViewer.vue`는 CDN(v3.4.120)을 직접 사용하므로 영향 없음.
+
+---
+
+## 잔여 과제 (Backlog)
+
+### Issue #10 — [FE] 마이룸 카운트 API 연동
+- `quizCount`: 생성된 문제 수 — PDF agent 엔드포인트에서 사용자별 문제 수 집계 필요
+- `summaryCount`: 생성된 요약 수
+- `teamspaceCount`: 소속 팀스페이스 수 — `/api/v1/teams/my` 또는 유사 엔드포인트 필요
+
+### Issue #11 — [FE] 카카오 로그인 authStore 미연동
+현재 카카오 로그인 성공 시 `localStorage`에 직접 `kakaoToken`, `userInfo` 등을 개별 키로 저장.
+`authStore.setAuth()` 형식으로 통일 필요. 백엔드에 카카오 OAuth 콜백 API 구현이 선행되어야 함.
+
+### Issue #12 — [BE] 캘린더 API 부재
+프론트 `StudentMainPage.vue`의 v-calendar 이벤트 데이터가 하드코딩(`2025-03-18`, `2025-03-20`).
+캘린더 CRUD API (`GET/POST/PUT/DELETE /api/v1/calendar/`) 구현 필요.
+
+---
+
 ## 변경 이력
 
 | 날짜 | 작업 | 담당 |
@@ -192,3 +316,8 @@ ai_ask:{sha256(user_id:query)}   TTL=3600s
 | 2026-02-23 | Issue #2 보안 문제 수정 | Claude Code |
 | 2026-02-23 | Issue #3 응답 속도 개선 | Claude Code |
 | 2026-02-23 | Issue #1 운영보수 작업 | Claude Code |
+| 2026-03-03 | Issue #5 사용자 정보 하드코딩 제거 + 401 버그 수정 | Claude Code |
+| 2026-03-03 | Issue #6 출석체크 백엔드 API 연동 | Claude Code |
+| 2026-03-03 | Issue #7 민감 콘솔 로그 제거 (카카오 키, 토큰, 사용자 정보) | Claude Code |
+| 2026-03-03 | Issue #8 마이룸 카운트 하드코딩 → ref 변수화 | Claude Code |
+| 2026-03-03 | Issue #9 npm 보안 취약점 22건 패치 (pdfjs-dist v5 강제 업그레이드 포함) | Claude Code |
