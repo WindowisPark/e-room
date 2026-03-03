@@ -15,7 +15,16 @@ import redis.asyncio as aioredis
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
-# 환경 변수에서 Redis 설정 로드
+# 환경 변수에서 Redis 설정 로드 (REDIS_URL 우선)
+REDIS_URL = (
+    os.getenv("REDIS_PRIVATE_URL")
+    or os.getenv("REDIS_URL")
+    or "redis://{}:{}/{}".format(
+        os.getenv("REDIS_HOST", "localhost"),
+        os.getenv("REDIS_PORT", 6379),
+        os.getenv("REDIS_DB", 0),
+    )
+)
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
@@ -29,14 +38,12 @@ def json_serializer(obj):
 
 # 동기식 Redis 클라이언트 초기화
 try:
-    redis_client = Redis(
-        host=REDIS_HOST,
-        port=REDIS_PORT,
-        db=REDIS_DB,
+    redis_client = Redis.from_url(
+        REDIS_URL,
         decode_responses=True,
-        socket_connect_timeout=3,   # 3초 안에 연결 안되면 실패
-        socket_timeout=3,           # 명령 실행 3초 제한
-        retry_on_timeout=False      # 타임아웃 시 재시도 안함
+        socket_connect_timeout=3,
+        socket_timeout=3,
+        retry_on_timeout=False
     )
     redis_client.ping()
     logger.info("✅ Redis 연결 성공")
@@ -163,11 +170,9 @@ def get_redis_client() -> aioredis.Redis:
     비동기 Redis 클라이언트 인스턴스 반환 (싱글톤 패턴)
     WebSocket 연결 관리에 사용됨
     """
-    return aioredis.Redis(
-        host=REDIS_HOST,  # "localhost" 대신 환경 변수 사용
-        port=REDIS_PORT,
-        db=REDIS_DB,
-        decode_responses=True  # 응답을 자동으로 디코딩
+    return aioredis.Redis.from_url(
+        REDIS_URL,
+        decode_responses=True
     )
 
 async def publish_message(channel: str, message: Dict[str, Any]) -> int:
