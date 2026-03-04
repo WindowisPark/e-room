@@ -1,47 +1,36 @@
 <template>
   <div class="membership-page">
+    <div class="dashboard-banner">
+      취업을 향한 여정, 플래노바와 함께 계획하세요
+    </div>
     <div class="page-container">
       <div class="left-section">
-        <div class="offer-card">
-          <div class="limited-time-banner">
-            <div class="countdown-text">한정 기간 이벤트!</div>
-          </div>
-          <!-- 이벤트 이미지 컨테이너에 스포트라이트 효과 추가 -->
-          <div class="event-image-container spotlight-container">
-            <div class="spotlight-effect"></div>
-            <img src="@/assets/images/planova_open_event.png" alt="플래노바 오픈 이벤트" class="event-image">
-          </div>
-          
-          <!-- 플래닛 수량 표시 섹션 개선 -->
-          <div class="credit-breakdown">
-            <div class="credit-item">
-              <div class="credit-amount">300플래닛</div>
-              <div class="credit-label">기본 제공</div>
+        <div class="career-cards">
+          <router-link to="/student/resume" class="career-card">
+            <span class="career-icon">📄</span>
+            <div class="career-info">
+              <div class="career-title">이력서 · 포트폴리오</div>
+              <div class="career-desc">AI가 다듬어주는 나만의 이력서</div>
             </div>
-            <div class="plus-divider">+</div>
-            <div class="credit-item bonus highlight-bonus">
-              <div class="bonus-badge">BONUS</div>
-              <div class="credit-amount">100플래닛</div>
-              <div class="credit-label">보너스 제공</div>
+            <span class="career-arrow">→</span>
+          </router-link>
+          <router-link to="/student/coverletter" class="career-card">
+            <span class="career-icon">✍️</span>
+            <div class="career-info">
+              <div class="career-title">자기소개서</div>
+              <div class="career-desc">AI 초안으로 시작하는 자소서</div>
             </div>
-            <div class="equals-divider">=</div>
-            <div class="credit-item total">
-              <div class="credit-amount glow-text">400플래닛</div>
-              <div class="credit-label">총 플래닛</div>
+            <span class="career-arrow">→</span>
+          </router-link>
+          <router-link to="/student/jobs" class="career-card">
+            <span class="career-icon">🔍</span>
+            <div class="career-info">
+              <div class="career-title">기업 조사</div>
+              <div class="career-desc">공고 분석 · 기업 정보 한눈에</div>
             </div>
-          </div>
+            <span class="career-arrow">→</span>
+          </router-link>
         </div>
-        
-        <!-- 버튼 개선 - 움직이는 애니메이션 추가 -->
-        <router-link to="/information/planet" class="purchase-button-link">
-          <button class="purchase-button">
-            <div class="button-content">
-              <span class="button-text">플래닛 구매하기</span>
-              <span class="button-icon">→</span>
-            </div>
-            <div class="button-shine"></div>
-          </button>
-        </router-link>
       </div>
       
       <div class="right-section">
@@ -74,6 +63,11 @@
       </div>
     </div>
     
+    <div class="planet-mini-card">
+      <span>🎁 오픈 이벤트 — 지금 가입하면 400 플래닛 제공</span>
+      <router-link to="/information/planet" class="planet-mini-btn">구매하기 →</router-link>
+    </div>
+
     <div class="features-section">
         <img
           :src="featureImages[currentImageIndex]"
@@ -836,6 +830,104 @@ export default {
   0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
   40% {transform: translateY(-10px);}
   60% {transform: translateY(-5px);}
+}
+
+/* 대시보드 배너 */
+.dashboard-banner {
+  background: linear-gradient(90deg, #F76707, #FF9500);
+  color: white;
+  padding: 14px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+/* 취업 여정 카드 */
+.career-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.career-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border-left: 4px solid transparent;
+  text-decoration: none;
+  color: inherit;
+  transition: border-left-color 0.2s, box-shadow 0.2s;
+}
+
+.career-card:hover {
+  border-left-color: #F76707;
+  box-shadow: 0 6px 16px rgba(247, 103, 7, 0.12);
+}
+
+.career-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.career-info {
+  flex: 1;
+}
+
+.career-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 4px;
+}
+
+.career-desc {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.career-arrow {
+  font-size: 1.2rem;
+  color: #F76707;
+  flex-shrink: 0;
+}
+
+/* 플래닛 미니 카드 */
+.planet-mini-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFF8F0;
+  border: 1px solid #FFD8B0;
+  border-radius: 12px;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+  color: #555;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.planet-mini-btn {
+  background: #F76707;
+  color: white;
+  border-radius: 50px;
+  padding: 8px 20px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.planet-mini-btn:hover {
+  background: #d95e06;
 }
 
 /* 반응형 스타일 */

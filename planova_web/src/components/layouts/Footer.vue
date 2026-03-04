@@ -17,7 +17,7 @@ const subscribe = () => {
         <div class="footer-brand">
           <h2 class="brand-title">플래노바 PLANOVA</h2>
           <p class="brand-description">
-            학습을 통해 새로운 가능성을 이룹니다. <br> 플래노바는 프리미엄 AI 튜터로 디지털 시대의<br>새로운 공부법을 제공합니다.
+            학창시절부터 취업까지,<br>당신의 모든 계획은 플래노바가 함께합니다.
           </p>
           
           <div class="app-download">
@@ -37,10 +37,10 @@ const subscribe = () => {
           <div class="links-column">
             <h3>플래노바 서비스</h3>
             <ul>
-              <li><a href="#">학습 콘텐츠</a></li>
-              <li><a href="#">AI 튜터링</a></li>
-              <li><a href="#">사용자 후기</a></li>
-              <li><a href="#">기업 교육 서비스</a></li>
+              <li><a href="#">AI 학습 플랜</a></li>
+              <li><a href="#">이력서·포트폴리오</a></li>
+              <li><a href="#">자기소개서</a></li>
+              <li><a href="#">기업 공고 조사</a></li>
             </ul>
           </div>
 

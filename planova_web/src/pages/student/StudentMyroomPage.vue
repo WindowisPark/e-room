@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <div class="header">
-      <h1 class="title">플래노바와 <span class="day-count">{{ consecutiveDays }}</span>일째 함께하는중</h1>
+      <h1 class="title">플래노바와 함께한 <span class="day-count">{{ consecutiveDays }}</span>일째 여정</h1>
     </div>
 
     <div class="attendance-card">
