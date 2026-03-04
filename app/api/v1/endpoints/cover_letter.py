@@ -189,6 +189,22 @@ def update_item(
     return item
 
 
+@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_item(
+    item_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    item = db.query(CoverLetterItem).join(CoverLetter).filter(
+        CoverLetterItem.id == item_id,
+        CoverLetter.user_id == current_user.id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+    db.delete(item)
+    db.commit()
+
+
 # ─── AI 초안 생성 ─────────────────────────────────────────────────────────────
 
 @router.post("/{cl_id}/generate")
@@ -212,11 +228,14 @@ def generate_drafts(
         profile = db.query(ResumeProfile).filter(ResumeProfile.id == cl.resume_profile_id).first()
         if profile:
             resume_items = db.query(ResumeItem).filter(ResumeItem.profile_id == profile.id).all()
-            lines = [f"[{it.category.value}] {it.title}"]
-            if it.organization:
-                lines[-1] += f" @ {it.organization}"
-            if it.description:
-                lines.append(f"  {it.description}")
+            lines = []
+            for it in resume_items:
+                line = f"[{it.category.value}] {it.title}"
+                if it.organization:
+                    line += f" @ {it.organization}"
+                lines.append(line)
+                if it.description:
+                    lines.append(f"  {it.description}")
             resume_summary = "\n".join(lines)
 
     # 기업 분석 데이터 수집
