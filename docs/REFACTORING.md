@@ -321,3 +321,88 @@ GET  /api/v1/attendance/   → 동일 구조
 | 2026-03-03 | Issue #7 민감 콘솔 로그 제거 (카카오 키, 토큰, 사용자 정보) | Claude Code |
 | 2026-03-03 | Issue #8 마이룸 카운트 하드코딩 → ref 변수화 | Claude Code |
 | 2026-03-03 | Issue #9 npm 보안 취약점 22건 패치 (pdfjs-dist v5 강제 업그레이드 포함) | Claude Code |
+| 2026-03-04 | v2 리팩토링: 팀/게이미피케이션/결제/출석 제거, async 전환, 사이드바 재구성 | Claude Code |
+
+---
+
+## v2 리팩토링 (2026-03-04)
+
+### 목표
+
+v1 종합 플랫폼 → v2 "학습 + 취준" 집중 슬림 플랫폼
+
+### 제거된 기능
+
+#### Backend — 엔드포인트
+
+| 파일 | 이유 |
+|------|------|
+| `teams.py`, `team_pdf.py`, `team_activity.py` | 팀 기능 전면 제거 |
+| `gamification.py`, `badges.py` | 게이미피케이션 제거 |
+| `events.py` | 이벤트/마케팅 제거 |
+| `attendance.py` | 게이미피케이션 연동 제거 |
+| `payments.py` | v2 무료화 |
+| `phone_verification.py` | 인증 단순화 |
+| `notifications.py` | 팀 알림 제거 |
+| `question.py` | 제거 |
+
+#### Backend — 서비스/모델
+
+- 서비스: `team_service`, `team_activity_service`, `payment_service`, `subscription_service`, `point_service`, `badge_service`, `event_service`, `invite_code_service`, `sms_service`
+- 모델: `team`, `team_activity`, `gamification`, `payment`, `event`, `attendance`, `notification`, `question`
+- `user.py` 필드 제거: `plan_type`, `plan_expires_at`, `points`, `level`, `exp`, `streak_days`, `phone_number`, `is_phone_verified`
+- `tag.py`: `PDFTagMention` 모델 제거, `PDFFile.team_id` 제거
+
+#### Frontend
+
+- 라우터: `board.js`, `event.js`
+- 페이지: `board/` 4개, `EventPage.vue`, `TeamFileManager.vue`
+- API: `boardApi.js`, `memberAttendanceApi.js`
+
+### 버그 수정
+
+- `cover_letter.py`: `generate_drafts` sync → async (`asyncio.to_thread`)
+- `job_research.py`: `_scrape_url`, `_analyze_with_ai` sync → async (이벤트 루프 블로킹 해소)
+- `main.py`: `/api/debug/frontend` 보안 노출 엔드포인트 제거
+- `StudentResumePage.vue`: `exportPdf()` `window.open()` → `axios` + Blob 다운로드 (JWT 인증 포함)
+
+### Frontend 사이드바 재구성
+
+```
+사이드바
+├── 홈
+├── ── 학습 ──
+│   ├── PDF 학습
+│   ├── AI 튜터
+│   └── 캘린더
+└── ── 커리어 ──
+    ├── 이력서
+    ├── 기업 조사
+    ├── 자소서
+    └── 마이룸
+```
+
+### Alembic 마이그레이션 (완료)
+
+`20f954c9ba74 → b1v2cleanup001` 마이그레이션 적용 완료:
+- DROP: `mentions`, `point_history`, `user_badges`, `badges`, `team_activities`, `team_members`, `teams`, `payments`, `notifications`, `questions`, `attendance`
+- DROP columns (users): `phone_number`, `is_phone_verified`, `allow_mention_notifications`, `plan_type`, `plan_started_at`, `plan_expires_at`, `points`, `level`, `streak_days`, `exp`
+- DROP columns (pdf_files): `team_id`
+- DROP enums: `plantype`, `paymentstatus`, `team_role_enum`, `pointactiontype`, `badgetype`
+- CREATE: `password_reset_tokens`, `resume_profiles`, `resume_items`, `saved_companies`, `cover_letters`, `cover_letter_items`
+
+### WebSocket 정리
+
+- `collaboration.py` 제거 (팀 실시간 협업 WebSocket)
+- `chat.py` 유지 (AI 튜터 WebSocket)
+
+### 서버 기동 검증 (완료)
+
+```
+Application startup complete ✅
+/api/health → {"status":"healthy"} ✅
+/api/v1/teams → 404 ✅
+/api/v1/gamification/points → 404 ✅
+/api/v1/users/me → 401 (인증 필요) ✅
+/api/v1/resume/profiles → 401 (인증 필요) ✅
+```

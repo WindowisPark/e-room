@@ -13,27 +13,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from app.core.config import settings
 from app.db.base import Base
 
-# 모든 모델 임포트 - 마이그레이션에 포함되도록
-# 사용자 관련
+# 유지되는 모델만 import
 from app.models.user import User
-
-# 팀/협업 관련
-from app.models.team import Team, TeamMember
-from app.models.team_activity import TeamActivity
-
-# 문서/태그 관련
-from app.models.tag import PDFFile, PDFTag, PDFTagMention
-
-# 게이미피케이션 관련
-from app.models.gamification import Badge, UserBadge, PointHistory
-from app.models.attendance import Attendance
-
-# 기타 기능 관련
-from app.models.notification import Notification
-from app.models.payment import Payment
-from app.models.question import Question
-
-# 취업 준비 기능
+from app.models.tag import PDFFile, PDFTag
+from app.models.password_reset import PasswordResetToken
 from app.models.resume import ResumeProfile, ResumeItem
 from app.models.job_research import SavedCompany
 from app.models.cover_letter import CoverLetter, CoverLetterItem

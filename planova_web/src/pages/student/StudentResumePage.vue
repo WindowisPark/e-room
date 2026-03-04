@@ -304,12 +304,36 @@ async function deleteItem(itemId) {
   items.value = items.value.filter(i => i.id !== itemId);
 }
 
-function exportJson() {
-  window.open(`${API}/profiles/${selectedProfile.value.id}/export/json`, '_blank');
+async function exportJson() {
+  try {
+    const res = await axios.get(`${API}/profiles/${selectedProfile.value.id}/export/json`, {
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `resume_${selectedProfile.value.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('JSON 내보내기에 실패했습니다.');
+  }
 }
 
-function exportPdf() {
-  window.open(`${API}/profiles/${selectedProfile.value.id}/export/pdf`, '_blank');
+async function exportPdf() {
+  try {
+    const res = await axios.get(`${API}/profiles/${selectedProfile.value.id}/export/pdf`, {
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `resume_${selectedProfile.value.id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('PDF 다운로드에 실패했습니다.');
+  }
 }
 
 onMounted(loadProfiles);

@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="AI-Agent API with Authentication, PDF Management, and Team Collaboration",
+    description="AI-Agent API with Authentication, PDF Management, and Career Tools",
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
@@ -92,15 +92,6 @@ def health_check():
     }
 
 
-@app.get("/api/debug/frontend")
-def debug_frontend():
-    return {
-        "static_dir": _static_dir,
-        "files_in_static": os.listdir(_static_dir) if os.path.exists(_static_dir) else [],
-        "index_html_exists": os.path.exists(f"{_static_dir}/index.html"),
-    }
-
-
 @app.get("/{full_path:path}")
 async def serve_spa(request: Request, full_path: str):
     if full_path.startswith("api/"):
@@ -135,7 +126,7 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title=settings.PROJECT_NAME,
         version="1.0.0",
-        description="AI-Agent API with Authentication, PDF Management, and Team Collaboration",
+        description="AI-Agent API with Authentication, PDF Management, and Career Tools",
         routes=app.routes,
     )
 

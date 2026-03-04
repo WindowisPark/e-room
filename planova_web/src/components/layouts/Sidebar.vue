@@ -22,7 +22,6 @@ const currentMenu = computed(() => {
   if (path.includes('/student/jobs')) return 'jobs';
   if (path.includes('/student/coverletter')) return 'coverletter';
   if (path.includes('/student/myroom')) return 'myroom';
-  if (path.includes('/student/faq')) return 'faq';
   if (path.includes('/student/support')) return 'support';
 
   return 'main';
@@ -32,7 +31,7 @@ const emit = defineEmits(['menu-click']);
 
 const handleMenuClick = (menuName) => {
   emit('menu-click', menuName);
-  
+
   if (menuName === 'main') router.push('/student/main');
   else router.push(`/student/${menuName}`);
 };
@@ -58,81 +57,87 @@ const clearHovered = () => {
     <div class="logo-container" @click="navigateToHome" style="cursor: pointer;">
       <img src="@/assets/images/planova-small-logo.jpg" alt="로고" class="logo">
     </div>
-    
+
     <nav class="nav-menu">
-      <div 
-        class="nav-item" 
+      <!-- 홈 -->
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'main' }"
         @click="handleMenuClick('main')"
         @mouseenter="setHovered('main')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img 
-          :src="currentMenu === 'main' || hoveredItem === 'main'
-            ? '/sidebar-home-click.png' 
-            : '/sidebar-home.png'" 
-          class="icon-image"
-        />
-      </div>
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'main' || hoveredItem === 'main'
+              ? '/sidebar-home-click.png'
+              : '/sidebar-home.png'"
+            class="icon-image"
+          />
+        </div>
         <div class="nav-text">홈</div>
       </div>
-      
-      <div 
-        class="nav-item" 
+
+      <!-- 학습 섹션 -->
+      <div class="section-label">학습</div>
+
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'pdf' }"
         @click="handleMenuClick('pdf')"
         @mouseenter="setHovered('pdf')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img 
-          :src="currentMenu === 'pdf' || hoveredItem === 'pdf'
-            ? '/sidebar-pdf-click.png' 
-            : '/sidebar-pdf.png'" 
-          class="icon-image"
-        />
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'pdf' || hoveredItem === 'pdf'
+              ? '/sidebar-pdf-click.png'
+              : '/sidebar-pdf.png'"
+            class="icon-image"
+          />
+        </div>
+        <div class="nav-text">PDF 학습</div>
       </div>
-        <div class="nav-text">학습</div>
-      </div>
-      
-      <div 
-        class="nav-item" 
+
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'aitutor' }"
         @click="handleMenuClick('aitutor')"
         @mouseenter="setHovered('aitutor')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img 
-          :src="currentMenu === 'aitutor' || hoveredItem === 'aitutor'
-            ? '/sidebar-aitutor-click.png' 
-            : '/sidebar-aitutor.png'" 
-          class="icon-image"
-        />
-      </div>
-         
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'aitutor' || hoveredItem === 'aitutor'
+              ? '/sidebar-aitutor-click.png'
+              : '/sidebar-aitutor.png'"
+            class="icon-image"
+          />
+        </div>
         <div class="nav-text">AI 튜터</div>
       </div>
-      
-      <div 
-        class="nav-item" 
+
+      <div
+        class="nav-item"
         :class="{ active: currentMenu === 'calendar' }"
         @click="handleMenuClick('calendar')"
         @mouseenter="setHovered('calendar')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img 
-          :src="currentMenu === 'calendar' || hoveredItem === 'calendar'
-            ? '/sidebar-calendar-click.png' 
-            : '/sidebar-calendar.png'" 
-          class="icon-image"
-        />
-      </div>
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'calendar' || hoveredItem === 'calendar'
+              ? '/sidebar-calendar-click.png'
+              : '/sidebar-calendar.png'"
+            class="icon-image"
+          />
+        </div>
         <div class="nav-text">캘린더</div>
       </div>
-      
+
+      <!-- 커리어 섹션 -->
+      <div class="section-label">커리어</div>
+
       <div
         class="nav-item"
         :class="{ active: currentMenu === 'resume' }"
@@ -166,6 +171,7 @@ const clearHovered = () => {
         <div class="nav-text">자소서</div>
       </div>
 
+      <!-- 기타 -->
       <div
         class="nav-item"
         :class="{ active: currentMenu === 'myroom' }"
@@ -173,14 +179,14 @@ const clearHovered = () => {
         @mouseenter="setHovered('myroom')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img
-          :src="currentMenu === 'myroom' || hoveredItem === 'myroom'
-            ? '/sidebar-myroom-click.png'
-            : '/sidebar-myroom.png'"
-          class="icon-image"
-        />
-      </div>
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'myroom' || hoveredItem === 'myroom'
+              ? '/sidebar-myroom-click.png'
+              : '/sidebar-myroom.png'"
+            class="icon-image"
+          />
+        </div>
         <div class="nav-text">마이룸</div>
       </div>
 
@@ -191,15 +197,15 @@ const clearHovered = () => {
         @mouseenter="setHovered('support')"
         @mouseleave="clearHovered"
       >
-      <div class="nav-icon">
-        <img
-          :src="currentMenu === 'support' || hoveredItem === 'support'
-            ? '/sidebar-support-click.png'
-            : '/sidebar-support.png'"
-          class="icon-image-support"
-        />
-      </div>
-      <div class="nav-text">고객지원</div>
+        <div class="nav-icon">
+          <img
+            :src="currentMenu === 'support' || hoveredItem === 'support'
+              ? '/sidebar-support-click.png'
+              : '/sidebar-support.png'"
+            class="icon-image-support"
+          />
+        </div>
+        <div class="nav-text">고객지원</div>
       </div>
     </nav>
   </aside>
@@ -215,11 +221,12 @@ const clearHovered = () => {
   align-items: center;
   padding: 20px 0;
   height: 100vh;
+  overflow-y: auto;
   z-index: 1000;
 }
 
 .logo-container {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .logo {
@@ -232,8 +239,21 @@ const clearHovered = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 40px;
+  gap: 20px;
   width: 100%;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #bbb;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  width: 100%;
+  text-align: center;
+  padding: 4px 0 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 4px;
 }
 
 .nav-item {
@@ -257,10 +277,6 @@ const clearHovered = () => {
   transition: color 0.2s ease;
 }
 
-.active-icon {
-  color: #F76707;
-}
-
 .icon-image {
   width: 30px;
   height: 30px;
@@ -274,10 +290,11 @@ const clearHovered = () => {
 }
 
 .nav-text {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
   transition: color 0.2s ease;
-  margin-top: 4px;
+  margin-top: 2px;
+  text-align: center;
 }
 
 .nav-item.active .nav-text {

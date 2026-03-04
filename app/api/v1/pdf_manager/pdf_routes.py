@@ -13,7 +13,6 @@ from app.schemas.file import (
 from app.api import deps
 from app.models.user import User
 from app.crud.crud_tag import create_pdf_file
-from app.services.point_service import add_points, PointActionType
 import logging
 
 # 표준 라이브러리
@@ -60,14 +59,6 @@ async def upload_pdf(
 
         # 성공한 파일들에 대해 후속 처리
         for file_info in results["success"]:
-            # 포인트 적립
-            await add_points(
-                db=db,
-                user_id=user_id,
-                action_type=PointActionType.PDF_UPLOAD,
-                description=f"PDF 업로드: {file_info.get('original_name', '파일')}"
-            )
-
             # DB에 파일 정보 기록
             create_pdf_file(
                 db=db,

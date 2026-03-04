@@ -12,9 +12,7 @@ from app.db.session import get_db, SessionLocal
 from sqlalchemy.orm import Session
 
 import logging
-import hmac
-import hashlib
-from fastapi import Request, HTTPException, WebSocket, status
+from fastapi import WebSocket, status
 from app.core.redis_helper import redis_client
 
 # 로깅 설정
@@ -96,21 +94,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
-
-async def verify_iamport_webhook(request: Request):
-    if not settings.IAMPORT_WEBHOOK_SECRET:
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
-
-    signature = request.headers.get("x-imp-signature")
-    if not signature:
-        raise HTTPException(status_code=403, detail="Missing webhook signature")
-
-    body = await request.body()
-    secret = settings.IAMPORT_WEBHOOK_SECRET.encode()
-    generated_signature = hmac.new(secret, body, hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(signature, generated_signature):
-        raise HTTPException(status_code=403, detail="Invalid Webhook Signature")
 
 async def get_current_user_ws(websocket: WebSocket) -> Optional[User]:
     """

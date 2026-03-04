@@ -1,5 +1,6 @@
 # app/api/v1/endpoints/job_research.py
 
+import asyncio
 import logging
 from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -46,8 +47,8 @@ class SavedCompanyOut(BaseModel):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _scrape_url(url: str) -> str:
-    """URL에서 텍스트 추출. 실패 시 빈 문자열 반환."""
+def _scrape_url_sync(url: str) -> str:
+    """URL에서 텍스트 추출 (동기). asyncio.to_thread에서 호출."""
     try:
         import httpx
         from bs4 import BeautifulSoup
@@ -58,7 +59,7 @@ def _scrape_url(url: str) -> str:
                 "Chrome/120.0.0.0 Safari/537.36"
             )
         }
-        response = httpx.get(url, headers=headers, timeout=10, follow_redirects=True)
+        response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
@@ -69,8 +70,8 @@ def _scrape_url(url: str) -> str:
         return ""
 
 
-def _analyze_with_ai(content: str) -> Dict[str, Any]:
-    """Gemini로 채용 공고 분석."""
+def _analyze_with_ai_sync(content: str) -> Dict[str, Any]:
+    """Gemini로 채용 공고 분석 (동기). asyncio.to_thread에서 호출."""
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
         import json
@@ -127,7 +128,7 @@ def _analyze_with_ai(content: str) -> Dict[str, Any]:
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/analyze")
-def analyze_job(
+async def analyze_job(
     data: AnalyzeRequest,
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -137,14 +138,14 @@ def analyze_job(
 
     raw = ""
     if data.url:
-        raw = _scrape_url(data.url)
+        raw = await asyncio.to_thread(_scrape_url_sync, data.url)
     if data.text:
         raw = (raw + "\n" + data.text).strip() if raw else data.text
 
     if not raw:
         raise HTTPException(status_code=422, detail="공고 내용을 가져올 수 없습니다. 텍스트를 직접 입력해주세요.")
 
-    analysis = _analyze_with_ai(raw)
+    analysis = await asyncio.to_thread(_analyze_with_ai_sync, raw)
     return {"raw_content": raw, "analysis": analysis}
 
 

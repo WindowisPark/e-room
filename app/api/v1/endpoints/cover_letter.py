@@ -1,5 +1,6 @@
 # app/api/v1/endpoints/cover_letter.py
 
+import asyncio
 import logging
 from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -208,7 +209,7 @@ def delete_item(
 # ─── AI 초안 생성 ─────────────────────────────────────────────────────────────
 
 @router.post("/{cl_id}/generate")
-def generate_drafts(
+async def generate_drafts(
     cl_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
@@ -289,7 +290,7 @@ def generate_drafts(
 - 구체적이고 진솔한 문체로 작성
 - 글자수 제한이 있으면 반드시 준수"""
 
-        response = llm.invoke(prompt)
+        response = await asyncio.to_thread(llm.invoke, prompt)
         text = response.content.strip()
         if text.startswith("```"):
             text = text.strip("`").strip()
