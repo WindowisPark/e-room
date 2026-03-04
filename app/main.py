@@ -65,6 +65,12 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+from app.core.exceptions import AppException
+from app.core.error_handlers import app_exception_handler, unhandled_exception_handler
+
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+
 app.include_router(pdf_router, prefix=f"{settings.API_V1_STR}/pdf", tags=["PDF Manager"])
 app.include_router(admin_router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
 app.include_router(api_router, prefix=settings.API_V1_STR)

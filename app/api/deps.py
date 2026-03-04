@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.core.config import settings
+from app.core.exceptions import ErrorMessage
 from app.db.session import SessionLocal
 from app.core.redis_helper import redis_client
 from app.core.security import ACCESS_SECRET_KEY
@@ -35,14 +36,14 @@ async def get_current_user(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증이 필요합니다",
+            detail=ErrorMessage.AUTH_REQUIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if redis_client is not None and redis_client.exists(token):  # redis_client가 None이 아닐 때만 체크
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰이 취소되었습니다"
+            detail=ErrorMessage.TOKEN_REVOKED,
         )
 
     try:
@@ -50,15 +51,15 @@ async def get_current_user(
         token_data = schemas.TokenPayload(**payload)
     except (JWTError, ValidationError):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="인증 정보를 확인할 수 없습니다"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorMessage.TOKEN_INVALID,
         )
 
     user = crud.user.get(db, id=token_data.sub)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="사용자를 찾을 수 없습니다"
+            detail=ErrorMessage.USER_NOT_FOUND,
         )
     return user
 
@@ -67,8 +68,8 @@ def get_current_active_user(
 ) -> User:
     if not crud.user.is_active(current_user):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="비활성화된 사용자입니다"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessage.USER_INACTIVE,
         )
     return current_user
 
@@ -80,7 +81,7 @@ def get_admin_user(
     if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="관리자 권한이 필요합니다."
+            detail=ErrorMessage.ADMIN_REQUIRED,
         )
     return current_user
 

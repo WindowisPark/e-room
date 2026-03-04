@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.security import get_password_hash, verify_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserCreateOAuth, UserUpdate
-from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.exceptions import DatabaseException, NotFoundException, ErrorMessage
 
 class CRUDUser:
     def get(self, db: Session, id: int) -> Optional[User]:
@@ -42,7 +42,7 @@ class CRUDUser:
             return db_obj
         except SQLAlchemyError as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"사용자 생성 실패: {str(e)}")
+            raise DatabaseException(f"사용자 생성 실패: {str(e)}")
 
     def create_oauth_user(self, db: Session, *, obj_in: UserCreateOAuth) -> User:
         """📌 OAuth 사용자 생성"""
@@ -59,7 +59,7 @@ class CRUDUser:
             return db_obj
         except SQLAlchemyError as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"OAuth 사용자 생성 실패: {str(e)}")
+            raise DatabaseException(f"OAuth 사용자 생성 실패: {str(e)}")
 
     def update(self, db: Session, *, db_obj: User, obj_in: UserUpdate) -> User:
         """📌 사용자 정보 업데이트"""
@@ -80,7 +80,7 @@ class CRUDUser:
             return db_obj
         except SQLAlchemyError as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"사용자 업데이트 실패: {str(e)}")
+            raise DatabaseException(f"사용자 업데이트 실패: {str(e)}")
 
     def authenticate(self, db: Session, *, email: str, password: str) -> Optional[User]:
         """📌 사용자 인증"""
@@ -104,12 +104,12 @@ class CRUDUser:
         try:
             user = self.get(db, user_id)
             if not user:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+                raise NotFoundException(ErrorMessage.USER_NOT_FOUND)
 
             db.delete(user)
             db.commit()
         except SQLAlchemyError as e:
             db.rollback()
-            raise HTTPException(status_code=500, detail=f"사용자 삭제 실패: {str(e)}")
+            raise DatabaseException(f"사용자 삭제 실패: {str(e)}")
 
 user = CRUDUser()

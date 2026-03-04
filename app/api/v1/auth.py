@@ -14,6 +14,7 @@ from app import crud, schemas
 from app.api import deps
 from app.core import security
 from app.core.config import settings
+from app.core.exceptions import ErrorMessage
 from app.models.user import User
 from app.core.redis_helper import redis_client
 import urllib.parse
@@ -63,7 +64,7 @@ async def refresh_token(refresh_token: str = Body(...)):
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail=ErrorMessage.REFRESH_TOKEN_INVALID,
         )
 
     stored_refresh_token = redis_client.get(f"refresh:{user_id}")
@@ -75,7 +76,7 @@ async def refresh_token(refresh_token: str = Body(...)):
     if stored_refresh_token is None or stored_refresh_token != refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token expired or invalid"
+            detail=ErrorMessage.REFRESH_TOKEN_INVALID,
         )
 
     new_access_token = security.create_access_token(user_id)
@@ -286,11 +287,11 @@ async def register_user(
 ):
     existing_user = crud.user.get_by_email(db, email=user_in.email)
     if existing_user:
-        raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ErrorMessage.EMAIL_ALREADY_EXISTS)
 
     existing_username = db.query(User).filter(User.username == user_in.username).first()
     if existing_username:
-        raise HTTPException(status_code=400, detail="이미 사용 중인 사용자명입니다")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ErrorMessage.USERNAME_ALREADY_EXISTS)
 
     user_schema = schemas.UserCreate(
         email=user_in.email,
