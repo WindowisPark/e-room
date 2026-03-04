@@ -461,8 +461,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         await websocket.close(code=4001)
         return
     try:
-        from jose import jwt as jose_jwt
-        payload = jose_jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=["HS256"])
+        import jwt
+        payload = jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=["HS256"])
         token_user_id = str(payload.get("sub"))
         if token_user_id != user_id:
             await websocket.close(code=4003)

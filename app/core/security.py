@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Union, Optional
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 from passlib.context import CryptContext
 from app.schemas.token import TokenPayload
 from redis import Redis
