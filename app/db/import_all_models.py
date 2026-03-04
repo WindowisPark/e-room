@@ -18,6 +18,9 @@ from app.models.resume import ResumeProfile, ResumeItem, ItemCategory
 from app.models.job_research import SavedCompany
 from app.models.cover_letter import CoverLetter, CoverLetterItem
 
+# 5. 캘린더 모델
+from app.models.calendar import CalendarTask, CalendarGoal
+
 
 ALL_MODELS = [
     User,
@@ -26,6 +29,7 @@ ALL_MODELS = [
     ResumeProfile, ResumeItem,
     SavedCompany,
     CoverLetter, CoverLetterItem,
+    CalendarTask, CalendarGoal,
 ]
 
 __all__ = [
@@ -35,5 +39,6 @@ __all__ = [
     'ResumeProfile', 'ResumeItem', 'ItemCategory',
     'SavedCompany',
     'CoverLetter', 'CoverLetterItem',
+    'CalendarTask', 'CalendarGoal',
     'ALL_MODELS',
 ]

@@ -58,18 +58,6 @@
         </div>
       </div>
 
-      <div class="menu-card">
-        <div class="menu-header">
-          <div class="menu-icon team-icon">👥</div>
-          <div class="menu-title">팀스페이스</div>
-        </div>
-        <div class="menu-links">
-        <div class="menu-link" @click="navigateToPdf('team')">
-            <span>나의 팀스페이스({{ teamspaceCount }})</span>
-            <span class="arrow">›</span>
-        </div>
-        </div>
-      </div>
     </div>    
     <div class="achievement-section">
       <h3 class="section-title">내 달성 과제</h3>
@@ -110,11 +98,11 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import LineChart from '@/components/LineChart.vue';
 import { memberAttendanceApi } from '@/api/memberAttendanceApi.js';
+import api from '@/api';
 const currentDay = ref(1);
 const consecutiveDays = ref(1);
 const quizCount = ref(0);
 const summaryCount = ref(0);
-const teamspaceCount = ref(0);
 const attendanceStatus = reactive({
   lastCheckDate: null,
   completedDays: [1],
@@ -242,6 +230,14 @@ onMounted(async () => {
     progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
   } catch (e) {
     loadAttendanceData();
+  }
+
+  try {
+    const { data } = await api.get('/users/me/details');
+    summaryCount.value = data.storage?.total_pdfs ?? 0;
+    quizCount.value = data.activity?.annotations_count ?? 0;
+  } catch (e) {
+    // 카운트 연동 실패 시 0 유지
   }
 });
 

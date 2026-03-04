@@ -136,72 +136,33 @@ const kakaoLogin = async () => {
     alert('카카오 SDK가 로드되지 않았습니다.');
     return;
   }
-  
+
   if (!window.Kakao.isInitialized()) {
     alert('카카오 SDK가 초기화되지 않았습니다.');
     return;
   }
-  
-  try {
-    isLoading.value = true;
-    
-    // 카카오 로그인 실행
-    window.Kakao.Auth.login({
-      success: async (authObj) => {
-        // 사용자 정보 요청
-        window.Kakao.API.request({
-          url: '/v2/user/me',
-          success: (userData) => {
-            // 로그인 정보 저장
-            localStorage.setItem('isAuthenticated', 'true');
-            localStorage.setItem('kakaoToken', authObj.access_token);
-            localStorage.setItem('userInfo', JSON.stringify(userData));
-            localStorage.setItem('loginMethod', 'kakao');
-            
-            // 학생 메인 페이지로 이동
-            router.push({ name: 'studentMain' });
-          },
-          fail: (error) => {
-            console.error('사용자 정보 요청 실패', error);
-            alert('사용자 정보를 가져오는데 실패했습니다.');
-          }
-        });
-      },
-      fail: (error) => {
-        console.error('카카오 로그인 실패', error);
-        alert('로그인에 실패했습니다. 다시 시도해주세요.');
-      }
-    });
-  } catch (error) {
-    console.error('로그인 실패:', error);
-    alert('로그인 중 오류가 발생했습니다: ' + error.message);
-  } finally {
-    isLoading.value = false;
-  }
-};
 
-// 로그아웃 (옵션)
-const logout = () => {
-  const loginMethod = localStorage.getItem('loginMethod');
-  
-  if (loginMethod === 'kakao' && window.Kakao?.Auth.getAccessToken()) {
-    window.Kakao?.API.request({
-      url: '/v1/user/unlink',
-      success: () => {
-        console.log('카카오 로그아웃 성공');
-      },
-      fail: (error) => {
-        console.error('카카오 로그아웃 실패', error);
+  isLoading.value = true;
+
+  window.Kakao.Auth.login({
+    success: async (authObj) => {
+      try {
+        const response = await authApi.kakaoLogin(authObj.access_token);
+        authStore.setAuth(response);
+        router.push({ name: 'studentMain' });
+      } catch (error) {
+        console.error('카카오 JWT 발급 실패:', error);
+        alert('로그인에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        isLoading.value = false;
       }
-    });
-  }
-  
-  // 공통 로그아웃 처리
-  localStorage.removeItem('isAuthenticated');
-  localStorage.removeItem('kakaoToken');
-  localStorage.removeItem('userInfo');
-  localStorage.removeItem('userEmail');
-  localStorage.removeItem('loginMethod');
+    },
+    fail: (error) => {
+      console.error('카카오 로그인 실패', error);
+      alert('로그인에 실패했습니다. 다시 시도해주세요.');
+      isLoading.value = false;
+    }
+  });
 };
 
 // 회원가입 페이지로 이동하는 함수 추가

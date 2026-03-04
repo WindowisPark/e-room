@@ -52,6 +52,11 @@ export default {
     return data;
   },
 
+  async kakaoLogin(kakaoAccessToken) {
+    const { data } = await api.post(`${BASE_URL}/kakao/token`, { kakao_access_token: kakaoAccessToken });
+    return data;
+  },
+
   async changePassword(formData) {
     const { data } = await api.put(`${BASE_URL}/${formData.id}/changepassword`, formData);
     return data;

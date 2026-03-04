@@ -234,7 +234,11 @@ async def kakao_callback(
             return {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "token_type": "bearer"
+                "token_type": "bearer",
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_admin": user.is_admin,
             }
 
         except httpx.HTTPStatusError as e:
@@ -256,6 +260,81 @@ async def kakao_callback(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"인증 중 오류가 발생했습니다: {str(e)}"
             )
+
+@router.post("/kakao/token")
+async def kakao_sdk_token_exchange(
+    kakao_access_token: str = Body(..., embed=True),
+    db: Session = Depends(deps.get_db)
+):
+    """
+    카카오 FE SDK로 획득한 access_token을 받아 JWT 발급
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            user_info_response = await client.get(
+                "https://kapi.kakao.com/v2/user/me",
+                headers={"Authorization": f"Bearer {kakao_access_token}"},
+                params={"property_keys": '["kakao_account.profile", "kakao_account.email", "kakao_account.name"]'}
+            )
+            user_info_response.raise_for_status()
+            user_info = user_info_response.json()
+
+            kakao_account = user_info.get("kakao_account", {})
+            profile = kakao_account.get("profile", {})
+            kakao_id = str(user_info.get("id"))
+
+            if not kakao_id:
+                raise HTTPException(status_code=400, detail="카카오 사용자 ID를 가져올 수 없습니다")
+
+            nickname = profile.get("nickname")
+            email = kakao_account.get("email")
+            name = kakao_account.get("name")
+
+            user = crud.user.get_by_oauth_id(db, "kakao", kakao_id)
+
+            if not user:
+                if not email:
+                    email = f"kakao_{kakao_id}@example.com"
+                display_name = name or nickname or "Kakao User"
+                user_in = schemas.UserCreateOAuth(
+                    oauth_provider="kakao",
+                    oauth_id=kakao_id,
+                    email=email,
+                    full_name=display_name,
+                    username=nickname or f"kakao_user_{kakao_id[:8]}",
+                    is_verified=True
+                )
+                user = crud.user.create_oauth_user(db, obj_in=user_in)
+                create_user_folders(user.id)
+                logger.info(f"✅ 카카오 회원가입 성공 (SDK) - User ID: {user.id}")
+            else:
+                logger.info(f"✅ 카카오 로그인 성공 (SDK) - User ID: {user.id}")
+
+            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+            access_token = security.create_access_token(user.id, expires_delta=access_token_expires)
+            refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
+            security.store_refresh_token(user.id, refresh_token, int(refresh_token_expires.total_seconds()))
+
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_admin": user.is_admin,
+            }
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"🚨 카카오 SDK 토큰 검증 오류: {str(e)}")
+            raise HTTPException(status_code=401, detail="카카오 토큰 검증 실패")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"🚨 카카오 SDK 로그인 오류: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"인증 중 오류가 발생했습니다: {str(e)}")
+
 
 @router.get("/me", response_model=schemas.User)
 async def read_users_me(
