@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import MenuGroup from './menu/MenuGroup.vue';
 import AccountMenuGroup from './menu/AccountMenuGroup.vue';
@@ -17,14 +17,8 @@ const toggleNavShow = () => {
   state.value.isNavShow = !state.value.isNavShow;
 };
 
-
 const navigateToSignup = () => {
-  console.log('시작하기 함수 호출됨');
-  try {
-    window.location.href = '/auth/login';
-  } catch (error) {
-    console.error('시작하기(로그인) 페이지 이동 오류:', error);
-  }
+  router.push('/auth/login');
 };
 
 const navigateToMyPage = () => {
@@ -54,7 +48,7 @@ const logout = () => {
             </li>
           </ul>
           <div class="auth-buttons">
-            <template v-if="authStore.isLoggedIn">
+            <template v-if="authStore.isLogin">
               <div class="user-greeting">
                 <span class="welcome-text">{{ authStore.user.username }}님 환영합니다!</span>
                 <div class="user-menu">
@@ -64,10 +58,7 @@ const logout = () => {
               </div>
             </template>
             <template v-else>
-              <button 
-                class="btn btn-primary signup-btn" 
-                @click="navigateToSignup"
-                onclick="console.log('Native click event triggered')">
+              <button class="btn btn-primary signup-btn" @click="navigateToSignup">
                 시작하기
               </button>
             </template>
@@ -133,33 +124,20 @@ const logout = () => {
   align-items: center;
 }
 
-.login-btn {
-  margin-right: 10px;
-  padding: 8px 16px;
-  background: transparent;
-  color: #9b9898;
-  border: none;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.login-btn:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
 .signup-btn {
-  background-color: #FF6301;
-  border-color: #FF6301;
-  border-radius: 4px;
+  background-color: #F76707;
+  border-color: #F76707;
+  border-radius: 50px;
   padding: 8px 20px;
   font-weight: 500;
   color: white;
   cursor: pointer;
+  box-shadow: 0 4px 14px rgba(247, 103, 7, 0.3);
 }
 
 .signup-btn:hover {
-  background-color: #e07c47;
-  border-color: #e07c47;
+  background-color: #d95e06;
+  border-color: #d95e06;
 }
 
 .user-greeting {
@@ -170,7 +148,7 @@ const logout = () => {
 
 .welcome-text {
   font-weight: 500;
-  color: #FF6301;
+  color: #F76707;
   margin-right: 15px;
 }
 
@@ -205,29 +183,21 @@ const logout = () => {
   background-color: rgba(0, 0, 0, 0.04);
 }
 
-.planova {
-  color: white;
-}
-
-.premium {
-  color: #ffd700;
-}
-
 @media (max-width: 992px) {
   .navbar-collapse {
     width: 100%;
     margin-top: 15px;
   }
-  
+
   .navbar-nav {
     margin-bottom: 15px;
   }
-  
+
   .user-greeting {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .welcome-text {
     margin-bottom: 10px;
   }

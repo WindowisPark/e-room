@@ -145,7 +145,9 @@ const clearHovered = () => {
         @mouseenter="setHovered('resume')"
         @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-emoji">📄</div>
+        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'resume' || hoveredItem === 'resume' }">
+          <i class="fa-solid fa-id-card"></i>
+        </div>
         <div class="nav-text">이력서</div>
       </div>
 
@@ -156,7 +158,9 @@ const clearHovered = () => {
         @mouseenter="setHovered('jobs')"
         @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-emoji">🏢</div>
+        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'jobs' || hoveredItem === 'jobs' }">
+          <i class="fa-solid fa-building"></i>
+        </div>
         <div class="nav-text">기업 조사</div>
       </div>
 
@@ -167,7 +171,9 @@ const clearHovered = () => {
         @mouseenter="setHovered('coverletter')"
         @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-emoji">✍️</div>
+        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'coverletter' || hoveredItem === 'coverletter' }">
+          <i class="fa-solid fa-pen-nib"></i>
+        </div>
         <div class="nav-text">자소서</div>
       </div>
 
@@ -306,8 +312,13 @@ const clearHovered = () => {
   color: #F76707;
 }
 
-.nav-icon-emoji {
-  font-size: 22px;
-  line-height: 1;
+.nav-icon-fa {
+  font-size: 20px;
+  color: #999;
+  transition: color 0.2s ease;
+}
+
+.nav-icon-fa.active {
+  color: #F76707;
 }
 </style>

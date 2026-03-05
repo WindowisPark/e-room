@@ -11,19 +11,6 @@ const logout = () => {
   authStore.logout();
   router.push('/auth/login');
 };
-
-const goToPassPage = () => {
-  router.push('/information/planet');
-};
-
-const goToPartnershipPage = () => {
-  router.push('/information/partnership');
-};
-
-// New function to navigate to PDF page
-const goToPdfPage = () => {
-  router.push('/student/pdf');
-};
 </script>
 
 <template>
@@ -31,35 +18,23 @@ const goToPdfPage = () => {
     <div class="logo-space">
     </div>
     <div class="right-section">
-      <div class="header-links">
-        <router-link to="/information/planet" class="header-link">플래닛 구매</router-link>
-        <router-link to="/information/partnership" class="header-link">기업 제휴</router-link>
-      </div>
       <div class="user-profile-container"
             @mouseover="showDropdown = true"
             @mouseleave="showDropdown = false">
         <div class="user-profile">
           <img src="@/assets/images/student-profile.png" alt="프로필" class="profile-image" />
         </div>
-        
+
         <div v-if="showDropdown" class="mini-dropdown">
           <div class="user-header">
             <div class="user-name">{{ authStore.username }}</div>
             <div class="user-email">{{ authStore.email }}</div>
           </div>
-          
-          <div class="menu-items">
-            <div class="menu-item">
-              <div class="item-name">플래닛</div>
-              <div class="item-value">
-                보유 중인 플래닛이 없습니다
-              </div>
-            </div>
-          </div>
-          
+
           <div class="menu-divider"></div>
-          
+
           <div class="menu-item logout-button" @click="logout">
+            <i class="fa-solid fa-right-from-bracket"></i>
             <div class="item-name">로그아웃</div>
           </div>
         </div>
@@ -86,25 +61,6 @@ const goToPdfPage = () => {
 .right-section {
   display: flex;
   align-items: center;
-  gap: 20px;
-}
-
-.header-links {
-  display: flex;
-  gap: 20px;
-}
-
-.header-link {
-  color: #333;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: color 0.2s ease;
-  cursor: pointer;
-}
-
-.header-link:hover {
-  color: #F37322;
 }
 
 .user-profile-container {
@@ -130,7 +86,7 @@ const goToPdfPage = () => {
   position: absolute;
   top: 45px;
   right: 0;
-  width: 280px;
+  width: 240px;
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -155,15 +111,16 @@ const goToPdfPage = () => {
   color: #888;
 }
 
-.menu-items {
-  padding: 5px 0;
+.menu-divider {
+  height: 1px;
+  background-color: #f0f0f0;
 }
 
 .menu-item {
   padding: 12px 15px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
@@ -172,40 +129,14 @@ const goToPdfPage = () => {
   background-color: #f9f9f9;
 }
 
-.item-name {
-  font-size: 15px;
-  color: #333;
-}
-
-.item-value {
-  display: flex;
-  align-items: center;
-  color: #666;
+.menu-item i {
+  color: #888;
   font-size: 14px;
 }
 
-.divider {
-  width: 1px;
-  height: 12px;
-  background-color: #ddd;
-  margin: 0 8px;
-}
-
-.point-value {
-  color: #ff5100;
-  font-weight: 600;
-}
-
-.arrow-icon {
-  color: #999;
-  font-size: 18px;
-  margin-left: 8px;
-}
-
-.menu-divider {
-  height: 1px;
-  background-color: #f0f0f0;
-  margin: 5px 0;
+.item-name {
+  font-size: 15px;
+  color: #333;
 }
 
 .logout-button:hover {
