@@ -26,16 +26,16 @@ class SessionManager:
     def create_session(self, user_id: str, task_type: str = None) -> str:
         """
         새 세션 생성
-        
+
         Args:
             user_id: 사용자 ID
             task_type: 작업 타입 (qa, summary, exam, scheduler)
-            
+
         Returns:
             session_id: 생성된 세션 ID
         """
         session_id = f"session:{user_id}:{uuid.uuid4().hex[:8]}"
-        
+
         session_data = {
             "session_id": session_id,
             "user_id": user_id,
@@ -44,27 +44,27 @@ class SessionManager:
             "last_activity": datetime.now().isoformat(),
             "agent_state": {},
             "waiting_for": None,
-            "chat_title": None,  # QA 채팅의 소제목
-            "message_history": [],  # QA 대화 히스토리
+            "chat_title": None,
+            "message_history": [],
             "current_request_type": None,
             "selected_files": [],
             "processing_status": "idle"
         }
-        
-        # Redis에 저장
-        ttl = self._get_ttl(task_type)
-        self.redis_client.setex(
-            session_id,
-            ttl,
-            json.dumps(session_data, ensure_ascii=False)
-        )
 
-        # 사용자별 세션 목록에 추가 (QA 채팅 목록용)
-        if task_type == "qa":
-            user_sessions_key = f"user_sessions:{user_id}"
-            self.redis_client.lpush(user_sessions_key, session_id)
-            self.redis_client.expire(user_sessions_key, self.QA_SESSION_TTL)
-        
+        try:
+            ttl = self._get_ttl(task_type)
+            self.redis_client.setex(
+                session_id,
+                ttl,
+                json.dumps(session_data, ensure_ascii=False)
+            )
+            if task_type == "qa":
+                user_sessions_key = f"user_sessions:{user_id}"
+                self.redis_client.lpush(user_sessions_key, session_id)
+                self.redis_client.expire(user_sessions_key, self.QA_SESSION_TTL)
+        except Exception as e:
+            logger.warning(f"Redis 저장 실패, 인메모리 세션만 사용: {e}")
+
         logger.info(f"새 세션 생성: {session_id}")
         return session_id
     
