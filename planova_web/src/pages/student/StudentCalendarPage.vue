@@ -182,6 +182,7 @@
 </template>
 
 <script setup>
+defineOptions({ name: 'StudentCalendarPage' })
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import calendarApi from '@/api/calendarApi';
 

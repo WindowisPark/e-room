@@ -155,7 +155,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '@/api';
 import calendarApi from '@/api/calendarApi';
@@ -342,8 +342,11 @@ const evolutionInfo = computed(() => {
   return map[evolutionStage.value];
 });
 
-// ── onMounted ─────────────────────────────────────
-onMounted(async () => {
+// ── onMounted / onActivated ────────────────────────
+const lastFetchTime = ref(0);
+const TTL_MS = 3 * 60 * 1000; // 3분
+
+const fetchAll = async () => {
   const [detailsRes, tasksRes, resumeRes, jobsRes, clRes] = await Promise.allSettled([
     api.get('/users/me/details'),
     calendarApi.getTasks(todayStr()),
@@ -379,6 +382,13 @@ onMounted(async () => {
   clCount.value     = clData.length;
 
   buildActivityFeed(resumeData, jobsData, clData);
+  lastFetchTime.value = Date.now();
+};
+
+onMounted(fetchAll);
+
+onActivated(() => {
+  if (Date.now() - lastFetchTime.value > TTL_MS) fetchAll();
 });
 </script>
 

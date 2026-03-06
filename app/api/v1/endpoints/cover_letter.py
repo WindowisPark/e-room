@@ -256,11 +256,25 @@ async def generate_drafts(
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
         import json
+        import re
+
+        def extract_json(raw: str) -> str:
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw)
+            if match:
+                return match.group(1).strip()
+            return raw.strip()
+
+        # 컨텍스트 크기 제한
+        resume_ctx = resume_summary[:3000] if resume_summary else "(이력서 정보 없음)"
+        job_ctx = job_summary[:2000] if job_summary else "(기업 정보 없음)"
 
         llm = ChatGoogleGenerativeAI(
             model=settings.AI_MODEL_NAME,
             google_api_key=settings.GOOGLE_API_KEY,
             request_timeout=settings.AI_LLM_TIMEOUT,
+            temperature=0.4,
+            max_output_tokens=2048,
+            model_kwargs={"response_mime_type": "application/json"},
         )
 
         questions_block = "\n".join([
@@ -271,10 +285,10 @@ async def generate_drafts(
         prompt = f"""당신은 취업 전문 컨설턴트입니다. 아래 지원자 정보와 기업 정보를 바탕으로 자소서 각 문항의 초안을 작성해주세요.
 
 【지원자 이력서】
-{resume_summary or '(이력서 정보 없음)'}
+{resume_ctx}
 
 【지원 기업 정보】
-{job_summary or '(기업 정보 없음)'}
+{job_ctx}
 
 【자소서 문항 목록】
 {questions_block}
@@ -291,11 +305,7 @@ async def generate_drafts(
 - 글자수 제한이 있으면 반드시 준수"""
 
         response = await asyncio.to_thread(llm.invoke, prompt)
-        text = response.content.strip()
-        if text.startswith("```"):
-            text = text.strip("`").strip()
-            if text.lower().startswith("json"):
-                text = text[4:].strip()
+        text = extract_json(response.content.strip())
 
         drafts = json.loads(text)
 

@@ -79,11 +79,21 @@ def _analyze_with_ai_sync(content: str) -> Dict[str, Any]:
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
         import json
+        import re
+
+        def extract_json(raw: str) -> str:
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw)
+            if match:
+                return match.group(1).strip()
+            return raw.strip()
 
         llm = ChatGoogleGenerativeAI(
             model=settings.AI_MODEL_NAME,
             google_api_key=settings.GOOGLE_API_KEY,
             request_timeout=settings.AI_LLM_TIMEOUT,
+            temperature=0.4,
+            max_output_tokens=2048,
+            model_kwargs={"response_mime_type": "application/json"},
         )
 
         prompt = f"""다음 채용 공고를 분석하여 아래 JSON 형식으로 정리해주세요. 모든 필드를 한국어로 작성하세요.
@@ -108,11 +118,7 @@ def _analyze_with_ai_sync(content: str) -> Dict[str, Any]:
 }}"""
 
         response = llm.invoke(prompt)
-        text = response.content.strip()
-        if text.startswith("```"):
-            text = text.strip("`").strip()
-            if text.lower().startswith("json"):
-                text = text[4:].strip()
+        text = extract_json(response.content.strip())
         return json.loads(text)
 
     except Exception as e:

@@ -20,7 +20,9 @@ const useDefaultLayout = computed(() => {
     <router-view />
   </DefaultLayout>
   <StudentLayout v-else-if="useStudentLayout">
-    <router-view />
+    <keep-alive :max="6" :exclude="['StudentCalendarPage']">
+      <router-view />
+    </keep-alive>
   </StudentLayout>
   <router-view v-else />
 </template>

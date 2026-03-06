@@ -10,9 +10,15 @@ from fastapi.testclient import TestClient
 from datetime import datetime
 
 from app.main import app
-from app.models.user import User, PlanType
-from app.models.payment import Payment, PaymentStatus
+from app.models.user import User
 from app.core.security import create_access_token
+
+# PlanType / Payment 모델이 제거된 경우 폴백
+try:
+    from app.models.payment import Payment, PaymentStatus
+except ImportError:
+    Payment = None
+    PaymentStatus = None
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,7 +60,6 @@ def test_user():
         email="test@example.com",
         username="testuser",
         full_name="테스트 사용자",
-        plan_type=PlanType.free,
         is_active=True,
         role="user",
         created_at=datetime.utcnow()
