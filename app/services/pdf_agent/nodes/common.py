@@ -18,6 +18,9 @@ llm = ChatGoogleGenerativeAI(
     model=settings.AI_MODEL_NAME,
     google_api_key=settings.GOOGLE_API_KEY,
     request_timeout=settings.AI_LLM_TIMEOUT,
+    temperature=0.4,
+    max_output_tokens=2048,
+    response_mime_type="application/json",
 )
 
 def input_question_api(state: AgentState, query: str) -> Dict[str, Any]:

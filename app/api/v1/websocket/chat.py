@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.services.session_manager import SessionManager
 from app.services.pdf_agent.tools import get_initial_state
 from app.services.pdf_agent.graphs.main import intergrate_graph
+from app.services.pdf_agent.nodes.common import judge_the_purpose_of_the_input
+from app.services.pdf_agent.nodes.qa_system import start_point_of_qa_system
 from app.api import deps
 from app.models.user import User
 from app.api.v1.websocket.handlers import TaskHandlers
@@ -98,6 +100,9 @@ class WebSocketManager:
     async def handle_first_message(self, session_id: str, message: str, user_id: str):
         """첫 메시지 처리 및 목적 판단"""
         try:
+            session_data = self.session_manager.get_session(session_id)
+            selected_files = session_data.get("selected_files", [])
+
             # LangGraph 상태 초기화
             state = get_initial_state(
                 user_id=user_id,
@@ -106,66 +111,65 @@ class WebSocketManager:
                 purpose="",
                 query=message
             )
-            
-            # 목적 판단 실행
-            await self.send_status(session_id, "processing", "요청을 분석하고 있습니다...")
-            
-            result = await self.run_agent_step(state, "judge_the_purpose_of_the_input")
-            purpose = result.get("purpose", "qa")
-            
-            # 세션에 상태 저장
-            session_data = {
-                "agent_state": result,
-                "task_type": purpose
-            }
-            self.session_manager.update_session(session_id, session_data)
-            
-            # 목적에 따라 분기
-            if purpose == "qa":
-                await self.handle_qa(session_id, result)
-            elif purpose == "summary":
-                await self.handle_summary_start(session_id, result)
-            elif purpose == "generate_exam":
-                await self.handle_exam_start(session_id, result)
-            elif purpose == "schedule":
-                await self.handle_scheduler_start(session_id, result)
+            # 세션에서 선택된 파일 정보를 state에 포함 (RAG 판단용)
+            state["selected_files"] = selected_files
+
+            # 파일 없으면 judge_purpose 생략 → QA 직행 (LLM call 절약)
+            if not selected_files:
+                purpose = "qa_system"
             else:
-                # 기본적으로 QA로 처리
-                await self.handle_qa(session_id, result)
-                
+                await self.send_status(session_id, "processing", "요청을 분석하고 있습니다...")
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: judge_the_purpose_of_the_input(state)
+                )
+                purpose = result.get("purpose", "qa_system")
+
+            state["purpose"] = purpose
+            self.session_manager.update_session(session_id, {"task_type": purpose, "agent_state": state})
+
+            # 목적에 따라 분기
+            if purpose == "qa_system":
+                await self.handle_qa(session_id, state)
+            elif purpose == "summary":
+                await self.handle_summary_start(session_id, state)
+            elif purpose == "generate_exam":
+                await self.handle_exam_start(session_id, state)
+            elif purpose == "schedule":
+                await self.handle_scheduler_start(session_id, state)
+            else:
+                await self.handle_qa(session_id, state)
+
         except Exception as e:
             logger.error(f"첫 메시지 처리 오류: {str(e)}")
             await self.send_error(session_id, "요청을 처리할 수 없습니다.")
 
     async def handle_qa(self, session_id: str, state: dict):
-        """QA 처리 - 바로 응답"""
+        """QA 처리 - 노드 함수 직접 호출"""
         try:
             await self.send_status(session_id, "processing", "답변을 생성하고 있습니다...")
 
-            # QA 에이전트 실행
-            result = await self.run_agent_step(state, "start_point_of_qa_system")
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: start_point_of_qa_system(state)
+            )
             messages = result.get("messages", [])
             response_content = messages[-1].content if messages else "답변을 생성할 수 없습니다."
-            
-            # AI 응답을 히스토리에 추가
+
             ai_message = AIMessage(content=response_content)
             self.session_manager.add_message_to_history(session_id, ai_message)
-            
-            # 응답 전송
+
             await self.send_message(session_id, {
                 "type": "ai_response",
                 "session_id": session_id,
                 "data": {
                     "message": response_content,
                     "task_type": "qa",
-                    "is_final": False  # QA는 대화가 계속될 수 있음
+                    "is_final": False
                 },
                 "timestamp": self.get_timestamp()
             })
-            
-            # 에이전트 상태 업데이트
+
             self.session_manager.update_session(session_id, {"agent_state": result})
-            
+
         except Exception as e:
             logger.error(f"QA 처리 오류: {str(e)}")
             await self.send_error(session_id, "답변 생성 중 오류가 발생했습니다.")
@@ -191,9 +195,10 @@ class WebSocketManager:
             current_state["last_user_query"] = message
             
             await self.send_status(session_id, "processing", "답변을 생성하고 있습니다...")
-            
-            # QA 에이전트 재실행
-            result = await self.run_agent_step(current_state, "start_point_of_qa_system")
+
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: start_point_of_qa_system(current_state)
+            )
             messages = result.get("messages", [])
             response_content = messages[-1].content if messages else "답변을 생성할 수 없습니다."
             
