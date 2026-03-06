@@ -151,6 +151,18 @@
       </div>
     </div>
 
+    <!-- 대화 삭제 확인 모달 -->
+    <div v-if="showDeleteConfirm" class="file-selector-modal" @click.self="showDeleteConfirm = false">
+      <div class="modal-content delete-confirm-modal">
+        <p>이 대화를 삭제하시겠습니까?</p>
+        <p class="delete-warning">삭제된 대화는 복구할 수 없습니다.</p>
+        <div class="modal-actions">
+          <button @click="confirmDeleteChat">삭제</button>
+          <button @click="showDeleteConfirm = false">취소</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 파일 선택 모달 -->
     <div v-if="showFileSelector" class="file-selector-modal">
       <div class="modal-content">
@@ -195,6 +207,8 @@ const selectedFilePaths = ref([])
 const fileInput = ref(null)
 const chatMessagesContainer = ref(null)
 const questionTextarea = ref(null)
+const showDeleteConfirm = ref(false)
+const deleteChatId = ref(null)
 
 // 퀵 액션
 const aiActions = [
@@ -305,14 +319,20 @@ async function loadChat(chatId) {
   scrollToBottom()
 }
 
-async function deleteChat(chatId) {
-  if (confirm('이 대화를 삭제하시겠습니까?')) {
-    try { await apiClient.delete(`/ws/chat/sessions/${chatId}`) } catch {}
-    chatHistory.value = chatHistory.value.filter(c => c.id !== chatId)
-    if (currentChatId.value === chatId) {
-      currentChatId.value = null
-      currentChat.value = null
-    }
+function deleteChat(chatId) {
+  deleteChatId.value = chatId
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteChat() {
+  const chatId = deleteChatId.value
+  showDeleteConfirm.value = false
+  deleteChatId.value = null
+  try { await apiClient.delete(`/ws/chat/sessions/${chatId}`) } catch {}
+  chatHistory.value = chatHistory.value.filter(c => c.id !== chatId)
+  if (currentChatId.value === chatId) {
+    currentChatId.value = null
+    currentChat.value = null
   }
 }
 
@@ -817,6 +837,24 @@ watch(currentChat, () => { scrollToBottom() })
 .modal-actions button:first-child:hover { background: #e05500; }
 .modal-actions button:last-child:not(:first-child) { background: #f5f5f7; color: #555; }
 .modal-actions button:last-child:not(:first-child):hover { background: #eaeaea; }
+
+.delete-confirm-modal p:first-child {
+  font-size: 17px;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 6px;
+}
+.delete-warning {
+  font-size: 13px !important;
+  color: #999 !important;
+  font-weight: 400 !important;
+  margin-bottom: 20px !important;
+}
+.delete-confirm-modal .modal-actions button:first-child {
+  background: #e53935;
+  color: white;
+}
+.delete-confirm-modal .modal-actions button:first-child:hover { background: #c62828; }
 
 /* ── 스크롤바 ── */
 .history-section::-webkit-scrollbar,

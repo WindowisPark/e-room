@@ -180,9 +180,10 @@
 
       <!-- ④ 초기 빈 상태 -->
       <div v-else class="empty-state">
-        <div class="empty-icon">🏢</div>
-        <p>채용 공고를 분석하고 기업 정보를 저장해보세요.</p>
-        <button class="btn-primary" @click="openAnalyzeForm">공고 분석 시작</button>
+        <i class="fa-solid fa-building empty-icon"></i>
+        <p class="empty-title">아직 분석한 기업이 없어요</p>
+        <p class="empty-desc">채용 공고 URL이나 텍스트를 붙여넣으면<br>AI가 핵심 정보를 정리해드려요.</p>
+        <button class="btn-primary" @click="openAnalyzeForm">+ 공고 분석 시작</button>
       </div>
     </main>
 
@@ -830,11 +831,13 @@ onMounted(loadCompanies);
   align-items: center;
   justify-content: center;
   height: 60%;
-  color: #bbb;
-  gap: 16px;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
 }
-.empty-icon { font-size: 48px; }
-.empty-state p { font-size: 15px; color: #999; margin: 0; }
+.empty-icon { font-size: 52px; color: #ddd; }
+.empty-title { font-size: 18px; font-weight: 600; color: #555; margin: 0; }
+.empty-desc { font-size: 14px; color: #999; line-height: 1.6; margin: 0; }
 
 /* 버튼 */
 .btn-primary {

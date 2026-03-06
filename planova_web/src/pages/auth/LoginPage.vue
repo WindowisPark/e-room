@@ -42,6 +42,13 @@ const isFormValid = computed(() => {
   return isEmailValid.value && isPasswordValid.value;
 });
 
+const forgotPasswordToast = ref(false);
+
+const handleForgotPassword = () => {
+  forgotPasswordToast.value = true;
+  setTimeout(() => { forgotPasswordToast.value = false; }, 3000);
+};
+
 // 카카오 SDK 초기화
 onMounted(async () => {
   // 카카오 SDK가 로드될 때까지 기다림
@@ -195,8 +202,8 @@ onMounted(() => {
         </div>
         
         <h1 class="login-title">
-          프리미엄 AI 튜터와 함께<br>
-          <span class="highlight">학습의 여정을 시작하세요!</span>
+          학습부터 취업까지,<br>
+          <span class="highlight">지금 시작하세요!</span>
         </h1>
         
         <!-- 로그인 탭 메뉴 -->
@@ -255,13 +262,16 @@ onMounted(() => {
                 <input type="checkbox" id="remember" v-model="rememberMe" />
                 <label for="remember">이메일 기억하기</label>
               </div>
-              <a href="#" class="forgot-password">비밀번호 찾기</a>
+              <button type="button" class="forgot-password" @click="handleForgotPassword">비밀번호 찾기</button>
+              <div v-if="forgotPasswordToast" class="forgot-toast">
+                준비 중입니다. 고객지원으로 문의해주세요.
+              </div>
             </div>
             
             <button 
               type="submit" 
               class="login-button"
-              :disabled="isLoading || (!isFormValid && (email || password))"
+              :disabled="isLoading || !isFormValid"
             >
               <span v-if="!isLoading">로그인</span>
               <div v-else class="button-spinner"></div>
@@ -398,7 +408,7 @@ onMounted(() => {
 .highlight {
   position: relative;
   display: inline-block;
-  color: #F37322;
+  color: var(--color-primary);
   z-index: 1;
 }
 
@@ -409,7 +419,7 @@ onMounted(() => {
   bottom: 0;
   width: 100%;
   height: 30%;
-  background-color: rgba(255, 156, 63, 0.2);
+  background-color: rgba(247, 103, 7, 0.2);
   z-index: -1;
   border-radius: 3px;
 }
@@ -435,7 +445,7 @@ onMounted(() => {
 }
 
 .tab-button.active {
-  color: #F37322;
+  color: var(--color-primary);
 }
 
 .tab-button.active::after {
@@ -445,7 +455,7 @@ onMounted(() => {
   left: 0;
   width: 100%;
   height: 2px;
-  background-color: #F37322;
+  background-color: var(--color-primary);
 }
 
 .tab-content {
@@ -476,8 +486,8 @@ onMounted(() => {
 }
 
 .form-group input:focus {
-  border-color: #F37322;
-  box-shadow: 0 0 0 2px rgba(243, 115, 34, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(247, 103, 7, 0.1);
 }
 
 .input-error {
@@ -497,6 +507,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 20px;
   font-size: 13px;
+  position: relative;
 }
 
 .remember-me {
@@ -509,20 +520,37 @@ onMounted(() => {
 }
 
 .forgot-password {
+  background: none;
+  border: none;
+  padding: 0;
   color: #666;
-  text-decoration: none;
+  font-size: 13px;
+  cursor: pointer;
   transition: color 0.3s;
 }
 
 .forgot-password:hover {
-  color: #F37322;
+  color: var(--color-primary);
   text-decoration: underline;
+}
+
+.forgot-toast {
+  position: absolute;
+  right: 0;
+  top: 22px;
+  background: #333;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 10;
 }
 
 .login-button {
   width: 100%;
   padding: 14px;
-  background-color: #F37322;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -536,7 +564,7 @@ onMounted(() => {
 }
 
 .login-button:hover:not(:disabled) {
-  background-color: #e05e0a;
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
 }
 
@@ -573,7 +601,7 @@ onMounted(() => {
 }
 
 .signup-link a {
-  color: #F37322;
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -632,9 +660,9 @@ onMounted(() => {
 .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(243, 115, 34, 0.3);
+  border: 3px solid rgba(247, 103, 7, 0.3);
   border-radius: 50%;
-  border-top-color: #F37322;
+  border-top-color: var(--color-primary);
   animation: spin 1s linear infinite;
 }
 

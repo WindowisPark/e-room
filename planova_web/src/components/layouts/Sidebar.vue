@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
@@ -40,16 +40,6 @@ const navigateToHome = () => {
   emit('menu-click', 'main');
   router.push('/student/main');
 };
-
-const hoveredItem = ref(null);
-
-const setHovered = (menuName) => {
-  hoveredItem.value = menuName;
-};
-
-const clearHovered = () => {
-  hoveredItem.value = null;
-};
 </script>
 
 <template>
@@ -58,161 +48,115 @@ const clearHovered = () => {
       <img src="@/assets/images/planova-small-logo.jpg" alt="로고" class="logo">
     </div>
 
-    <nav class="nav-menu">
+    <nav class="nav-menu" aria-label="주 메뉴">
       <!-- 홈 -->
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'main' }"
+        :aria-current="currentMenu === 'main' ? 'page' : undefined"
         @click="handleMenuClick('main')"
-        @mouseenter="setHovered('main')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'main' || hoveredItem === 'main'
-              ? '/sidebar-home-click.png'
-              : '/sidebar-home.png'"
-            class="icon-image"
-          />
-        </div>
-        <div class="nav-text">홈</div>
-      </div>
+        <i class="fa-solid fa-house nav-icon"></i>
+        <span class="nav-text">홈</span>
+      </button>
 
       <!-- 학습 섹션 -->
-      <div class="section-label">학습</div>
+      <div class="section-label" aria-hidden="true">학습</div>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'pdf' }"
+        :aria-current="currentMenu === 'pdf' ? 'page' : undefined"
         @click="handleMenuClick('pdf')"
-        @mouseenter="setHovered('pdf')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'pdf' || hoveredItem === 'pdf'
-              ? '/sidebar-pdf-click.png'
-              : '/sidebar-pdf.png'"
-            class="icon-image"
-          />
-        </div>
-        <div class="nav-text">PDF 학습</div>
-      </div>
+        <i class="fa-solid fa-file-pdf nav-icon"></i>
+        <span class="nav-text">PDF 학습</span>
+      </button>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'aitutor' }"
+        :aria-current="currentMenu === 'aitutor' ? 'page' : undefined"
         @click="handleMenuClick('aitutor')"
-        @mouseenter="setHovered('aitutor')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'aitutor' || hoveredItem === 'aitutor'
-              ? '/sidebar-aitutor-click.png'
-              : '/sidebar-aitutor.png'"
-            class="icon-image"
-          />
-        </div>
-        <div class="nav-text">AI 튜터</div>
-      </div>
-
-      <div
-        class="nav-item"
-        :class="{ active: currentMenu === 'calendar' }"
-        @click="handleMenuClick('calendar')"
-        @mouseenter="setHovered('calendar')"
-        @mouseleave="clearHovered"
-      >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'calendar' || hoveredItem === 'calendar'
-              ? '/sidebar-calendar-click.png'
-              : '/sidebar-calendar.png'"
-            class="icon-image"
-          />
-        </div>
-        <div class="nav-text">캘린더</div>
-      </div>
+        <i class="fa-solid fa-robot nav-icon"></i>
+        <span class="nav-text">AI 튜터</span>
+      </button>
 
       <!-- 커리어 섹션 -->
-      <div class="section-label">커리어</div>
+      <div class="section-label" aria-hidden="true">커리어</div>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'resume' }"
+        :aria-current="currentMenu === 'resume' ? 'page' : undefined"
         @click="handleMenuClick('resume')"
-        @mouseenter="setHovered('resume')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'resume' || hoveredItem === 'resume' }">
-          <i class="fa-solid fa-id-card"></i>
-        </div>
-        <div class="nav-text">이력서</div>
-      </div>
+        <i class="fa-solid fa-id-card nav-icon"></i>
+        <span class="nav-text">이력서</span>
+      </button>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'jobs' }"
+        :aria-current="currentMenu === 'jobs' ? 'page' : undefined"
         @click="handleMenuClick('jobs')"
-        @mouseenter="setHovered('jobs')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'jobs' || hoveredItem === 'jobs' }">
-          <i class="fa-solid fa-building"></i>
-        </div>
-        <div class="nav-text">기업 조사</div>
-      </div>
+        <i class="fa-solid fa-building nav-icon"></i>
+        <span class="nav-text">기업 조사</span>
+      </button>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'coverletter' }"
+        :aria-current="currentMenu === 'coverletter' ? 'page' : undefined"
         @click="handleMenuClick('coverletter')"
-        @mouseenter="setHovered('coverletter')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon nav-icon-fa" :class="{ active: currentMenu === 'coverletter' || hoveredItem === 'coverletter' }">
-          <i class="fa-solid fa-pen-nib"></i>
-        </div>
-        <div class="nav-text">자소서</div>
-      </div>
+        <i class="fa-solid fa-pen-nib nav-icon"></i>
+        <span class="nav-text">자소서</span>
+      </button>
 
-      <!-- 기타 -->
-      <div
+      <!-- 관리 섹션 -->
+      <div class="section-label" aria-hidden="true">관리</div>
+
+      <button
+        type="button"
+        class="nav-item"
+        :class="{ active: currentMenu === 'calendar' }"
+        :aria-current="currentMenu === 'calendar' ? 'page' : undefined"
+        @click="handleMenuClick('calendar')"
+      >
+        <i class="fa-solid fa-calendar-days nav-icon"></i>
+        <span class="nav-text">캘린더</span>
+      </button>
+
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'myroom' }"
+        :aria-current="currentMenu === 'myroom' ? 'page' : undefined"
         @click="handleMenuClick('myroom')"
-        @mouseenter="setHovered('myroom')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'myroom' || hoveredItem === 'myroom'
-              ? '/sidebar-myroom-click.png'
-              : '/sidebar-myroom.png'"
-            class="icon-image"
-          />
-        </div>
-        <div class="nav-text">마이룸</div>
-      </div>
+        <i class="fa-solid fa-chart-bar nav-icon"></i>
+        <span class="nav-text">내 활동</span>
+      </button>
 
-      <div
+      <button
+        type="button"
         class="nav-item"
         :class="{ active: currentMenu === 'support' }"
+        :aria-current="currentMenu === 'support' ? 'page' : undefined"
         @click="handleMenuClick('support')"
-        @mouseenter="setHovered('support')"
-        @mouseleave="clearHovered"
       >
-        <div class="nav-icon">
-          <img
-            :src="currentMenu === 'support' || hoveredItem === 'support'
-              ? '/sidebar-support-click.png'
-              : '/sidebar-support.png'"
-            class="icon-image-support"
-          />
-        </div>
-        <div class="nav-text">고객지원</div>
-      </div>
+        <i class="fa-solid fa-headset nav-icon"></i>
+        <span class="nav-text">고객지원</span>
+      </button>
     </nav>
   </aside>
 </template>
@@ -250,9 +194,9 @@ const clearHovered = () => {
 }
 
 .section-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #bbb;
+  color: #888;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   width: 100%;
@@ -269,56 +213,49 @@ const clearHovered = () => {
   gap: 5px;
   width: 100%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
   padding: 5px 0;
+  /* button reset */
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid #F76707;
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .nav-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #666;
+  color: #999;
   transition: color 0.2s ease;
-}
-
-.icon-image {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-}
-
-.icon-image-support {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
 }
 
 .nav-text {
   font-size: 11px;
   color: #666;
   transition: color 0.2s ease;
-  margin-top: 2px;
   text-align: center;
 }
 
+.nav-item.active .nav-icon,
 .nav-item.active .nav-text {
   color: #F76707;
+}
+
+.nav-item.active .nav-text {
   font-weight: 500;
 }
 
+.nav-item:hover .nav-icon,
 .nav-item:hover .nav-text {
-  color: #F76707;
-}
-
-.nav-icon-fa {
-  font-size: 20px;
-  color: #999;
-  transition: color 0.2s ease;
-}
-
-.nav-icon-fa.active {
   color: #F76707;
 }
 </style>

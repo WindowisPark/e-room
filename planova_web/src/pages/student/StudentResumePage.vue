@@ -141,7 +141,10 @@
     </main>
 
     <div v-else class="empty-editor">
-      <p>왼쪽에서 이력서를 선택하거나 새로 만들어보세요.</p>
+      <i class="fa-regular fa-file-lines empty-editor-icon"></i>
+      <p class="empty-editor-title">아직 이력서가 없어요</p>
+      <p class="empty-editor-desc">AI가 함께 다듬어주는 이력서,<br>지금 시작해보세요.</p>
+      <button class="btn-primary" @click="openCreateProfile">+ 첫 이력서 만들기</button>
     </div>
 
     <!-- 이력서 생성 모달 -->
@@ -753,7 +756,30 @@ onMounted(loadProfiles);
 .btn-add:hover { border-color: #F76707; color: #F76707; background: #fff8f5; }
 
 .empty-editor {
-  flex: 1; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 15px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+}
+.empty-editor-icon {
+  font-size: 52px;
+  color: #ddd;
+}
+.empty-editor-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #555;
+  margin: 0;
+}
+.empty-editor-desc {
+  font-size: 14px;
+  color: #999;
+  line-height: 1.6;
+  margin: 0;
 }
 
 /* 버튼 공통 */

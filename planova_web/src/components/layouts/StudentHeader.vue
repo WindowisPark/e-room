@@ -1,11 +1,27 @@
 <script setup>
-import { useRouter } from 'vue-router';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
+const route = useRoute();
 const showDropdown = ref(false);
 const authStore = useAuthStore();
+
+const PAGE_TITLES = {
+  studentMain: '홈',
+  studentAitutor: 'AI 튜터',
+  studentCalendar: '캘린더',
+  studentPdf: 'PDF 학습',
+  studentPdfView: 'PDF 뷰어',
+  studentMyroom: '내 활동',
+  studentResume: '이력서',
+  studentJobs: '기업 조사',
+  studentCoverLetter: '자소서',
+  studentSupport: '고객지원',
+};
+
+const pageTitle = computed(() => PAGE_TITLES[route.name] || '');
 
 const logout = () => {
   authStore.logout();
@@ -29,6 +45,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick));
 <template>
   <header class="student-header">
     <div class="logo-space">
+      <span v-if="pageTitle" class="page-title">{{ pageTitle }}</span>
     </div>
     <div class="right-section">
       <div class="user-profile-container" @click.stop="toggleDropdown">
@@ -67,6 +84,15 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick));
 
 .logo-space {
   flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #222;
+  letter-spacing: -0.2px;
 }
 
 .right-section {
