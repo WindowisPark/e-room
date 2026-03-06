@@ -93,7 +93,7 @@ class TaskHandlers:
                 "task_type": "qa",
                 "waiting_for": None,
                 "current_request_type": None,
-                "agent_state": result
+                "agent_state": {k: v for k, v in result.items() if k != "messages"}
             })
             
             await self.manager.send_message(session_id, {
@@ -175,7 +175,7 @@ class TaskHandlers:
             result = await self.manager.run_agent_step(current_state, "analyze_previous_exam")
             
             # 분석 완료 후 학습자료 선택 요청
-            self.manager.session_manager.update_session(session_id, {"agent_state": result})
+            self.manager.session_manager.update_session(session_id, {"agent_state": {k: v for k, v in result.items() if k != "messages"}})
             await self.request_study_material_selection(session_id)
             
         except Exception as e:
@@ -218,7 +218,7 @@ class TaskHandlers:
                 "task_type": "qa",
                 "waiting_for": None,
                 "current_request_type": None,
-                "agent_state": result,
+                "agent_state": {k: v for k, v in result.items() if k != "messages"},
                 "exam_step": "study_material_selected"
             })
             
@@ -393,7 +393,7 @@ class TaskHandlers:
                 "task_type": "qa",
                 "waiting_for": None,
                 "current_request_type": None,
-                "agent_state": result,
+                "agent_state": {k: v for k, v in result.items() if k != "messages"},
                 "scheduler_step": "schedule_generated"
             })
             

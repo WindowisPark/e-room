@@ -97,6 +97,10 @@ class WebSocketManager:
             logger.error(f"사용자 메시지 처리 오류: {str(e)}")
             await self.send_error(session_id, "메시지 처리 중 오류가 발생했습니다.")
 
+    def _strip_messages(self, state: dict) -> dict:
+        """agent_state 저장 전 LangChain 메시지 객체 제거 (JSON 직렬화 불가)"""
+        return {k: v for k, v in state.items() if k != "messages"}
+
     async def handle_first_message(self, session_id: str, message: str, user_id: str):
         """첫 메시지 처리 및 목적 판단"""
         try:
@@ -125,7 +129,7 @@ class WebSocketManager:
                 purpose = result.get("purpose", "qa_system")
 
             state["purpose"] = purpose
-            self.session_manager.update_session(session_id, {"task_type": purpose, "agent_state": state})
+            self.session_manager.update_session(session_id, {"task_type": purpose, "agent_state": self._strip_messages(state)})
 
             # 목적에 따라 분기
             if purpose == "qa_system":
@@ -168,7 +172,7 @@ class WebSocketManager:
                 "timestamp": self.get_timestamp()
             })
 
-            self.session_manager.update_session(session_id, {"agent_state": result})
+            self.session_manager.update_session(session_id, {"agent_state": self._strip_messages(result)})
 
         except Exception as e:
             logger.error(f"QA 처리 오류: {str(e)}")
@@ -219,8 +223,8 @@ class WebSocketManager:
             })
             
             # 에이전트 상태 업데이트
-            self.session_manager.update_session(session_id, {"agent_state": result})
-            
+            self.session_manager.update_session(session_id, {"agent_state": self._strip_messages(result)})
+
         except Exception as e:
             logger.error(f"QA 대화 계속 처리 오류: {str(e)}")
             await self.send_error(session_id, "답변 생성 중 오류가 발생했습니다.")
