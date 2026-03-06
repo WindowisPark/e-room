@@ -25,6 +25,7 @@ class ResumeProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     summary = Column(Text, nullable=True)
+    profile_type = Column(SAEnum("job", "academic", name="profile_type_enum"), nullable=False, default="job", server_default="job")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

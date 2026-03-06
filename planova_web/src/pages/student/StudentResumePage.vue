@@ -6,9 +6,16 @@
         <h2>이력서</h2>
         <button class="btn-primary btn-sm" @click="openCreateProfile">+ 새 이력서</button>
       </div>
+
+      <!-- 학업/취업 탭 -->
+      <div class="type-tabs">
+        <button :class="{ active: profileType === 'job' }" @click="profileType = 'job'">취업용</button>
+        <button :class="{ active: profileType === 'academic' }" @click="profileType = 'academic'">학업용</button>
+      </div>
+
       <ul class="profile-list">
         <li
-          v-for="p in profiles"
+          v-for="p in filteredProfiles"
           :key="p.id"
           class="profile-item"
           :class="{ active: selectedProfile?.id === p.id }"
@@ -17,7 +24,7 @@
           <div class="profile-title">{{ p.title }}</div>
           <div class="profile-date">{{ formatDate(p.updated_at) }}</div>
         </li>
-        <li v-if="profiles.length === 0" class="empty-hint">이력서가 없습니다.</li>
+        <li v-if="filteredProfiles.length === 0" class="empty-hint">이력서가 없습니다.</li>
       </ul>
     </aside>
 
@@ -96,6 +103,10 @@
       <div class="modal">
         <h3>새 이력서 만들기</h3>
         <input v-model="newProfileTitle" placeholder="이력서 제목" class="modal-input" />
+        <div class="type-radio-group">
+          <label><input type="radio" v-model="newProfileType" value="job" /> 취업용</label>
+          <label><input type="radio" v-model="newProfileType" value="academic" /> 학업용</label>
+        </div>
         <div class="modal-actions">
           <button class="btn-outline" @click="showCreateModal = false">취소</button>
           <button class="btn-primary" @click="createProfile">만들기</button>
@@ -161,6 +172,8 @@ const activeCat = ref('experience');
 const showCreateModal = ref(false);
 const showItemModal = ref(false);
 const newProfileTitle = ref('');
+const newProfileType = ref('job');
+const profileType = ref('job');
 const editingTitle = ref(false);
 const editTitleValue = ref('');
 const summaryValue = ref('');
@@ -187,6 +200,10 @@ const defaultItemForm = () => ({
 });
 
 const itemForm = ref(defaultItemForm());
+
+const filteredProfiles = computed(() =>
+  profiles.value.filter(p => (p.profile_type || 'job') === profileType.value)
+);
 
 const filteredItems = computed(() =>
   items.value.filter(i => i.category === activeCat.value)
@@ -216,13 +233,18 @@ async function selectProfile(p) {
 
 function openCreateProfile() {
   newProfileTitle.value = '';
+  newProfileType.value = profileType.value;
   showCreateModal.value = true;
 }
 
 async function createProfile() {
   if (!newProfileTitle.value.trim()) return;
-  const res = await axios.post(`${API}/profiles`, { title: newProfileTitle.value.trim() });
+  const res = await axios.post(`${API}/profiles`, {
+    title: newProfileTitle.value.trim(),
+    profile_type: newProfileType.value,
+  });
   profiles.value.unshift(res.data);
+  profileType.value = newProfileType.value;
   await selectProfile(res.data);
   showCreateModal.value = false;
 }
@@ -370,6 +392,48 @@ onMounted(loadProfiles);
   font-weight: 600;
   color: #333;
   margin: 0;
+}
+
+/* 학업/취업 탭 */
+.type-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  margin: 0;
+}
+
+.type-tabs button {
+  flex: 1;
+  padding: 9px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #888;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.type-tabs button.active {
+  color: #F76707;
+  border-bottom-color: #F76707;
+}
+
+/* 이력서 타입 라디오 */
+.type-radio-group {
+  display: flex;
+  gap: 20px;
+  margin: 12px 0;
+}
+
+.type-radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #444;
 }
 
 .profile-list {

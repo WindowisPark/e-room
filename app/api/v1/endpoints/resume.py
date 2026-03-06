@@ -20,11 +20,13 @@ router = APIRouter()
 class ResumeProfileCreate(BaseModel):
     title: str
     summary: Optional[str] = None
+    profile_type: str = "job"
 
 
 class ResumeProfileUpdate(BaseModel):
     title: Optional[str] = None
     summary: Optional[str] = None
+    profile_type: Optional[str] = None
 
 
 class ResumeProfileOut(BaseModel):
@@ -32,6 +34,7 @@ class ResumeProfileOut(BaseModel):
     user_id: int
     title: str
     summary: Optional[str]
+    profile_type: str
     updated_at: Any
     created_at: Any
 
@@ -115,7 +118,7 @@ def create_profile(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    profile = ResumeProfile(user_id=current_user.id, title=data.title, summary=data.summary)
+    profile = ResumeProfile(user_id=current_user.id, title=data.title, summary=data.summary, profile_type=data.profile_type)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -143,6 +146,8 @@ def update_profile(
         profile.title = data.title
     if data.summary is not None:
         profile.summary = data.summary
+    if data.profile_type is not None:
+        profile.profile_type = data.profile_type
     db.commit()
     db.refresh(profile)
     return profile
