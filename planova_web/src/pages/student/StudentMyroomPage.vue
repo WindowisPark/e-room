@@ -96,8 +96,6 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
-import LineChart from '@/components/LineChart.vue';
-import { memberAttendanceApi } from '@/api/memberAttendanceApi.js';
 import api from '@/api';
 const currentDay = ref(1);
 const consecutiveDays = ref(1);
@@ -128,20 +126,6 @@ const checkAttendance = async () => {
 
   isLoading.value = true;
   try {
-    const res = await memberAttendanceApi.checkAttendance();
-    const data = res.data;
-    consecutiveDays.value = data.current_streak ?? consecutiveDays.value;
-    attendanceStatus.canCheckToday = !data.today_checked;
-    currentDay.value = data.current_streak ?? currentDay.value;
-    attendanceStatus.lastCheckDate = data.today ?? new Date().toISOString();
-    if (!attendanceStatus.completedDays.includes(currentDay.value)) {
-      attendanceStatus.completedDays.push(currentDay.value);
-    }
-    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
-    saveAttendanceData();
-    showToast(data.message ?? "출석체크 완료!");
-  } catch (e) {
-    // 오프라인 fallback
     const nextDay = currentDay.value + 1;
     if (nextDay <= 7) {
       currentDay.value = nextDay;
@@ -152,6 +136,7 @@ const checkAttendance = async () => {
       progressFillWidth.value = `${(nextDay - 1) * 16.66}%`;
       saveAttendanceData();
     }
+    showToast("출석체크 완료!");
   } finally {
     isLoading.value = false;
   }
@@ -220,17 +205,7 @@ const attendanceBtnClass = computed(() => {
 });
 
 onMounted(async () => {
-  try {
-    const res = await memberAttendanceApi.getAttendanceStatus();
-    const data = res.data;
-    consecutiveDays.value = data.current_streak ?? consecutiveDays.value;
-    attendanceStatus.canCheckToday = !data.today_checked;
-    currentDay.value = data.current_streak ?? currentDay.value;
-    attendanceStatus.lastCheckDate = data.today ?? null;
-    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
-  } catch (e) {
-    loadAttendanceData();
-  }
+  loadAttendanceData();
 
   try {
     const { data } = await api.get('/users/me/details');

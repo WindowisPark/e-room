@@ -45,18 +45,8 @@ const featureSteps = [
   }
 ];
 
-const currentFeature = ref(0);
-let featureInterval = null;
-
-const nextFeature = () => {
-  currentFeature.value = (currentFeature.value + 1) % featureSteps.length;
-};
-
-const goToFeature = (i) => {
-  currentFeature.value = i;
-  clearInterval(featureInterval);
-  featureInterval = setInterval(nextFeature, 3500);
-};
+const activeTab = ref(0);
+const setTab = (i) => { activeTab.value = i; };
 
 // ── Stats ──
 const stats = [
@@ -153,8 +143,6 @@ const steps = [
 let observer = null;
 
 onMounted(() => {
-  featureInterval = setInterval(nextFeature, 3500);
-
   observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -173,7 +161,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  clearInterval(featureInterval);
   if (observer) observer.disconnect();
 });
 </script>
@@ -208,76 +195,41 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 우: 피처 캐러셀 (데스크톱) -->
-        <div class="feature-carousel">
-          <div class="step-tabs">
+        <!-- 우: 탭 전환 패널 (데스크톱) -->
+        <div class="feature-tabs-panel">
+          <div class="ftab-row">
             <button
               v-for="(step, i) in featureSteps"
               :key="i"
-              :class="['step-tab', { active: currentFeature === i }]"
-              :style="currentFeature === i ? { background: step.accent, color: 'white', borderColor: step.accent } : {}"
-              @click="goToFeature(i)"
+              :class="['ftab', { active: activeTab === i }]"
+              @click="setTab(i)"
             >
-              {{ step.step }}
+              <i :class="step.faIcon"></i>
+              {{ step.title }}
             </button>
           </div>
 
-          <div class="feature-track-wrap">
-            <div
-              class="feature-track"
-              :style="{ transform: `translateX(-${currentFeature * 100}%)` }"
-            >
-              <div
-                v-for="(step, i) in featureSteps"
-                :key="i"
-                class="feature-card"
-                :style="{ background: step.bg }"
-              >
-                <div class="fc-top">
-                  <span class="fc-step-num" :style="{ color: step.accent }">{{ step.step }}</span>
-                  <span class="fc-tag">{{ step.tag }}</span>
-                </div>
-                <div class="fc-icon-wrap">
-                  <i :class="step.faIcon" :style="{ color: step.accent }"></i>
-                </div>
-                <h3 class="fc-title" :style="{ color: step.accent }">{{ step.title }}</h3>
-                <p class="fc-desc">{{ step.desc }}</p>
-                <ul class="fc-items">
-                  <li
-                    v-for="item in step.items"
-                    :key="item"
-                    class="fc-item"
-                    :style="{ borderLeftColor: step.accent }"
-                  >{{ item }}</li>
-                </ul>
-                <div class="fc-progress-bar">
-                  <div
-                    class="fc-progress-fill"
-                    :style="{ background: step.accent }"
-                    :class="{ animating: currentFeature === i }"
-                  ></div>
-                </div>
+          <Transition name="fp-fade" mode="out-in">
+            <div :key="activeTab" class="feature-panel">
+              <div class="fp-icon-wrap">
+                <i :class="featureSteps[activeTab].faIcon"></i>
               </div>
+              <h3 class="fp-title">{{ featureSteps[activeTab].title }}</h3>
+              <p class="fp-desc">{{ featureSteps[activeTab].desc }}</p>
+              <ul class="fp-items">
+                <li v-for="item in featureSteps[activeTab].items" :key="item">
+                  <i class="fa-solid fa-check"></i> {{ item }}
+                </li>
+              </ul>
             </div>
-          </div>
-
-          <div class="fc-arrow-row">
-            <button class="fc-arrow" @click="goToFeature((currentFeature - 1 + featureSteps.length) % featureSteps.length)">←</button>
-            <button class="fc-arrow" @click="goToFeature((currentFeature + 1) % featureSteps.length)">→</button>
-          </div>
+          </Transition>
         </div>
 
-        <!-- 모바일 2×2 그리드 -->
-        <div class="mobile-feature-cards">
-          <div
-            v-for="step in featureSteps"
-            :key="step.step"
-            class="mfc-card"
-            :style="{ borderTopColor: step.accent }"
-          >
-            <i :class="step.faIcon" :style="{ color: step.accent }"></i>
-            <div class="mfc-title">{{ step.title }}</div>
-          </div>
+        <!-- 모바일 필 -->
+        <div class="mobile-feature-pills">
+          <span v-for="step in featureSteps" :key="step.step" class="mfp-pill">
+            <i :class="step.faIcon"></i> {{ step.title }}
+          </span>
         </div>
       </div>
     </section>
@@ -302,63 +254,139 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="bento-grid">
-          <!-- 학습(PDF) — big -->
-          <div class="bento-card bento-big" :style="{ borderTopColor: bentoFeatures[0].accent }">
-            <div class="bento-tag" :style="{ color: bentoFeatures[0].accent, background: '#FFF3E8' }">
-              {{ bentoFeatures[0].tag }}
+          <!-- AI 학습 플랜 — big -->
+          <div class="bento-card bento-big study-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">수능_국어_독서.pdf</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-section-hd">AI 요약</div>
+                <div class="mock-line"></div>
+                <div class="mock-line short"></div>
+                <div class="mock-line"></div>
+                <div class="mock-section-hd" style="margin-top: 14px;">생성된 문제</div>
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  다음 중 글쓴이의 주장과 일치하는 것은?
+                </div>
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  밑줄 친 ⓐ의 의미로 가장 적절한 것은?
+                </div>
+              </div>
             </div>
-            <i :class="bentoFeatures[0].icon" class="bento-icon" :style="{ color: bentoFeatures[0].accent }"></i>
-            <h3 class="bento-title">{{ bentoFeatures[0].title }}</h3>
-            <p class="bento-desc">{{ bentoFeatures[0].desc }}</p>
-            <ul class="bento-items">
-              <li v-for="item in bentoFeatures[0].items" :key="item">
-                <i class="fa-solid fa-check" :style="{ color: bentoFeatures[0].accent }"></i>
-                {{ item }}
-              </li>
-            </ul>
-            <router-link to="/auth/login" class="bento-cta" :style="{ background: bentoFeatures[0].accent }">
-              PDF 학습 시작하기 →
-            </router-link>
+            <div class="card-footer">
+              <div class="card-ft-title">AI 학습 플랜</div>
+              <div class="card-ft-desc">PDF 업로드 → 요약·문제 자동 생성</div>
+            </div>
           </div>
 
-          <!-- 이력서 -->
-          <div class="bento-card bento-small" :style="{ borderTopColor: bentoFeatures[1].accent }">
-            <div class="bento-tag" :style="{ color: bentoFeatures[1].accent, background: '#EFF6FF' }">
-              {{ bentoFeatures[1].tag }}
+          <!-- 이력서 — small -->
+          <div class="bento-card bento-small resume-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">이력서.pdf</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-name-row">김플래노 · 프론트엔드 개발자</div>
+                <div class="mock-chips">
+                  <span class="mock-chip">Vue.js</span>
+                  <span class="mock-chip">React</span>
+                  <span class="mock-chip">TypeScript</span>
+                </div>
+              </div>
             </div>
-            <i :class="bentoFeatures[1].icon" class="bento-icon" :style="{ color: bentoFeatures[1].accent }"></i>
-            <h3 class="bento-title">{{ bentoFeatures[1].title }}</h3>
-            <p class="bento-desc">{{ bentoFeatures[1].desc }}</p>
+            <div class="card-footer">
+              <div class="card-ft-title">이력서</div>
+              <div class="card-ft-desc">AI가 함께 다듬는 나만의 이력서</div>
+            </div>
           </div>
 
-          <!-- 자소서 -->
-          <div class="bento-card bento-small" :style="{ borderTopColor: bentoFeatures[2].accent }">
-            <div class="bento-tag" :style="{ color: bentoFeatures[2].accent, background: '#F0FDF4' }">
-              {{ bentoFeatures[2].tag }}
+          <!-- 자소서 — small -->
+          <div class="bento-card bento-small cover-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">자기소개서 · 지원동기</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-line"></div>
+                <div class="mock-line short"></div>
+                <div class="mock-line"></div>
+                <span class="mock-ai-badge">AI 다듬기 ✓</span>
+              </div>
             </div>
-            <i :class="bentoFeatures[2].icon" class="bento-icon" :style="{ color: bentoFeatures[2].accent }"></i>
-            <h3 class="bento-title">{{ bentoFeatures[2].title }}</h3>
-            <p class="bento-desc">{{ bentoFeatures[2].desc }}</p>
+            <div class="card-footer">
+              <div class="card-ft-title">자기소개서</div>
+              <div class="card-ft-desc">AI 초안으로 빠르게 시작</div>
+            </div>
           </div>
 
           <!-- AI 튜터 — wide -->
-          <div class="bento-card bento-wide" :style="{ borderTopColor: bentoFeatures[3].accent }">
-            <div class="bento-tag" :style="{ color: bentoFeatures[3].accent, background: '#F5F3FF' }">
-              {{ bentoFeatures[3].tag }}
+          <div class="bento-card bento-wide tutor-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">AI 튜터 채팅</span>
+              </div>
+              <div class="mock-body mock-chat-body">
+                <div class="mock-chat-r">미적분 극한값 구하는 방법을 모르겠어요 😅</div>
+                <div class="mock-chat-l">극한은 x가 특정 값에 가까워질 때의 함수값이에요. 예시로 보여드릴게요!</div>
+                <div class="mock-chat-r">lim(x→0) sinx/x 는 얼마예요?</div>
+                <div class="mock-chat-l">그 값은 1이에요. 로피탈 정리를 쓰면 바로 구할 수 있어요 ✨</div>
+              </div>
             </div>
-            <i :class="bentoFeatures[3].icon" class="bento-icon" :style="{ color: bentoFeatures[3].accent }"></i>
-            <h3 class="bento-title">{{ bentoFeatures[3].title }}</h3>
-            <p class="bento-desc">{{ bentoFeatures[3].desc }}</p>
+            <div class="card-footer">
+              <div class="card-ft-title">AI 튜터</div>
+              <div class="card-ft-desc">모르는 개념을 즉시 질문, 무제한 응답</div>
+            </div>
           </div>
 
           <!-- 기업 조사 — wide -->
-          <div class="bento-card bento-wide" :style="{ borderTopColor: bentoFeatures[4].accent }">
-            <div class="bento-tag" :style="{ color: bentoFeatures[4].accent, background: '#FDF4FF' }">
-              {{ bentoFeatures[4].tag }}
+          <div class="bento-card bento-wide jobs-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">기업 공고 분석</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-job-name">카카오 · 프론트엔드 개발자</div>
+                <div class="mock-chips">
+                  <span class="mock-chip">서울</span>
+                  <span class="mock-chip">연봉 5,000만+</span>
+                  <span class="mock-chip">경력 3년+</span>
+                </div>
+                <div class="mock-section-hd" style="margin-top: 10px;">예상 면접 질문</div>
+                <div class="mock-line short"></div>
+              </div>
             </div>
-            <i :class="bentoFeatures[4].icon" class="bento-icon" :style="{ color: bentoFeatures[4].accent }"></i>
-            <h3 class="bento-title">{{ bentoFeatures[4].title }}</h3>
-            <p class="bento-desc">{{ bentoFeatures[4].desc }}</p>
+            <div class="card-footer">
+              <div class="card-ft-title">기업 공고 조사</div>
+              <div class="card-ft-desc">채용 공고 자동 분석 + 면접 예상 질문 제공</div>
+            </div>
           </div>
         </div>
       </div>
@@ -505,6 +533,17 @@ body, html {
   overflow: hidden;
 }
 
+/* 파스텔 도트 배경 패턴 */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(247, 103, 7, 0.07) 1.5px, transparent 1.5px);
+  background-size: 30px 30px;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .bg-blobs {
   position: absolute;
   inset: 0;
@@ -633,109 +672,77 @@ body, html {
   color: #F76707;
 }
 
-/* ── 피처 캐러셀 (데스크톱) ── */
-.feature-carousel {
+/* ── 탭 전환 패널 ── */
+.feature-tabs-panel {
   flex: 1;
-  max-width: 460px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-.step-tabs { display: flex; gap: 8px; }
+.ftab-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-.step-tab {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: 2px solid #e0e0e0;
-  background: white; color: #999;
-  font-weight: 800; font-size: 0.8rem;
-  cursor: pointer; transition: all 0.25s;
-}
-
-.step-tab:hover { border-color: #F76707; color: #F76707; }
-
-.feature-track-wrap {
-  overflow: hidden;
-  border-radius: 20px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
-}
-
-.feature-track {
-  display: flex;
-  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.feature-card {
-  min-width: 100%;
-  padding: 32px 28px 24px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 340px;
-}
-
-.fc-top { display: flex; align-items: center; justify-content: space-between; }
-.fc-step-num { font-size: 1.8rem; font-weight: 900; line-height: 1; }
-.fc-tag { font-size: 0.75rem; color: #999; background: white; padding: 4px 10px; border-radius: 50px; font-weight: 600; }
-
-.fc-icon-wrap {
-  font-size: 2rem;
-}
-
-.fc-title { font-size: 1.4rem; font-weight: 800; margin: 0; }
-.fc-desc { font-size: 0.88rem; color: #555; line-height: 1.65; margin: 0; white-space: pre-line; }
-
-.fc-items { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; }
-.fc-item { font-size: 0.82rem; color: #444; padding-left: 12px; border-left: 3px solid; font-weight: 500; }
-
-.fc-progress-bar { height: 3px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-top: auto; overflow: hidden; }
-.fc-progress-fill { height: 100%; width: 0%; border-radius: 2px; }
-.fc-progress-fill.animating { animation: progressFill 3.5s linear forwards; }
-
-@keyframes progressFill { from { width: 0%; } to { width: 100%; } }
-
-.fc-arrow-row { display: flex; gap: 8px; justify-content: flex-end; }
-.fc-arrow {
-  width: 36px; height: 36px; border-radius: 50%;
-  border: 2px solid #e0e0e0; background: white;
-  font-size: 1rem; cursor: pointer; transition: all 0.2s;
-}
-.fc-arrow:hover { border-color: #F76707; color: #F76707; }
-
-/* ── 모바일 피처 카드 ── */
-.mobile-feature-cards {
-  display: none;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  width: 100%;
-  margin-top: 32px;
-}
-
-.mfc-card {
-  background: #fafafa;
-  border-top: 4px solid;
-  border-radius: 12px;
-  padding: 20px 16px;
-  display: flex;
-  flex-direction: column;
+.ftab {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.88rem;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 50px;
+  border: 2px solid #e0e0e0;
+  background: white;
+  color: #888;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ftab:hover { border-color: #F76707; color: #F76707; }
+.ftab.active { background: #F76707; border-color: #F76707; color: white; }
+
+.feature-panel {
+  background: white;
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
 }
 
-.mfc-card i {
-  font-size: 1.6rem;
-}
+.fp-icon-wrap { font-size: 2.2rem; color: #F76707; }
+.fp-title { font-size: 1.4rem; font-weight: 800; color: #1a1a1a; margin: 0; }
+.fp-desc { font-size: 0.9rem; color: #555; line-height: 1.7; margin: 0; white-space: pre-line; }
+.fp-items { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.fp-items li { font-size: 0.85rem; color: #444; display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.fp-items li i { color: #F76707; font-size: 0.75rem; }
 
-.mfc-title {
-  font-size: 0.88rem;
+/* Fade transition */
+.fp-fade-enter-active, .fp-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fp-fade-enter-from { opacity: 0; transform: translateY(10px); }
+.fp-fade-leave-to   { opacity: 0; transform: translateY(-6px); }
+
+/* ── 모바일 필 ── */
+.mobile-feature-pills {
+  display: none;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 28px;
+}
+.mfp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 50px;
+  background: #FFF3E8;
+  color: #F76707;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: #333;
-  text-align: center;
 }
 
 /* ── Stats Bar ── */
@@ -790,15 +797,13 @@ body, html {
 }
 
 .bento-card {
-  background: white;
   border-radius: 20px;
-  padding: 32px 28px;
-  border-top: 4px solid;
+  padding: 18px 18px 14px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   transition: transform 0.25s, box-shadow 0.25s;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  overflow: hidden;
 }
 
 .bento-card:hover {
@@ -806,80 +811,201 @@ body, html {
   box-shadow: 0 12px 32px rgba(0,0,0,0.1);
 }
 
-.bento-big {
-  grid-row: span 2;
-}
+.bento-big  { grid-row: span 2; }
+.bento-wide { grid-column: span 2; }
 
-.bento-wide {
-  grid-column: span 2;
-}
+/* Card accent backgrounds */
+.study-card  { background: linear-gradient(145deg, #FFF3E8, #ffffff); }
+.resume-card { background: linear-gradient(145deg, #EFF6FF, #ffffff); }
+.cover-card  { background: linear-gradient(145deg, #F0FDF4, #ffffff); }
+.tutor-card  { background: linear-gradient(145deg, #F5F3FF, #ffffff); }
+.jobs-card   { background: linear-gradient(145deg, #FDF4FF, #ffffff); }
 
-.bento-tag {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 50px;
-  width: fit-content;
-}
-
-.bento-icon {
-  font-size: 2rem;
-  margin: 4px 0;
-}
-
-.bento-title {
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: #1a1a1a;
-  margin: 0;
-}
-
-.bento-desc {
-  font-size: 0.9rem;
-  color: #555;
-  line-height: 1.65;
-  margin: 0;
-}
-
-.bento-items {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
+/* Mock window */
+.mock-window {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.bento-items li {
-  font-size: 0.88rem;
-  color: #444;
+.mock-bar {
+  background: #f3f3f3;
+  border-radius: 10px 10px 0 0;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
 }
 
-.bento-items li i {
-  font-size: 0.78rem;
+.mock-dots {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
-.bento-cta {
-  display: inline-block;
-  color: white;
-  text-decoration: none;
-  padding: 12px 24px;
-  border-radius: 50px;
-  font-size: 0.9rem;
+.mock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d4d4d4;
+}
+
+.study-card  .mock-dot { background: rgba(247, 103,  7, 0.45); }
+.resume-card .mock-dot { background: rgba( 59, 130,246, 0.45); }
+.cover-card  .mock-dot { background: rgba( 16, 185,129, 0.45); }
+.tutor-card  .mock-dot { background: rgba(139,  92,246, 0.45); }
+.jobs-card   .mock-dot { background: rgba(168,  85,247, 0.45); }
+
+.mock-bar-label {
+  font-size: 0.72rem;
+  color: #888;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mock-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Placeholder lines */
+.mock-line {
+  height: 9px;
+  background: #ececec;
+  border-radius: 4px;
+  width: 100%;
+}
+.mock-line.short { width: 58%; }
+
+.mock-section-hd {
+  font-size: 0.66rem;
   font-weight: 700;
-  margin-top: auto;
-  transition: opacity 0.2s, transform 0.2s;
-  width: fit-content;
-  box-shadow: 0 4px 14px rgba(247, 103, 7, 0.3);
+  color: #bbb;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
 }
 
-.bento-cta:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+.mock-q-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  color: #555;
+  line-height: 1.4;
+}
+
+.mock-q-circle {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid #ccc;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Chips */
+.mock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mock-chip {
+  font-size: 0.67rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 50px;
+  background: #f0f0f0;
+  color: #555;
+}
+
+/* Resume */
+.mock-name-row {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+/* Cover letter */
+.mock-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #10B981;
+  background: #F0FDF4;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 3px 9px;
+  border-radius: 50px;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+/* Chat bubbles */
+.mock-chat-body { gap: 7px; }
+
+.mock-chat-r {
+  align-self: flex-end;
+  background: #8B5CF6;
+  color: white;
+  font-size: 0.71rem;
+  padding: 7px 11px;
+  border-radius: 12px 12px 0 12px;
+  max-width: 76%;
+  line-height: 1.45;
+}
+
+.mock-chat-l {
+  align-self: flex-start;
+  background: #f0f0f0;
+  color: #333;
+  font-size: 0.71rem;
+  padding: 7px 11px;
+  border-radius: 12px 12px 12px 0;
+  max-width: 82%;
+  line-height: 1.45;
+}
+
+/* Jobs */
+.mock-job-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+/* Card footer */
+.card-footer {
+  padding: 14px 2px 2px;
+  flex-shrink: 0;
+}
+
+.card-ft-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 3px;
+}
+
+.card-ft-desc {
+  font-size: 0.82rem;
+  color: #888;
 }
 
 /* ── How It Works ── */
@@ -1023,13 +1149,8 @@ body, html {
 
 /* ── Responsive ── */
 @media (max-width: 960px) {
-  .feature-carousel {
-    display: none;
-  }
-
-  .mobile-feature-cards {
-    display: grid;
-  }
+  .feature-tabs-panel { display: none; }
+  .mobile-feature-pills { display: flex; }
 
   .hero-title { font-size: 2.4rem; }
   .hero-body {

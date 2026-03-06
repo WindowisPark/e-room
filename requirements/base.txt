@@ -1,4 +1,4 @@
-# âœ… ì›¹ í”„ë ˆìž„ì›Œí¬ ë° ê¸°ë³¸ íŒ¨í‚¤ì§€
+# ? À¥ ÇÁ·¹ÀÓ¿öÅ© ¹× ±âº» ÆÐÅ°Áö
 fastapi>=0.103.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.4.0
@@ -7,53 +7,53 @@ python-multipart>=0.0.6
 python-dotenv>=1.0.0
 pydantic-settings>=2.0.0
 
-# âœ… ë°ì´í„°ë² ì´ìŠ¤
-sqlalchemy>=2.0.27  # ìµœì‹  ë²„ì „ ì‚¬ìš©
+# ? µ¥ÀÌÅÍº£ÀÌ½º
+sqlalchemy>=2.0.27  # ÃÖ½Å ¹öÀü »ç¿ë
 alembic>=1.12.0
 psycopg2-binary>=2.9.7
 pgvector>=0.2.0
 
-# âœ… ì¸ì¦
+# ? ÀÎÁõ
 PyJWT>=2.8.0
 passlib[bcrypt]>=1.7.4
 
-# âœ… ìºì‹± ë° ìž‘ì—… í
+# ? Ä³½Ì ¹× ÀÛ¾÷ Å¥
 redis>=5.0.0
 websockets>=11.0.0
 rq>=1.15.1
 rq-scheduler>=0.13.1
 
-# âœ… HTTP í´ë¼ì´ì–¸íŠ¸
+# ? HTTP Å¬¶óÀÌ¾ðÆ®
 httpx>=0.25.0
 aiofiles>=23.2.0
 requests>=2.31.0
 
-# âœ… PDF ì²˜ë¦¬
+# ? PDF Ã³¸®
 pdfplumber
-pdf2image>=1.16.3  # ì£¼ì˜: Poppler ì˜ì¡´ì„± í•„ìš”
-pytesseract>=0.3.10  # ì£¼ì˜: Tesseract OCR ì˜ì¡´ì„± í•„ìš”
+pdf2image>=1.16.3  # ÁÖÀÇ: Poppler ÀÇÁ¸¼º ÇÊ¿ä
+pytesseract>=0.3.10  # ÁÖÀÇ: Tesseract OCR ÀÇÁ¸¼º ÇÊ¿ä
 pymupdf>=1.23.4
 fpdf2
 
-# âœ… AI ë° ìžì—°ì–´ ì²˜ë¦¬
+# ? AI ¹× ÀÚ¿¬¾î Ã³¸®
 openai>=1.12.0
 numpy>=1.25.2
 tiktoken>=0.5.1
 
-# âœ… LangChain & Vector DB (ìµœì‹  ë²„ì „ ì‚¬ìš©)
-langchain-core>=0.3.60  # ìµœì‹  ì½”ì–´ ë²„ì „ ì‚¬ìš©
-langchain>=0.1.4  # ìµœì‹  ë²„ì „
+# ? LangChain & Vector DB (ÃÖ½Å ¹öÀü »ç¿ë)
+langchain-core>=0.3.60  # ÃÖ½Å ÄÚ¾î ¹öÀü »ç¿ë
+langchain>=0.1.4  # ÃÖ½Å ¹öÀü
 langchain-community>=0.0.24
 langchain-text-splitters>=0.3.0
 langgraph>=0.0.24
-langchain-upstage>=0.6.0  # Upstage ìµœì‹  ë²„ì „
+langchain-upstage>=0.6.0  # Upstage ÃÖ½Å ¹öÀü
 langchain-openai>=0.0.5
 langchain-google-genai>=2.0.0  # Gemini API
 langchain-chroma>=0.0.5
 chromadb>=0.4.18
-langsmith>=0.1.4  # ìµœì‹  ë²„ì „
+langsmith>=0.1.4  # ÃÖ½Å ¹öÀü
 
-# âœ… ê¸°íƒ€ ìœ í‹¸ë¦¬í‹°
+# ? ±âÅ¸ À¯Æ¿¸®Æ¼
 loguru>=0.7.2
 gptpdf
 packaging>=23.2
@@ -62,5 +62,5 @@ boto3
 nest_asyncio
 Pillow
 bcrypt<4.1.0
-# âœ… ê²€ìƒ‰ì—”ì§„ ì—°ë™
+# ? °Ë»ö¿£Áø ¿¬µ¿
 opensearch-py>=2.3.2

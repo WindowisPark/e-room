@@ -1,267 +1,130 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, computed } from 'vue';
+import PlannySvg from '@/components/PlannySvg.vue';
 
 const allFaqItems = ref([
-  {
-    id: 1,
-    category: 'tutor',
-    question: 'PLANOVA AI 튜터는 무엇인가요?',
-    answer: 'PLANOVA AI 튜터는 인공지능을 활용한 학습 도우미로, 개인 맞춤형 학습 계획 수립과 문제 해결에 도움을 드립니다.',
-    isOpen: false
-  },
-  {
-    id: 2,
-    category: 'tutor',
-    question: 'PLANOVA AI 튜터 멤버십은 어떤 혜택가 있나요?',
-    answer: '멤버십에 가입하시면 무제한 문제 생성, PDF 요약본 생성, LLM 용량 제공 등 다양한 혜택을 누리실 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 3,
-    category: 'tutor',
-    question: 'PLANOVA AI 튜터는 어떤 사람들에게 추천하나요?',
-    answer: '학습에 어려움을 느끼는 학생, 개인 맞춤형 학습을 원하는 분, 효율적인 학습 방법을 찾고 계신 분들께 추천합니다.',
-    isOpen: false
-  },
-  {
-    id: 4,
-    category: 'tutor',
-    question: 'PLANOVA AI 튜터도 무료 체험을 할 수 있나요?',
-    answer: '네, 신규 가입 시 3일간의 무료 체험 기간을 제공해 드립니다.',
-    isOpen: false
-  },
-  
-  // 결제/환불 카테고리
-  {
-    id: 5,
-    category: 'payment',
-    question: 'PLANOVA AI 튜터 멤버십 결제는 어떻게 하나요?',
-    answer: '홈페이지에서 멤버십 플랜을 선택한 후, 다양한 결제 방법(신용카드, 계좌이체 등)으로 결제하실 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 6,
-    category: 'payment',
-    question: 'PLANOVA AI 튜터 멤버십 결제 수단을 변경할 수 있나요?',
-    answer: '네, 마이페이지 > 결제 관리에서 언제든지 결제 수단을 변경하실 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 7,
-    category: 'payment',
-    question: 'PLANOVA AI 튜터 멤버십은 자동 결제(구독형) 방식인가요?',
-    answer: '네, 편의를 위해 자동 결제 방식으로 운영되며, 마이페이지에서 언제든지 해지 가능합니다.',
-    isOpen: false
-  },
-  {
-    id: 8,
-    category: 'payment',
-    question: '멤버십 환불은 어떻게 신청하나요?',
-    answer: '멤버십 환불은 마이페이지 > 결제 관리 > 환불 신청에서 신청하실 수 있습니다. 결제일로부터 7일 이내에는 전액 환불이 가능하며, 그 이후에는 남은 기간에 대한 일할 계산 금액이 환불됩니다.',
-    isOpen: false
-  },
-  {
-    id: 9,
-    category: 'payment',
-    question: '환불 처리 기간은 얼마나 걸리나요?',
-    answer: '환불 신청 후 영업일 기준 3-5일 이내에 처리되며, 카드사 사정에 따라 실제 환불되는 시점은 달라질 수 있습니다.',
-    isOpen: false
-  },
-  
-  // 수업권 카테고리
-  {
-    id: 10,
-    category: 'attendance',
-    question: '수업권은 무엇인가요?',
-    answer: '수업권은 PLANOVA 서비스에서 제공하는 온라인 강의를 수강할 수 있는 권한을 말합니다. 멤버십에 따라 제공되는 수업권의 수와 유효기간은 다를 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 11,
-    category: 'attendance',
-    question: '수업권은 언제까지 사용할 수 있나요?',
-    answer: '수업권은 구매일로부터 3개월간 유효하며, 기간 내에 사용하지 않을 경우 자동으로 소멸됩니다.',
-    isOpen: false
-  },
-  {
-    id: 12,
-    category: 'attendance',
-    question: '수업권을 다른 사람에게 양도할 수 있나요?',
-    answer: '수업권은 구매자 본인만 사용할 수 있으며, 타인에게 양도하거나 판매할 수 없습니다.',
-    isOpen: false
-  },
-  
-  // 계정 카테고리
-  {
-    id: 13,
-    category: 'cancel',
-    question: '회원 탈퇴는 어떻게 하나요?',
-    answer: '마이페이지 > 계정 설정 > 회원 탈퇴에서 진행하실 수 있습니다. 탈퇴 시 모든 데이터가 삭제되니 신중하게 결정해 주세요.',
-    isOpen: false
-  },
-  {
-    id: 14,
-    category: 'cancel',
-    question: '비밀번호를 잊어버렸어요. 어떻게 해야 하나요?',
-    answer: '로그인 페이지에서 "비밀번호 찾기"를 클릭하여 가입 시 등록한 이메일로 비밀번호 재설정 링크를 받으실 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 15,
-    category: 'cancel',
-    question: '개인정보는 어떻게 관리되나요?',
-    answer: 'PLANOVA는 개인정보보호법을 준수하며, 수집된 개인정보는 서비스 제공 및 개선을 위해서만 사용됩니다. 자세한 내용은 개인정보처리방침을 참고해 주세요.',
-    isOpen: false
-  },
-  
-  // 기타 카테고리
-  {
-    id: 16,
-    category: 'etc',
-    question: '모바일에서도 서비스를 이용할 수 있나요?',
-    answer: '네, PLANOVA는 모바일 웹과 앱을 통해 언제 어디서나 이용하실 수 있습니다.',
-    isOpen: false
-  },
-  {
-    id: 17,
-    category: 'etc',
-    question: '오류나 버그를 발견했어요. 어디에 신고해야 하나요?',
-    answer: '고객센터 > 문의하기를 통해 신고해 주시면 신속하게 확인 후 개선하겠습니다.',
-    isOpen: false
-  }
+  // 시작하기
+  { id: 1, category: 'start', question: '회원가입은 어떻게 하나요?', answer: '플래노바는 카카오 간편 로그인으로 가입할 수 있습니다. 로그인 페이지에서 "카카오로 시작하기" 버튼을 클릭하면 30초 이내로 가입이 완료됩니다.', isOpen: false },
+  { id: 2, category: 'start', question: '카카오 로그인이 안 돼요. 어떻게 해야 하나요?', answer: '카카오 계정 로그인 상태를 확인하고 브라우저 캐시를 초기화해 보세요. 문제가 지속되면 support@planova.kr로 문의해 주세요.', isOpen: false },
+  { id: 3, category: 'start', question: '계정을 삭제하고 싶어요.', answer: '마이페이지 > 계정 설정 > 회원 탈퇴에서 진행할 수 있습니다. 탈퇴 시 모든 데이터가 삭제되니 신중하게 결정해 주세요.', isOpen: false },
+
+  // 캘린더
+  { id: 4, category: 'calendar', question: '일정을 추가하려면 어떻게 하나요?', answer: '캘린더 페이지에서 원하는 날짜를 클릭하거나 "+ 일정 추가" 버튼을 누르면 일정을 등록할 수 있습니다.', isOpen: false },
+  { id: 5, category: 'calendar', question: '등록한 일정을 수정하거나 삭제할 수 있나요?', answer: '네, 캘린더에서 일정을 클릭하면 수정 및 삭제 옵션이 나타납니다.', isOpen: false },
+  { id: 6, category: 'calendar', question: '반복 일정 설정이 가능한가요?', answer: '현재 버전에서는 반복 일정 기능을 준비 중입니다. 업데이트 공지를 기다려 주세요.', isOpen: false },
+
+  // 이력서/포트폴리오
+  { id: 7, category: 'resume', question: '이력서는 어떻게 작성하나요?', answer: '이력서 페이지에서 항목별로 내용을 입력하면 됩니다. AI가 문구 개선을 함께 도와드립니다.', isOpen: false },
+  { id: 8, category: 'resume', question: '작성한 이력서를 PDF로 다운로드할 수 있나요?', answer: 'PDF 내보내기 기능을 지원합니다. 이력서 페이지에서 "PDF 저장" 버튼을 클릭하세요.', isOpen: false },
+  { id: 9, category: 'resume', question: '포트폴리오 파일을 업로드할 수 있나요?', answer: '네, 이력서 페이지에서 파일을 첨부하거나 링크를 등록할 수 있습니다.', isOpen: false },
+
+  // 기업조사
+  { id: 10, category: 'jobs', question: '기업을 검색하는 방법은 무엇인가요?', answer: '기업 조사 페이지에서 기업명 또는 채용 공고 URL을 입력하면 AI가 자동으로 분석해드립니다.', isOpen: false },
+  { id: 11, category: 'jobs', question: '채용 공고를 자동으로 불러올 수 있나요?', answer: '채용 공고 URL을 붙여 넣으면 AI가 자동으로 내용을 스크래핑하고 핵심 정보를 요약해드립니다.', isOpen: false },
+  { id: 12, category: 'jobs', question: '면접 예상 질문도 제공되나요?', answer: '네, 기업 분석 후 해당 포지션에 맞는 면접 예상 질문을 AI가 제안해드립니다.', isOpen: false },
+
+  // 자소서
+  { id: 13, category: 'coverletter', question: 'AI 자소서 초안은 어떻게 생성하나요?', answer: '자소서 페이지에서 지원 기업, 직무, 자신의 경험을 입력하면 AI가 초안을 자동으로 생성해드립니다.', isOpen: false },
+  { id: 14, category: 'coverletter', question: '자소서 항목을 개별적으로 편집할 수 있나요?', answer: '네, 생성된 초안에서 각 항목을 클릭하여 자유롭게 편집할 수 있습니다.', isOpen: false },
+  { id: 15, category: 'coverletter', question: '여러 회사의 자소서를 관리할 수 있나요?', answer: '자소서 페이지에서 회사별로 별도 문서를 만들어 관리할 수 있습니다.', isOpen: false },
+
+  // 기타
+  { id: 16, category: 'etc', question: '모바일에서도 사용할 수 있나요?', answer: '네, 플래노바는 모바일 웹 브라우저에서도 이용하실 수 있습니다.', isOpen: false },
+  { id: 17, category: 'etc', question: '오류나 버그를 발견했어요. 어디에 신고해야 하나요?', answer: 'support@planova.kr로 오류 내용과 스크린샷을 보내주시면 신속하게 확인 후 개선하겠습니다.', isOpen: false },
 ]);
 
 const noticeItems = ref([
   {
     id: 1,
-    title: '[안내] PLANOVA 서비스 이용약관 개정 안내',
-    date: '2025.04.01',
-    content: '안녕하세요, PLANOVA입니다. 당사의 서비스 이용약관이 2025년 4월 15일부터 변경됩니다. 주요 변경사항은 개인정보 처리방침과 멤버십 갱신 정책입니다. 자세한 내용은 홈페이지에서 확인하실 수 있습니다.',
+    title: '[안내] 플래노바 서비스 오픈 안내',
+    date: '2026.03.05',
+    content: '안녕하세요, 플래노바입니다. 학창시절부터 취업까지 함께하는 AI 플랜 서비스 플래노바가 정식 오픈했습니다. 이력서, 자소서, 기업 조사, 캘린더 등 모든 기능을 무료로 이용하실 수 있습니다.',
     isOpen: false
   },
   {
     id: 2,
-    title: '[업데이트] PLANOVA AI 튜터 기능 업데이트 안내',
-    date: '2025.03.15',
-    content: 'PLANOVA AI 튜터의 기능이 업데이트되었습니다. 이번 업데이트에서는 더 정확한 학습 분석과 개인화된 학습 플랜 추천 기능이 개선되었습니다. 지금 바로 새로운 기능을 경험해보세요!',
+    title: '[업데이트] AI 자소서 초안 생성 기능 출시',
+    date: '2026.03.05',
+    content: 'AI가 자동으로 자소서 초안을 생성해주는 기능이 출시되었습니다. 지원 기업과 직무, 경험을 입력하면 바로 초안을 받아볼 수 있습니다.',
     isOpen: false
   },
   {
     id: 3,
-    title: '[공지] 설 연휴 고객센터 운영 안내',
-    date: '2025.02.08',
-    content: '설 연휴 기간(2월 10일 ~ 2월 13일) 동안 고객센터는 제한적으로 운영됩니다. 문의사항은 이메일로 남겨주시면 연휴 이후 순차적으로 답변 드리겠습니다. 즐거운 명절 보내세요!',
+    title: '[안내] 카카오 간편 로그인 지원',
+    date: '2026.03.05',
+    content: '카카오 계정으로 간편하게 플래노바에 가입하고 로그인하실 수 있습니다. 별도의 회원가입 절차 없이 30초 이내로 시작하세요.',
     isOpen: false
   },
-  {
-    id: 4,
-    title: '[안내] 시스템 점검 안내',
-    date: '2025.01.20',
-    content: '서비스 안정화를 위한 시스템 점검이 2025년 1월 25일 오전 2시부터 5시까지 진행됩니다. 해당 시간 동안에는 서비스 이용이 제한될 수 있으니 양해 부탁드립니다.',
-    isOpen: false
-  }
 ]);
 
 const guideItems = ref([
-  {
-    id: 1,
-    title: 'PLANOVA AI 튜터 시작하기',
-    content: 'PLANOVA AI 튜터를 처음 사용하시는 분들을 위한 기본 가이드입니다.',
-    isOpen: false
-  },
-  {
-    id: 2,
-    title: '효과적인 학습 계획 세우기',
-    content: 'AI 튜터를 활용하여 자신만의, 효과적인 학습 계획을 세우는 방법을 안내합니다.',
-    isOpen: false
-  },
-  {
-    id: 3,
-    title: '문제 생성 기능 활용하기',
-    content: '맞춤형 문제 생성 기능을 최대한 활용하여 학습 효과를 높이는 방법을 알아봅니다.',
-    isOpen: false
-  }
+  { id: 1, title: '플래노바 시작하기 — 카카오 로그인', content: '카카오 계정으로 30초 만에 플래노바를 시작하세요. 로그인 페이지에서 "카카오로 시작하기" 버튼을 클릭하면 바로 이용할 수 있습니다.', isOpen: false },
+  { id: 2, title: '이력서 & 포트폴리오 작성하기', content: '이력서 페이지에서 항목별로 내용을 입력하면 AI가 문구 개선을 도와드립니다. 완성 후 PDF로 바로 다운로드 가능합니다.', isOpen: false },
+  { id: 3, title: 'AI 자소서 초안 생성하기', content: '자소서 페이지에서 지원 기업, 직무, 경험을 입력하면 AI가 초안을 자동 생성합니다. 항목별로 자유롭게 편집할 수 있습니다.', isOpen: false },
+  { id: 4, title: '기업 조사 & 채용 공고 분석', content: '채용 공고 URL을 붙여 넣으면 AI가 핵심 정보를 요약하고 면접 예상 질문까지 제공합니다.', isOpen: false },
+]);
+
+const categories = ref([
+  { id: 'start', name: '시작하기', icon: 'fa-solid fa-rocket', color: '#F76707' },
+  { id: 'calendar', name: '캘린더', icon: 'fa-solid fa-calendar-days', color: '#F76707' },
+  { id: 'resume', name: '이력서', icon: 'fa-solid fa-file-lines', color: '#4A90E2' },
+  { id: 'jobs', name: '기업조사', icon: 'fa-solid fa-building', color: '#7C3AED' },
+  { id: 'coverletter', name: '자소서', icon: 'fa-solid fa-pen-to-square', color: '#16A34A' },
+  { id: 'etc', name: '기타', icon: 'fa-solid fa-circle-question', color: '#888' },
 ]);
 
 const searchQuery = ref('');
 const isSearching = computed(() => searchQuery.value.trim() !== '');
-
 const activeCategory = ref('자주 묻는 질문');
-const activeFaqCategory = ref('tutor');
+const activeFaqCategory = ref('start');
 
 const filteredFaqItems = computed(() => {
-  let items = allFaqItems.value;
-  
   if (isSearching.value) {
     const query = searchQuery.value.toLowerCase();
-    return items.filter(item => 
-      item.question.toLowerCase().includes(query) || 
+    return allFaqItems.value.filter(item =>
+      item.question.toLowerCase().includes(query) ||
       item.answer.toLowerCase().includes(query)
     );
-  } 
-  else {
-    return items.filter(item => item.category === activeFaqCategory.value);
   }
+  return allFaqItems.value.filter(item => item.category === activeFaqCategory.value);
 });
 
 const filteredNoticeItems = computed(() => {
   if (!isSearching.value) return noticeItems.value;
-  
   const query = searchQuery.value.toLowerCase();
-  return noticeItems.value.filter(item => 
-    item.title.toLowerCase().includes(query) || 
+  return noticeItems.value.filter(item =>
+    item.title.toLowerCase().includes(query) ||
     item.content.toLowerCase().includes(query)
   );
 });
 
 const filteredGuideItems = computed(() => {
   if (!isSearching.value) return guideItems.value;
-  
   const query = searchQuery.value.toLowerCase();
-  return guideItems.value.filter(item => 
-    item.title.toLowerCase().includes(query) || 
+  return guideItems.value.filter(item =>
+    item.title.toLowerCase().includes(query) ||
     item.content.toLowerCase().includes(query)
   );
 });
 
-const performSearch = () => {
-  
-};
+const clearSearch = () => { searchQuery.value = ''; };
 
 const toggleFaq = (id) => {
-  const updatedItems = allFaqItems.value.map(item => {
-    if (item.id === id) {
-      return { ...item, isOpen: !item.isOpen };
-    } else {
-      return { ...item, isOpen: false };
-    }
-  });
-  
-  allFaqItems.value = updatedItems;
+  allFaqItems.value = allFaqItems.value.map(item =>
+    item.id === id ? { ...item, isOpen: !item.isOpen } : { ...item, isOpen: false }
+  );
 };
 
 const toggleNotice = (id) => {
-  const updatedItems = noticeItems.value.map(item => {
-    if (item.id === id) {
-      return { ...item, isOpen: !item.isOpen };
-    } else {
-      return { ...item, isOpen: false };
-    }
-  });
-  
-  noticeItems.value = updatedItems;
+  noticeItems.value = noticeItems.value.map(item =>
+    item.id === id ? { ...item, isOpen: !item.isOpen } : { ...item, isOpen: false }
+  );
 };
 
 const toggleGuide = (id) => {
-  const updatedItems = guideItems.value.map(item => {
-    if (item.id === id) {
-      return { ...item, isOpen: !item.isOpen };
-    } else {
-      return { ...item, isOpen: false };
-    }
-  });
-  
-  guideItems.value = updatedItems;
+  guideItems.value = guideItems.value.map(item =>
+    item.id === id ? { ...item, isOpen: !item.isOpen } : { ...item, isOpen: false }
+  );
 };
 
 const changeTab = (tab) => {
@@ -274,80 +137,82 @@ const changeFaqCategory = (categoryId) => {
   clearSearch();
 };
 
-const categories = ref([
-  { id: 'payment', name: '결제/환불' },
-  { id: 'attendance', name: '수업권' },
-  { id: 'cancel', name: '계정' },
-  { id: 'tutor', name: 'PLANOVA AI 튜터' },
-  { id: 'etc', name: '기타' }
-]);
+const getCategoryColor = (categoryId) =>
+  categories.value.find(c => c.id === categoryId)?.color || '#F76707';
+
+const openContact = () => {
+  window.open('mailto:support@planova.kr?subject=플래노바 문의');
+};
 </script>
 
 <template>
+  <!-- 페이지 헤더 -->
+  <div class="support-hero">
+    <PlannySvg :size="88" class="planny-hero" />
+    <div class="support-hero-text">
+      <h2 class="support-hero-title">무엇을 도와드릴까요?</h2>
+      <p class="support-hero-sub">자주 묻는 질문이나 공지사항을 검색해보세요</p>
+    </div>
+  </div>
+
   <div class="faq-section">
+    <!-- 검색창 -->
     <div class="search-container">
       <div class="search-box">
         <span class="search-icon">🔍</span>
-        <input 
-          type="text" 
-          placeholder="궁금한 질문 검색해보세요." 
+        <input
+          type="text"
+          placeholder="궁금한 질문을 검색해보세요."
           class="search-input"
           v-model="searchQuery"
-          @keyup.enter="performSearch"
-        >
-
+        />
       </div>
     </div>
-    
+
+    <!-- 탭 -->
     <div class="tab-container">
       <div class="tabs">
-        <button 
-          class="tab" 
-          :class="{ active: activeCategory === 'PLANOVA 가이드' }"
-          @click="changeTab('PLANOVA 가이드')"
-        >
-          PLANOVA 가이드
+        <button class="tab" :class="{ active: activeCategory === 'PLANOVA 가이드' }" @click="changeTab('PLANOVA 가이드')">
+          플래노바 가이드
         </button>
-        <button 
-          class="tab" 
-          :class="{ active: activeCategory === '자주 묻는 질문' }"
-          @click="changeTab('자주 묻는 질문')"
-        >
+        <button class="tab" :class="{ active: activeCategory === '자주 묻는 질문' }" @click="changeTab('자주 묻는 질문')">
           자주 묻는 질문
         </button>
-        <button 
-          class="tab" 
-          :class="{ active: activeCategory === '공지사항' }"
-          @click="changeTab('공지사항')"
-        >
+        <button class="tab" :class="{ active: activeCategory === '공지사항' }" @click="changeTab('공지사항')">
           공지사항
         </button>
       </div>
     </div>
-    
 
+    <!-- FAQ 섹션 -->
     <div v-if="activeCategory === '자주 묻는 질문'">
-      <div v-if="!isSearching" class="category-filter">
-        <button 
-          v-for="category in categories" 
-          :key="category.id" 
-          class="category-btn"
+      <!-- 카테고리 카드 -->
+      <div v-if="!isSearching" class="category-cards">
+        <button
+          v-for="category in categories"
+          :key="category.id"
+          class="cat-card"
           :class="{ active: category.id === activeFaqCategory }"
+          :style="category.id === activeFaqCategory
+            ? { background: category.color, borderColor: category.color }
+            : { borderColor: '#e0e0e0' }"
           @click="changeFaqCategory(category.id)"
         >
-          {{ category.name }}
+          <i :class="category.icon" :style="{ color: category.id === activeFaqCategory ? 'white' : category.color }"></i>
+          <span :style="{ color: category.id === activeFaqCategory ? 'white' : '#555' }">{{ category.name }}</span>
         </button>
       </div>
-      
+
       <div class="faq-container">
-        <div 
-          v-for="item in filteredFaqItems" 
-          :key="item.id" 
+        <div
+          v-for="item in filteredFaqItems"
+          :key="item.id"
           class="faq-item"
-          :class="{ 'active': item.isOpen }"
+          :class="{ active: item.isOpen }"
         >
           <div class="faq-question" @click="toggleFaq(item.id)">
-            <span class="question-icon">Q</span>
+            <span class="cat-dot" :style="{ background: getCategoryColor(item.category) }"></span>
+            <span class="question-icon" :style="{ color: getCategoryColor(item.category) }">Q</span>
             <span class="question-text">{{ item.question }}</span>
             <span class="arrow-icon">{{ item.isOpen ? '▲' : '▼' }}</span>
           </div>
@@ -355,21 +220,25 @@ const categories = ref([
             <p>{{ item.answer }}</p>
           </div>
         </div>
-        
-        <div v-if="filteredFaqItems.length === 0" class="empty-message">
-          <p v-if="isSearching">검색 결과가 없습니다.</p>
-          <p v-else>해당 카테고리에 등록된 FAQ가 없습니다.</p>
+
+        <!-- 빈 상태 -->
+        <div v-if="filteredFaqItems.length === 0" class="empty-state">
+          <PlannySvg :size="72" class="planny-empty" />
+          <p class="empty-title">찾으시는 내용이 없나요?</p>
+          <p class="empty-sub">직접 문의해 주시면 빠르게 도와드릴게요.</p>
+          <button class="empty-contact-btn" @click="openContact">이메일로 문의하기</button>
         </div>
       </div>
     </div>
-    
+
+    <!-- 공지사항 섹션 -->
     <div v-if="activeCategory === '공지사항'">
       <div class="notice-container">
-        <div 
-          v-for="item in filteredNoticeItems" 
-          :key="item.id" 
+        <div
+          v-for="item in filteredNoticeItems"
+          :key="item.id"
           class="notice-item"
-          :class="{ 'active': item.isOpen }"
+          :class="{ active: item.isOpen }"
         >
           <div class="notice-header" @click="toggleNotice(item.id)">
             <div class="notice-title-container">
@@ -382,20 +251,22 @@ const categories = ref([
             <p>{{ item.content }}</p>
           </div>
         </div>
-
-        <div v-if="filteredNoticeItems.length === 0" class="empty-message">
-          <p>검색 결과가 없습니다.</p>
+        <div v-if="filteredNoticeItems.length === 0" class="empty-state">
+          <PlannySvg :size="72" class="planny-empty" />
+          <p class="empty-title">검색 결과가 없습니다.</p>
+          <p class="empty-sub">다른 검색어로 시도해보세요.</p>
         </div>
       </div>
     </div>
-    
+
+    <!-- 가이드 섹션 -->
     <div v-if="activeCategory === 'PLANOVA 가이드'">
       <div class="guide-container">
-        <div 
-          v-for="item in filteredGuideItems" 
-          :key="item.id" 
+        <div
+          v-for="item in filteredGuideItems"
+          :key="item.id"
           class="guide-item"
-          :class="{ 'active': item.isOpen }"
+          :class="{ active: item.isOpen }"
         >
           <div class="guide-header" @click="toggleGuide(item.id)">
             <span class="guide-title">{{ item.title }}</span>
@@ -405,39 +276,66 @@ const categories = ref([
             <p>{{ item.content }}</p>
           </div>
         </div>
-        
-        <div v-if="filteredGuideItems.length === 0" class="empty-message">
-          <p>검색 결과가 없습니다.</p>
+        <div v-if="filteredGuideItems.length === 0" class="empty-state">
+          <PlannySvg :size="72" class="planny-empty" />
+          <p class="empty-title">검색 결과가 없습니다.</p>
         </div>
       </div>
     </div>
   </div>
-  
+
+  <!-- 하단 문의 섹션 -->
   <div class="contact-section">
     <div class="contact-container">
       <div class="contact-text">
-        <h2 class="title">더 궁금한 것이 있다면 PLANOVA<br>고객센터로 연락주세요.</h2>
-        <button class="contact-button">PLANOVA팀에 문의하기</button>
+        <h2 class="contact-title">더 궁금한 것이 있으신가요?</h2>
+        <p class="contact-desc">플래노바 팀이 이메일로 빠르게 도와드립니다.</p>
+        <button class="contact-button" @click="openContact">이메일로 문의하기</button>
       </div>
-      
-      <div class="contact-info">
-        <p class="contact-type">대표전화</p>
-        <p class="phone-number">02-1234-1234</p>
-        
-        <p class="hours-title">운영시간</p>
-        <p class="hours">평일 오전 10:00 ~ 오후 6:00 KST</p>
-        <p class="lunch-time">점심시간 : 오후 1:00 ~ 오후 2:00 KST</p>
+      <div class="contact-email-info">
+        <p class="email-label">이메일 문의</p>
+        <p class="email-address">support@planova.kr</p>
+        <p class="email-note">평일 오전 10시 ~ 오후 6시 순차 답변</p>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ── 서포트 히어로 ── */
+.support-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 36px 0 28px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.planny-hero {
+  flex-shrink: 0;
+  filter: drop-shadow(0 6px 16px rgba(247, 103, 7, 0.25));
+}
+
+.support-hero-title {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #1a1a1a;
+  margin: 0 0 6px;
+}
+
+.support-hero-sub {
+  font-size: 0.95rem;
+  color: #888;
+  margin: 0;
+}
+
+/* ── 검색창 ── */
 .search-container {
   width: 100%;
   display: flex;
   justify-content: center;
-  margin: 20px 0 30px;
+  margin: 0 0 30px;
 }
 
 .search-box {
@@ -462,8 +360,16 @@ const categories = ref([
   background-color: #f7f7f7;
   font-size: 16px;
   outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
 }
 
+.search-input:focus {
+  border-color: #F76707;
+  background: white;
+}
+
+/* ── 탭 ── */
 .tab-container {
   margin-bottom: 30px;
   border-bottom: 1px solid #eee;
@@ -487,7 +393,7 @@ const categories = ref([
 }
 
 .tab.active {
-  color: #FF6B01;
+  color: #F76707;
   font-weight: bold;
 }
 
@@ -498,68 +404,87 @@ const categories = ref([
   left: 0;
   width: 100%;
   height: 2px;
-  background-color: #FF6B01;
+  background-color: #F76707;
 }
 
-.category-filter {
+/* ── 카테고리 카드 ── */
+.category-cards {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
   justify-content: center;
 }
 
-.category-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  background-color: white;
+.cat-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 2px solid;
+  border-radius: 50px;
+  background: white;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
-.category-btn.active {
-  background-color: #FF6B01;
-  color: white;
-  border-color: #FF6B01;
+.cat-card i {
+  font-size: 14px;
 }
 
-.category-btn:hover {
-  background-color: #f5f5f5;
+.cat-card:hover:not(.active) {
+  background: #fafafa;
+  transform: translateY(-1px);
 }
 
-.category-btn.active:hover {
-  background-color: #e35f00;
-}
-
-.faq-container, .notice-container, .guide-container {
+/* ── FAQ ── */
+.faq-container,
+.notice-container,
+.guide-container {
   max-width: 800px;
   margin: 0 auto 50px;
 }
 
-.faq-item, .notice-item, .guide-item {
+.faq-item,
+.notice-item,
+.guide-item {
   border-bottom: 1px solid #eee;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
 
-.faq-question, .notice-header, .guide-header {
+.faq-question,
+.notice-header,
+.guide-header {
   display: flex;
   align-items: center;
   padding: 20px 0;
   cursor: pointer;
+  gap: 4px;
+}
+
+.cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 6px;
 }
 
 .question-icon {
-  color: #FF6B01;
   font-weight: bold;
-  font-size: 18px;
-  margin-right: 15px;
+  font-size: 17px;
+  margin-right: 12px;
+  flex-shrink: 0;
 }
 
-.question-text, .notice-title, .guide-title {
+.question-text,
+.notice-title,
+.guide-title {
   flex: 1;
-  font-size: 16px;
+  font-size: 15px;
+  color: #333;
 }
 
 .notice-title-container {
@@ -571,158 +496,189 @@ const categories = ref([
 .notice-date {
   font-size: 12px;
   color: #999;
-  margin-top: 5px;
+  margin-top: 4px;
 }
 
 .arrow-icon {
-  font-size: 12px;
-  color: #999;
+  font-size: 11px;
+  color: #bbb;
   margin-left: 10px;
+  flex-shrink: 0;
 }
 
-.faq-answer, .notice-content, .guide-content {
-  padding: 0 0 20px 35px;
-  color: #666;
-  line-height: 1.6;
+.faq-answer,
+.notice-content,
+.guide-content {
+  padding: 0 0 20px 50px;
+  color: #555;
+  line-height: 1.7;
+  font-size: 14px;
 }
 
-.notice-content, .guide-content {
+.notice-content,
+.guide-content {
   padding: 0 0 20px 0;
 }
 
-.faq-item.active .faq-question,
-.notice-item.active .notice-header,
-.guide-item.active .guide-header {
-  color: #FF6B01;
-  font-weight: bold;
+.faq-item.active .question-text {
+  font-weight: 600;
 }
 
-.empty-message {
+/* ── 빈 상태 ── */
+.empty-state {
   text-align: center;
-  padding: 30px 0;
-  color: #999;
+  padding: 48px 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
+.planny-empty {
+  filter: drop-shadow(0 4px 12px rgba(247, 103, 7, 0.2));
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #555;
+  margin: 0;
+}
+
+.empty-sub {
+  font-size: 0.88rem;
+  color: #999;
+  margin: 0;
+}
+
+.empty-contact-btn {
+  margin-top: 8px;
+  background: #F76707;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.empty-contact-btn:hover {
+  background: #d95e06;
+  transform: translateY(-1px);
+}
+
+/* ── 하단 문의 섹션 ── */
 .contact-section {
   background-color: #FFF1E5;
   width: 100vw;
-  margin: 0;
-  padding: 0;
   position: relative;
   left: 50%;
-  right: 50%;
   margin-left: -50vw;
   margin-right: -50vw;
-  min-height: 300px;
 }
 
 .contact-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 80px 20px;
+  padding: 72px 24px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 40px;
 }
 
-.contact-text {
-  flex: 1;
-  padding-right: 40px;
-  margin-top: 20px;
-  margin-bottom: 20px;
+.contact-title {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #F76707;
+  line-height: 1.35;
+  margin: 0 0 12px;
 }
 
-.title {
-  font-size: 28px;
-  font-weight: bold;
-  color: #FF6B01;
-  line-height: 1.4;
-  margin-bottom: 40px;
+.contact-desc {
+  font-size: 1rem;
+  color: #666;
+  margin: 0 0 28px;
 }
 
 .contact-button {
-  background-color: #FFE4D0;
+  background-color: #F76707;
   border: none;
-  color: #FF6B01;
-  padding: 15px 30px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: bold;
+  color: white;
+  padding: 14px 32px;
+  border-radius: 50px;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.2s, transform 0.2s;
+  box-shadow: 0 4px 14px rgba(247,103,7,0.35);
 }
 
 .contact-button:hover {
-  background-color: #FFD6BA;
+  background-color: #d95e06;
+  transform: translateY(-2px);
 }
 
-.contact-info {
-  flex: 1;
-  margin-top: 20px;
-  margin-bottom: 20px;
+.contact-email-info {
+  flex-shrink: 0;
 }
 
-.contact-type {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
+.email-label {
+  font-size: 13px;
+  color: #999;
+  margin: 0 0 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.phone-number {
-  font-size: 28px;
-  font-weight: bold;
-  color: #FF6B01;
-  margin-bottom: 40px;
+.email-address {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #F76707;
+  margin: 0 0 8px;
 }
 
-.hours-title {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
+.email-note {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
 }
 
-.hours {
-  font-size: 16px;
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.lunch-time {
-  font-size: 16px;
-  color: #333;
-}
-
+/* ── Responsive ── */
 @media (max-width: 768px) {
+  .support-hero {
+    flex-direction: column;
+    text-align: center;
+    padding: 24px 0 16px;
+  }
+
   .tabs {
     overflow-x: auto;
     justify-content: flex-start;
     padding: 0 10px;
   }
-  
+
   .tab {
     white-space: nowrap;
     flex-shrink: 0;
   }
 
-  .category-filter {
-    overflow-x: auto;
-    justify-content: flex-start;
-    padding: 0 10px;
+  .category-cards {
+    padding: 0 4px;
   }
-  
-  .category-btn {
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  
+
   .contact-container {
     flex-direction: column;
-    padding: 60px 20px;
+    padding: 56px 20px;
+    text-align: center;
   }
-  
-  .contact-text {
-    padding-right: 0;
-    margin-bottom: 40px;
+
+  .contact-email-info {
+    text-align: center;
   }
 }
 </style>

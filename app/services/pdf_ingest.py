@@ -2,13 +2,20 @@ import os
 import logging
 import tempfile
 import requests
-from langchain_community.document_loaders import PDFPlumberLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from gptpdf import parse_pdf
-from langchain_openai import ChatOpenAI
+try:
+    from langchain_community.document_loaders import PDFPlumberLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_core.documents import Document
+    from langchain_openai import OpenAIEmbeddings
+    from langchain_community.vectorstores import Chroma
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    pass
+
+try:
+    from gptpdf import parse_pdf
+except ImportError:
+    parse_pdf = None
 logger = logging.getLogger(__name__)
 
 def download_s3_pdf_tempfile(s3_url: str) -> str:
