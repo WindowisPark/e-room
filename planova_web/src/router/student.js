@@ -18,6 +18,10 @@ export default [
         meta: { layout: 'StudentLayout' }
       },
       {
+        path: 'ai-tutor',
+        redirect: '/student/aitutor'
+      },
+      {
         path: 'calendar',
         name: 'studentCalendar',
         component: () => import('../pages/student/StudentCalendarPage.vue'),

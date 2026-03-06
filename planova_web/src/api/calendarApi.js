@@ -19,7 +19,7 @@ export default {
     return api.delete(`${BASE}/tasks/${id}`);
   },
   getTaskDates(year, month) {
-    return api.get(`${BASE}/tasks/dates`, { params: { year, month } });
+    return api.get(`${BASE}/task-dates`, { params: { year, month } });
   },
 
   getGoals(year, month, week) {

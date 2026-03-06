@@ -94,7 +94,7 @@ def health_check():
 
 @app.get("/{full_path:path}")
 async def serve_spa(request: Request, full_path: str):
-    if full_path.startswith("api/"):
+    if full_path.startswith("api/v1/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     if full_path.startswith("assets/"):
         raise HTTPException(status_code=404, detail="Asset not found")

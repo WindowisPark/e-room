@@ -50,7 +50,7 @@ const logout = () => {
           <div class="auth-buttons">
             <template v-if="authStore.isLogin">
               <div class="user-greeting">
-                <span class="welcome-text">{{ authStore.user.username }}님 환영합니다!</span>
+                <span class="welcome-text">{{ authStore.user?.username }}님 환영합니다!</span>
                 <div class="user-menu">
                   <button class="btn my-page-btn" @click="navigateToMyPage">마이페이지</button>
                   <button class="btn logout-btn" @click="logout">로그아웃</button>

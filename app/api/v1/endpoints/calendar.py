@@ -52,8 +52,7 @@ def create_task(
     return task
 
 
-# /tasks/dates 는 /tasks/{task_id} 보다 먼저 등록해야 "dates"가 task_id로 잡히지 않음
-@router.get("/tasks/dates", response_model=List[str])
+@router.get("/task-dates", response_model=List[str])
 def get_task_dates(
     year: int,
     month: int,

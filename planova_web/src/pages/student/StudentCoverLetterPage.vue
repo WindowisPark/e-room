@@ -32,6 +32,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <span v-if="saveStatus" class="save-status" :class="saveStatus">
+            {{ saveStatus === 'saving' ? '↻ 저장 중...' : '• 저장됨' }}
+          </span>
           <button class="btn-primary" @click="generateDrafts" :disabled="generating">
             <span v-if="generating">생성 중... ⏳</span>
             <span v-else>✨ AI 초안 생성</span>
@@ -52,6 +55,8 @@
             <span class="q-num">Q{{ idx + 1 }}</span>
             <span class="q-text">{{ item.question }}</span>
             <span v-if="item.char_limit" class="char-limit-badge">{{ item.char_limit }}자</span>
+            <button class="btn-icon order-btn" @click.stop="moveItem(idx, -1)" :disabled="idx === 0" title="위로">↑</button>
+            <button class="btn-icon order-btn" @click.stop="moveItem(idx, 1)" :disabled="idx === clItems.length - 1" title="아래로">↓</button>
             <span class="expand-icon">{{ expandedItem === item.id ? '▲' : '▼' }}</span>
             <button class="btn-icon" @click.stop="deleteItem(item.id)">✕</button>
           </div>
@@ -61,9 +66,15 @@
               v-model="item.answer"
               class="answer-input"
               :placeholder="'답변을 작성해주세요.' + (item.char_limit ? ` (최대 ${item.char_limit}자)` : '')"
-              @blur="saveItem(item)"
+              @input="triggerAutoSave(item)"
               :rows="8"
             ></textarea>
+            <div v-if="item.char_limit" class="char-progress-bg">
+              <div
+                class="char-progress-fill"
+                :style="{ width: getProgressWidth(item), background: getProgressColor(item) }"
+              ></div>
+            </div>
             <div class="char-counter" :class="{ over: item.char_limit && (item.answer || '').length > item.char_limit }">
               {{ (item.answer || '').length }}자
               <span v-if="item.char_limit"> / {{ item.char_limit }}자</span>
@@ -85,7 +96,7 @@
 
     <!-- 자소서 생성 모달 -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
+      <div class="dialog-box">
         <h3>새 자소서 만들기</h3>
         <div class="form-group">
           <label>제목 *</label>
@@ -112,21 +123,45 @@
       </div>
     </div>
 
-    <!-- 문항 추가 모달 -->
+    <!-- 문항 추가 모달 (프리셋 + 직접입력) -->
     <div v-if="showAddItemModal" class="modal-overlay" @click.self="showAddItemModal = false">
-      <div class="modal">
+      <div class="dialog-box dialog-wide">
         <h3>문항 추가</h3>
-        <div class="form-group">
-          <label>질문 *</label>
-          <textarea v-model="newItem.question" placeholder="자소서 질문을 입력하세요" class="modal-input" rows="3"></textarea>
+        <div class="add-mode-tabs">
+          <button :class="{ active: addMode === 'preset' }" @click="addMode = 'preset'">📋 기본 문항 선택</button>
+          <button :class="{ active: addMode === 'manual' }" @click="addMode = 'manual'">✏️ 직접 입력</button>
         </div>
-        <div class="form-group">
-          <label>글자수 제한 (0 또는 빈칸 = 제한 없음)</label>
-          <input v-model.number="newItem.char_limit" type="number" placeholder="1000" class="modal-input" />
+
+        <!-- 프리셋 목록 -->
+        <div v-if="addMode === 'preset'" class="preset-list">
+          <button
+            v-for="preset in PRESET_QUESTIONS"
+            :key="preset.label"
+            class="preset-item"
+            @click="selectPreset(preset)"
+          >
+            <div class="preset-item-top">
+              <span class="preset-label">{{ preset.label }}</span>
+              <span class="preset-limit-badge">{{ preset.limit }}자</span>
+            </div>
+            <p class="preset-text">{{ preset.text }}</p>
+          </button>
         </div>
-        <div class="modal-actions">
-          <button class="btn-outline" @click="showAddItemModal = false">취소</button>
-          <button class="btn-primary" @click="addItem">추가</button>
+
+        <!-- 직접 입력 -->
+        <div v-else class="manual-form">
+          <div class="form-group">
+            <label>질문 *</label>
+            <textarea v-model="newItem.question" placeholder="자소서 질문을 입력하세요" class="modal-input" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>글자수 제한 (빈칸 = 제한 없음)</label>
+            <input v-model.number="newItem.char_limit" type="number" placeholder="1000" class="modal-input" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn-outline" @click="showAddItemModal = false">취소</button>
+            <button class="btn-primary" @click="addItem">추가</button>
+          </div>
         </div>
       </div>
     </div>
@@ -135,11 +170,22 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
+import axios from '@/api/index.js';
 
-const CL_API = '/api/v1/coverletter';
-const JOBS_API = '/api/v1/jobs';
-const RESUME_API = '/api/v1/resume';
+const CL_API = '/coverletter';
+const JOBS_API = '/jobs';
+const RESUME_API = '/resume';
+
+const PRESET_QUESTIONS = [
+  { label: '성장과정',    text: '본인의 성장과정을 기술해 주세요.',                  limit: 800 },
+  { label: '지원동기',    text: '당사 및 해당 직무에 지원한 동기를 기술해 주세요.',  limit: 700 },
+  { label: '장점/단점',   text: '본인의 장점과 단점을 기술해 주세요.',               limit: 600 },
+  { label: '직무역량',    text: '직무 수행에 필요한 역량과 경험을 기술해 주세요.',   limit: 800 },
+  { label: '입사 후 포부', text: '입사 후 목표와 포부를 기술해 주세요.',             limit: 600 },
+  { label: '팀워크',      text: '팀 프로젝트 경험과 협업 방식을 기술해 주세요.',    limit: 700 },
+  { label: '도전/실패',   text: '가장 도전적인 경험과 극복 과정을 기술해 주세요.',  limit: 800 },
+  { label: '경험/경력',   text: '관련 경험 또는 경력을 구체적으로 기술해 주세요.',  limit: 800 },
+];
 
 const coverLetters = ref([]);
 const selectedCl = ref(null);
@@ -150,6 +196,9 @@ const expandedItem = ref(null);
 const generating = ref(false);
 const showCreateModal = ref(false);
 const showAddItemModal = ref(false);
+const addMode = ref('preset');
+const saveStatus = ref(null); // null | 'saving' | 'saved'
+const saveTimers = {};
 
 const newCl = ref({ title: '', company_id: null, resume_profile_id: null });
 const newItem = ref({ question: '', char_limit: null });
@@ -169,15 +218,49 @@ function formatDate(dt) {
   return new Date(dt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
 }
 
+// ─── 진행 바 ─────────────────────────────────────────────────
+
+function getProgressWidth(item) {
+  if (!item.char_limit) return '0%';
+  const ratio = Math.min((item.answer || '').length / item.char_limit, 1);
+  return `${ratio * 100}%`;
+}
+
+function getProgressColor(item) {
+  if (!item.char_limit) return '#e8e8e8';
+  const ratio = (item.answer || '').length / item.char_limit;
+  if (ratio > 1) return '#e03e00';
+  if (ratio >= 0.8) return '#F76707';
+  return '#e8e8e8';
+}
+
+// ─── 자동저장 ─────────────────────────────────────────────────
+
+function triggerAutoSave(item) {
+  saveStatus.value = 'saving';
+  clearTimeout(saveTimers[item.id]);
+  saveTimers[item.id] = setTimeout(async () => {
+    await saveItem(item);
+    saveStatus.value = 'saved';
+    setTimeout(() => { saveStatus.value = null; }, 2000);
+  }, 1000);
+}
+
+// ─── 데이터 로드 ─────────────────────────────────────────────
+
 async function loadAll() {
-  const [clRes, jobRes, resumeRes] = await Promise.all([
-    axios.get(CL_API),
-    axios.get(JOBS_API).catch(() => ({ data: [] })),
-    axios.get(`${RESUME_API}/profiles`).catch(() => ({ data: [] })),
-  ]);
-  coverLetters.value = clRes.data;
-  companies.value = jobRes.data;
-  resumeProfiles.value = resumeRes.data;
+  try {
+    const [clRes, jobRes, resumeRes] = await Promise.all([
+      axios.get(CL_API),
+      axios.get(JOBS_API).catch(() => ({ data: [] })),
+      axios.get(`${RESUME_API}/profiles`).catch(() => ({ data: [] })),
+    ]);
+    coverLetters.value = clRes.data;
+    companies.value = jobRes.data;
+    resumeProfiles.value = resumeRes.data;
+  } catch (e) {
+    console.warn('자소서 로딩 실패:', e.response?.status);
+  }
 }
 
 async function selectCoverLetter(id) {
@@ -218,7 +301,19 @@ function toggleExpand(id) {
 
 function openAddItem() {
   newItem.value = { question: '', char_limit: null };
+  addMode.value = 'preset';
   showAddItemModal.value = true;
+}
+
+async function selectPreset(preset) {
+  const res = await axios.post(`${CL_API}/${selectedCl.value.id}/items`, {
+    question: preset.text,
+    char_limit: preset.limit,
+    order_index: clItems.value.length,
+  });
+  clItems.value.push(res.data);
+  expandedItem.value = res.data.id;
+  showAddItemModal.value = false;
 }
 
 async function addItem() {
@@ -241,6 +336,34 @@ async function deleteItem(itemId) {
   if (!confirm('문항을 삭제하시겠습니까?')) return;
   await axios.delete(`${CL_API}/items/${itemId}`);
   clItems.value = clItems.value.filter(i => i.id !== itemId);
+}
+
+// ─── 순서 변경 ───────────────────────────────────────────────
+
+async function moveItem(idx, direction) {
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= clItems.value.length) return;
+
+  const item = clItems.value[idx];
+  const other = clItems.value[targetIdx];
+
+  const tmpOrder = item.order_index ?? idx;
+  item.order_index = other.order_index ?? targetIdx;
+  other.order_index = tmpOrder;
+
+  if (item.order_index === other.order_index) {
+    item.order_index = idx * 10;
+    other.order_index = targetIdx * 10;
+  }
+
+  // Swap in array
+  clItems.value.splice(idx, 1, other);
+  clItems.value.splice(targetIdx, 1, item);
+
+  await Promise.all([
+    axios.put(`${CL_API}/items/${item.id}`, { order_index: item.order_index }).catch(() => {}),
+    axios.put(`${CL_API}/items/${other.id}`, { order_index: other.order_index }).catch(() => {}),
+  ]);
 }
 
 async function generateDrafts() {
@@ -317,6 +440,17 @@ onMounted(loadAll);
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 10;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+  margin-left: -32px;
+  margin-right: -32px;
+  padding-left: 32px;
+  padding-right: 32px;
+  padding-top: 4px;
 }
 
 .cl-name { font-size: 22px; font-weight: 700; color: #222; margin: 0 0 8px; }
@@ -331,9 +465,20 @@ onMounted(loadAll);
   font-size: 12px;
 }
 
-.header-actions { display: flex; gap: 8px; align-items: center; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+/* 저장 상태 */
+.save-status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.save-status.saving { color: #F76707; background: #fff5ee; }
+.save-status.saved { color: #38a169; background: #f0fff4; }
 
 /* 문항 카드 */
+.questions-section { padding-top: 16px; }
+
 .question-card {
   background: #fff;
   border: 1px solid #e8e8e8;
@@ -342,12 +487,12 @@ onMounted(loadAll);
   overflow: hidden;
   transition: box-shadow 0.15s;
 }
-.question-card.expanded { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.question-card.expanded { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: #F76707; }
 
 .question-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 14px 16px;
   cursor: pointer;
   user-select: none;
@@ -387,9 +532,13 @@ onMounted(loadAll);
   color: #ccc;
   cursor: pointer;
   font-size: 12px;
-  padding: 2px 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
 }
-.btn-icon:hover { color: #e53e3e; }
+.btn-icon:hover { color: #e53e3e; background: #fef2f2; }
+
+.order-btn:hover { color: #F76707; background: #fff5ee; }
+.order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .answer-section {
   padding: 0 16px 16px;
@@ -411,13 +560,28 @@ onMounted(loadAll);
 }
 .answer-input:focus { outline: none; border-color: #F76707; }
 
+/* 진행 바 */
+.char-progress-bg {
+  height: 4px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.char-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s, background 0.3s;
+}
+
 .char-counter {
   text-align: right;
   font-size: 12px;
   color: #999;
   margin-top: 4px;
 }
-.char-counter.over { color: #e53e3e; font-weight: 600; }
+.char-counter.over { color: #e03e00; font-weight: 600; }
 
 .empty-questions {
   text-align: center;
@@ -451,7 +615,7 @@ onMounted(loadAll);
   font-size: 15px;
 }
 
-/* 버튼 */
+/* 버튼 공통 */
 .btn-primary {
   background: #F76707;
   color: #fff;
@@ -487,18 +651,18 @@ onMounted(loadAll);
   font-size: 12px;
 }
 
-/* 모달 */
+/* 모달 공통 */
 .modal-overlay {
-  position: fixed;
+  position: fixed !important;
   inset: 0;
   background: rgba(0,0,0,0.4);
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  z-index: 999;
+  z-index: 9999 !important;
 }
 
-.modal {
+.dialog-box {
   background: #fff;
   border-radius: 12px;
   padding: 28px;
@@ -508,7 +672,11 @@ onMounted(loadAll);
   box-shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 
-.modal h3 { margin: 0 0 20px; font-size: 17px; color: #222; }
+.dialog-wide {
+  max-width: 640px;
+}
+
+.dialog-box h3 { margin: 0 0 20px; font-size: 17px; color: #222; }
 
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
@@ -531,4 +699,85 @@ onMounted(loadAll);
   gap: 8px;
   margin-top: 20px;
 }
+
+/* 문항 추가 탭 */
+.add-mode-tabs {
+  display: flex;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 20px;
+}
+
+.add-mode-tabs button {
+  flex: 1;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #888;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.add-mode-tabs button.active {
+  color: #F76707;
+  border-bottom-color: #F76707;
+}
+
+/* 프리셋 목록 */
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.preset-item {
+  text-align: left;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.preset-item:hover {
+  border-color: #F76707;
+  background: #fff8f5;
+}
+
+.preset-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.preset-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.preset-limit-badge {
+  font-size: 11px;
+  background: #eee;
+  color: #666;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.preset-text {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.manual-form { padding-top: 4px; }
 </style>

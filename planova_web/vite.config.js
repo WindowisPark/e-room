@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://api.planova.kr',  // FastAPI 서버로 변경
+        target: 'http://127.0.0.1:8000',  // 로컬 FastAPI 서버
         changeOrigin: true,
       },
     },

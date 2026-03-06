@@ -1,6 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router';
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
@@ -11,6 +11,19 @@ const logout = () => {
   authStore.logout();
   router.push('/auth/login');
 };
+
+const toggleDropdown = () => {
+  showDropdown.value = !showDropdown.value;
+};
+
+const handleOutsideClick = (e) => {
+  if (!e.target.closest('.user-profile-container')) {
+    showDropdown.value = false;
+  }
+};
+
+onMounted(() => document.addEventListener('click', handleOutsideClick));
+onUnmounted(() => document.removeEventListener('click', handleOutsideClick));
 </script>
 
 <template>
@@ -18,9 +31,7 @@ const logout = () => {
     <div class="logo-space">
     </div>
     <div class="right-section">
-      <div class="user-profile-container"
-            @mouseover="showDropdown = true"
-            @mouseleave="showDropdown = false">
+      <div class="user-profile-container" @click.stop="toggleDropdown">
         <div class="user-profile">
           <img src="@/assets/images/student-profile.png" alt="프로필" class="profile-image" />
         </div>

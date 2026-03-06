@@ -26,6 +26,7 @@ class ResumeProfile(Base):
     title = Column(String(200), nullable=False)
     summary = Column(Text, nullable=True)
     profile_type = Column(SAEnum("job", "academic", name="profile_type_enum"), nullable=False, default="job", server_default="job")
+    contact_info = Column(JSON, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

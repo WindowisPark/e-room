@@ -24,6 +24,10 @@ class AnalyzeRequest(BaseModel):
     text: Optional[str] = None  # 공고 텍스트 직접 입력
 
 
+class UpdateRequest(BaseModel):
+    analysis: Optional[Dict[str, Any]] = None
+
+
 class SaveRequest(BaseModel):
     company_name: str
     job_title: Optional[str] = None
@@ -191,6 +195,27 @@ def get_company(
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="기업 정보를 찾을 수 없습니다.")
+    return company
+
+
+@router.put("/{company_id}", response_model=SavedCompanyOut)
+def update_company(
+    company_id: int,
+    data: UpdateRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """분석 결과(analysis JSON) 업데이트"""
+    company = db.query(SavedCompany).filter(
+        SavedCompany.id == company_id,
+        SavedCompany.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="기업 정보를 찾을 수 없습니다.")
+    if data.analysis is not None:
+        company.analysis = data.analysis
+    db.commit()
+    db.refresh(company)
     return company
 
 
