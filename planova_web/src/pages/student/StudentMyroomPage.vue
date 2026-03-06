@@ -1,94 +1,151 @@
 <template>
   <div class="dashboard">
-    <div class="header">
-      <h1 class="title">플래노바와 함께한 <span class="day-count">{{ consecutiveDays }}</span>일째 여정</h1>
-    </div>
-
-    <div class="attendance-card">
-      <div class="attendance-row">
-        <div class="day-circle">
-          <div class="day-number">{{ currentDay }}</div>
-          <div class="day-texts">
-            <div class="day-greeting">연속 출석 현황</div>
-            <div class="day-status">{{ consecutiveDays }}일째 출석 중</div>
-          </div>
-        </div>
-
-        <div class="progress-container">
-          <div class="progress-dots">
-                          <template v-for="day in 7" :key="day">
-              <div :class="['dot', attendanceStatus.completedDays.includes(day) ? 'completed' : '']">
-                <span v-if="attendanceStatus.completedDays.includes(day)" class="check-icon">✓</span>
-                <span v-else>{{ day }}</span>
-              </div>
-            </template>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-filled" :style="{ width: progressFillWidth }"></div>
-          </div>
-        </div>
-
-        <button :class="attendanceBtnClass" @click="checkAttendance" :disabled="isLoading || !attendanceStatus.canCheckToday">
-          {{ buttonText }}
-        </button>
+    <!-- 프로필 헤더 -->
+    <div class="profile-header">
+      <div class="profile-greeting">
+        <span class="greeting-text">안녕하세요, <strong>{{ userName }}</strong>님!</span>
+        <span class="journey-text">플래노바 <span class="accent">{{ daysSinceSignup }}</span>일째 여정</span>
       </div>
     </div>
-    
+
+    <!-- 토스트 -->
     <div class="toast-container" v-if="showToastFlag">
-      <div class="toast-message">
-        {{ toastMessage }}
-      </div>
+      <div class="toast-message">{{ toastMessage }}</div>
     </div>
-    
-    <div class="menu-section">
-      <div class="menu-card">
-        <div class="menu-header">
-          <div class="menu-icon study-icon">📚</div>
-          <div class="menu-title">학습</div>
-        </div>
-        <div class="menu-links">
-          <div class="menu-link" @click="navigateToPdf('personal')">
-            <span>생성된 문제({{ quizCount }})</span>
-            <span class="arrow">›</span>
+
+    <!-- 상단 그리드: 출석 + 오늘 할 일 -->
+    <div class="top-grid">
+      <!-- 출석 카드 -->
+      <div class="card attendance-card">
+        <h3 class="card-title">출석 스트릭</h3>
+        <div class="attendance-row">
+          <div class="day-circle">
+            <div class="day-number">{{ currentDay }}</div>
+            <div class="day-texts">
+              <div class="day-greeting">연속 출석</div>
+              <div class="day-status">{{ consecutiveDays }}일째</div>
+            </div>
           </div>
-          <div class="menu-link" @click="navigateToPdf('personal')">
-            <span>생성된 요약 파일({{ summaryCount }})</span>
-            <span class="arrow">›</span>
+          <div class="progress-container">
+            <div class="progress-dots">
+              <template v-for="day in 7" :key="day">
+                <div :class="['dot', attendanceStatus.completedDays.includes(day) ? 'completed' : '']">
+                  <span v-if="attendanceStatus.completedDays.includes(day)" class="check-icon">✓</span>
+                  <span v-else>{{ day }}</span>
+                </div>
+              </template>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-filled" :style="{ width: progressFillWidth }"></div>
+            </div>
           </div>
+          <button :class="attendanceBtnClass" @click="checkAttendance" :disabled="isLoading || !attendanceStatus.canCheckToday">
+            {{ buttonText }}
+          </button>
         </div>
       </div>
 
-    </div>    
-    <div class="achievement-section">
-      <h3 class="section-title">내 달성 과제</h3>
-      <div class="achievements">
-        <div class="achievement-card">
-          <div class="achievement-icon book-icon"></div>
-          <div class="achievement-text">Level 1</div>
+      <!-- 오늘의 할 일 -->
+      <div class="card today-tasks-card">
+        <h3 class="card-title">오늘의 할 일 <span class="task-date">{{ formattedToday }}</span></h3>
+        <div v-if="tasksLoading" class="empty-state">불러오는 중...</div>
+        <div v-else-if="todayTasks.length === 0" class="empty-state">
+          오늘 등록된 할 일이 없습니다.<br>
+          <span class="link-text" @click="router.push('/student/calendar')">캘린더에서 추가하기 →</span>
         </div>
-        <div class="achievement-card">
-          <div class="achievement-icon chat-icon"></div>
-          <div class="achievement-text">Level 1</div>
+        <ul v-else class="task-list">
+          <li
+            v-for="task in todayTasks"
+            :key="task.id"
+            :class="['task-item', task.is_completed ? 'done' : '']"
+            @click="handleToggleTask(task)"
+          >
+            <span class="task-check">{{ task.is_completed ? '✓' : '○' }}</span>
+            <span class="task-title">{{ task.title }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 빠른 바로가기 -->
+    <div class="card shortcuts-card">
+      <h3 class="card-title">빠른 바로가기</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item" @click="router.push('/student/resume')">
+          <div class="shortcut-icon">📄</div>
+          <div class="shortcut-label">이력서</div>
+          <div class="shortcut-count">{{ resumeCount }}개</div>
         </div>
-        <div class="achievement-card">
-          <div class="achievement-icon doc-icon"></div>
-          <div class="achievement-text">Level 1</div>
+        <div class="shortcut-item" @click="router.push('/student/coverletter')">
+          <div class="shortcut-icon">✉️</div>
+          <div class="shortcut-label">자소서</div>
+          <div class="shortcut-count">{{ clCount }}개</div>
+        </div>
+        <div class="shortcut-item" @click="router.push('/student/jobs')">
+          <div class="shortcut-icon">🏢</div>
+          <div class="shortcut-label">기업조사</div>
+          <div class="shortcut-count">{{ jobsCount }}개</div>
+        </div>
+        <div class="shortcut-item" @click="router.push('/student/calendar')">
+          <div class="shortcut-icon">📅</div>
+          <div class="shortcut-label">캘린더</div>
+          <div class="shortcut-count">{{ todayTasks.length }}건</div>
+        </div>
+        <div class="shortcut-item" @click="router.push('/student/pdf')">
+          <div class="shortcut-icon">📚</div>
+          <div class="shortcut-label">PDF</div>
+          <div class="shortcut-count">{{ pdfCount }}개</div>
         </div>
       </div>
     </div>
-    
-    <div class="chart-section">
-      <div class="chart-header">
-        <h3 class="section-title">학습 통계</h3>
-        <div class="chart-controls">
-          <div class="dropdown">
-            최근 3개월 <span class="dropdown-icon">▼</span>
-          </div>
-          <div class="period">| 2025.01 - 2025.03</div>
-        </div>
+
+    <!-- 하단 그리드: 최근 활동 + 달성 배지 -->
+    <div class="bottom-grid">
+      <!-- 최근 활동 -->
+      <div class="card activity-card">
+        <h3 class="card-title">최근 활동</h3>
+        <div v-if="recentActivity.length === 0" class="empty-state">아직 활동 내역이 없습니다.</div>
+        <ul v-else class="activity-list">
+          <li v-for="item in recentActivity" :key="item.id + item.type" class="activity-item">
+            <span class="activity-icon">{{ item.icon }}</span>
+            <div class="activity-info">
+              <span class="activity-name">{{ item.name }}</span>
+              <span class="activity-type">{{ item.typeLabel }}</span>
+            </div>
+            <span class="activity-date">{{ item.relativeDate }}</span>
+          </li>
+        </ul>
       </div>
-      <div class="chart-container">
-        <div class="placeholder-chart"></div>
+
+      <!-- 달성 배지 & 플래니 진화 -->
+      <div class="card evolution-card">
+        <h3 class="card-title">달성 배지 &amp; 플래니</h3>
+        <div class="evolution-inner">
+          <!-- 왼쪽: 플래니 -->
+          <div class="planny-side">
+            <PlannySvg :size="110" :stage="evolutionStage" />
+            <div class="evo-name">{{ evolutionInfo.name }}</div>
+            <div class="evo-count">{{ earnedCount }}/6 배지 획득</div>
+            <div class="evo-next" v-if="evolutionInfo.next">
+              다음 진화까지 {{ evolutionInfo.next - earnedCount }}개
+            </div>
+            <div class="evo-next complete" v-else>🎉 완전 진화!</div>
+          </div>
+          <!-- 오른쪽: 배지 그리드 -->
+          <div class="badges-side">
+            <div class="badges-grid">
+              <div
+                v-for="badge in badges"
+                :key="badge.id"
+                :class="['badge-item', badge.earned ? 'earned' : 'locked']"
+                :title="badge.condition"
+              >
+                <div class="badge-icon">{{ badge.icon }}</div>
+                <div class="badge-name">{{ badge.name }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -96,34 +153,68 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '@/api';
+import calendarApi from '@/api/calendarApi';
+import PlannySvg from '@/components/PlannySvg.vue';
+
+const router = useRouter();
+
+// ── 사용자 정보 ──────────────────────────────────
+const userName = ref('');
+const daysSinceSignup = ref(0);
+const pdfCount = ref(0);
+
+// ── 오늘 날짜 ────────────────────────────────────
+const todayStr = () => new Date().toISOString().split('T')[0];
+const today = new Date();
+const formattedToday = today.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' });
+
+// ── 출석 ─────────────────────────────────────────
 const currentDay = ref(1);
 const consecutiveDays = ref(1);
-const quizCount = ref(0);
-const summaryCount = ref(0);
+const progressFillWidth = ref('0%');
+const isLoading = ref(false);
 const attendanceStatus = reactive({
   lastCheckDate: null,
   completedDays: [1],
-  canCheckToday: true
+  canCheckToday: true,
 });
 
-const today = new Date();
-const dateFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
-const formattedToday = today.toLocaleDateString('ko-KR', dateFormatOptions);
+const loadAttendanceData = () => {
+  const savedData = localStorage.getItem('attendanceData');
+  if (savedData) {
+    const data = JSON.parse(savedData);
+    currentDay.value = data.currentDay;
+    consecutiveDays.value = data.consecutiveDays;
+    attendanceStatus.completedDays = data.completedDays;
+    attendanceStatus.lastCheckDate = data.lastCheckDate;
+    const lastCheck = new Date(data.lastCheckDate);
+    const now = new Date();
+    const isNewDay =
+      lastCheck.getDate() !== now.getDate() ||
+      lastCheck.getMonth() !== now.getMonth() ||
+      lastCheck.getFullYear() !== now.getFullYear();
+    attendanceStatus.canCheckToday = isNewDay;
+    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
+  }
+};
 
-import { useRouter } from 'vue-router';
-const router = useRouter();
-
-const navigateToPdf = (tabType = 'personal') => {
-  router.push({ path: '/student/pdf', query: { tab: tabType } });
+const saveAttendanceData = () => {
+  localStorage.setItem('attendanceData', JSON.stringify({
+    currentDay: currentDay.value,
+    consecutiveDays: consecutiveDays.value,
+    completedDays: attendanceStatus.completedDays,
+    lastCheckDate: attendanceStatus.lastCheckDate,
+    canCheckToday: attendanceStatus.canCheckToday,
+  }));
 };
 
 const checkAttendance = async () => {
   if (!attendanceStatus.canCheckToday) {
-    showToast("오늘은 이미 출석체크를 완료했습니다!");
+    showToast('오늘은 이미 출석체크를 완료했습니다!');
     return;
   }
-
   isLoading.value = true;
   try {
     const nextDay = currentDay.value + 1;
@@ -136,140 +227,145 @@ const checkAttendance = async () => {
       progressFillWidth.value = `${(nextDay - 1) * 16.66}%`;
       saveAttendanceData();
     }
-    showToast("출석체크 완료!");
+    showToast('출석체크 완료!');
   } finally {
     isLoading.value = false;
   }
 };
 
-const saveAttendanceData = () => {
-  localStorage.setItem('attendanceData', JSON.stringify({
-    currentDay: currentDay.value,
-    consecutiveDays: consecutiveDays.value,
-    completedDays: attendanceStatus.completedDays,
-    lastCheckDate: attendanceStatus.lastCheckDate,
-    canCheckToday: attendanceStatus.canCheckToday
-  }));
-};
+const buttonText = computed(() => {
+  if (isLoading.value) return '처리 중...';
+  if (!attendanceStatus.canCheckToday) return '완료';
+  return '출석';
+});
 
-const loadAttendanceData = () => {
-  const savedData = localStorage.getItem('attendanceData');
-  if (savedData) {
-    const data = JSON.parse(savedData);
-    currentDay.value = data.currentDay;
-    consecutiveDays.value = data.consecutiveDays;
-    attendanceStatus.completedDays = data.completedDays;
-    attendanceStatus.lastCheckDate = data.lastCheckDate;
-    
-    const lastCheck = new Date(data.lastCheckDate);
-    const today = new Date();
-    const isNewDay = lastCheck.getDate() !== today.getDate() || 
-                    lastCheck.getMonth() !== today.getMonth() || 
-                    lastCheck.getFullYear() !== today.getFullYear();
-    
-    attendanceStatus.canCheckToday = isNewDay;
-    progressFillWidth.value = `${(currentDay.value - 1) * 16.66}%`;
-  }
-};
+const attendanceBtnClass = computed(() =>
+  attendanceStatus.canCheckToday ? 'attendance-btn' : 'attendance-btn completed'
+);
 
+// ── 토스트 ────────────────────────────────────────
 const toastMessage = ref('');
 const showToastFlag = ref(false);
-
 const showToast = (message) => {
   toastMessage.value = message;
   showToastFlag.value = true;
-  
-  setTimeout(() => {
-    showToastFlag.value = false;
-  }, 3000);
+  setTimeout(() => { showToastFlag.value = false; }, 3000);
 };
 
-const progressFillWidth = ref('0%');
-const isLoading = ref(false);
-const buttonText = computed(() => {
-  if (isLoading.value) {
-    return '처리 중...';
-  } else if (!attendanceStatus.canCheckToday) {
-    return '완료';
-  } else {
-    return '출석';
+// ── 오늘 할 일 ────────────────────────────────────
+const todayTasks = ref([]);
+const tasksLoading = ref(true);
+
+const handleToggleTask = async (task) => {
+  try {
+    await calendarApi.toggleTask(task.id);
+    task.is_completed = !task.is_completed;
+  } catch {
+    showToast('상태 변경에 실패했습니다.');
   }
+};
+
+// ── 빠른 바로가기 카운트 ──────────────────────────
+const resumeCount = ref(0);
+const clCount = ref(0);
+const jobsCount = ref(0);
+
+// ── 최근 활동 ─────────────────────────────────────
+const recentActivity = ref([]);
+
+const relativeDate = (dateStr) => {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '어제';
+  return `${diff}일 전`;
+};
+
+const buildActivityFeed = (resumeData, jobsData, clData) => {
+  const items = [];
+  const take2 = (arr, icon, typeLabel) =>
+    (arr || []).slice(0, 2).map((item, i) => ({
+      id: item.id ?? i,
+      type: typeLabel,
+      icon,
+      typeLabel,
+      name: item.name || item.title || item.company_name || '(제목 없음)',
+      date: item.updated_at || item.created_at || null,
+      relativeDate: relativeDate(item.updated_at || item.created_at),
+    }));
+
+  items.push(...take2(resumeData, '📄', '이력서'));
+  items.push(...take2(jobsData, '🏢', '기업조사'));
+  items.push(...take2(clData, '✉️', '자소서'));
+
+  items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  recentActivity.value = items.slice(0, 5);
+};
+
+// ── 배지 & 진화 ───────────────────────────────────
+const badges = computed(() => [
+  { id: 'first',    icon: '🌱', name: '첫걸음',     condition: '플래노바 시작',       earned: true },
+  { id: 'resume',   icon: '📝', name: '이력서 작성자', condition: '이력서 1개 이상',    earned: resumeCount.value > 0 },
+  { id: 'jobs',     icon: '🔍', name: '기업탐정',    condition: '기업조사 3개 이상',   earned: jobsCount.value >= 3 },
+  { id: 'cl',       icon: '✉️', name: '스토리텔러',  condition: '자소서 1개 이상',     earned: clCount.value >= 1 },
+  { id: 'planner',  icon: '📅', name: '플래너',      condition: '오늘 할 일 등록',     earned: todayTasks.value.length > 0 },
+  { id: 'streak7',  icon: '🔥', name: '7일 전사',    condition: '7일 연속 출석',       earned: consecutiveDays.value >= 7 },
+]);
+
+const earnedCount = computed(() => badges.value.filter(b => b.earned).length);
+
+const evolutionStage = computed(() => {
+  if (earnedCount.value >= 6) return 4;
+  if (earnedCount.value >= 4) return 3;
+  if (earnedCount.value >= 2) return 2;
+  return 1;
 });
 
-const attendanceBtnClass = computed(() => {
-  if (!attendanceStatus.canCheckToday) {
-    return 'attendance-btn completed';
-  } else {
-    return 'attendance-btn';
-  }
+const evolutionInfo = computed(() => {
+  const map = {
+    1: { name: '잠든 행성',     next: 2, desc: '첫 배지를 획득했어요!' },
+    2: { name: '성장 중',       next: 4, desc: '플래니가 눈을 떴어요.' },
+    3: { name: '빛나는 탐험가', next: 6, desc: '반짝이기 시작했어요!' },
+    4: { name: '완전체 플래니', next: null, desc: '모든 배지를 달성했어요!' },
+  };
+  return map[evolutionStage.value];
 });
 
+// ── onMounted ─────────────────────────────────────
 onMounted(async () => {
   loadAttendanceData();
 
-  try {
-    const { data } = await api.get('/users/me/details');
-    summaryCount.value = data.storage?.total_pdfs ?? 0;
-    quizCount.value = data.activity?.annotations_count ?? 0;
-  } catch (e) {
-    // 카운트 연동 실패 시 0 유지
+  const [detailsRes, tasksRes, resumeRes, jobsRes, clRes] = await Promise.allSettled([
+    api.get('/users/me/details'),
+    calendarApi.getTasks(todayStr()),
+    api.get('/resume/profiles'),
+    api.get('/jobs'),
+    api.get('/coverletter'),
+  ]);
+
+  if (detailsRes.status === 'fulfilled') {
+    const d = detailsRes.value.data;
+    const info = d.user_info ?? {};
+    userName.value = info.full_name || info.username || info.email || '사용자';
+    daysSinceSignup.value = (d.signup_info?.days_since_signup ?? 0) + 1;
+    pdfCount.value = d.storage?.total_pdfs ?? 0;
   }
+
+  tasksLoading.value = false;
+  if (tasksRes.status === 'fulfilled') {
+    todayTasks.value = tasksRes.value.data || [];
+  }
+
+  const resumeData = resumeRes.status === 'fulfilled' ? (resumeRes.value.data || []) : [];
+  const jobsData   = jobsRes.status === 'fulfilled'   ? (jobsRes.value.data || [])   : [];
+  const clData     = clRes.status === 'fulfilled'     ? (clRes.value.data || [])     : [];
+
+  resumeCount.value = resumeData.length;
+  jobsCount.value   = jobsData.length;
+  clCount.value     = clData.length;
+
+  buildActivityFeed(resumeData, jobsData, clData);
 });
-
-const CircleProgress = {
-  props: {
-    percentage: {
-      type: Number,
-      required: true
-    },
-    color: {
-      type: String,
-      default: '#ff8c42'
-    }
-  },
-  setup(props) {
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const dashoffset = ref(circumference);
-
-    onMounted(() => {
-      const offset = circumference - (props.percentage / 100) * circumference;
-      dashoffset.value = offset;
-    });
-
-    return {
-      radius,
-      circumference,
-      dashoffset
-    };
-  },
-  template: `
-    <svg class="circle-progress" width="100" height="100" viewBox="0 0 100 100">
-      <circle
-        class="circle-bg"
-        cx="50"
-        cy="50"
-        :r="radius"
-        fill="none"
-        stroke="#e6e6e6"
-        stroke-width="10"
-      />
-      <circle
-        class="circle-progress-value"
-        cx="50"
-        cy="50"
-        :r="radius"
-        fill="none"
-        :stroke="color"
-        stroke-width="10"
-        stroke-linecap="round"
-        :stroke-dasharray="circumference"
-        :stroke-dashoffset="dashoffset"
-        transform="rotate(-90, 50, 50)"
-      />
-    </svg>
-  `
-};
 </script>
 
 <style scoped>
@@ -284,41 +380,91 @@ const CircleProgress = {
   position: relative;
 }
 
-.header {
-  margin-bottom: 20px;
+/* ── 프로필 헤더 ── */
+.profile-header {
   width: 95%;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto 20px auto;
+  background: white;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-.title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
+.profile-greeting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.greeting-text {
+  font-size: 20px;
+  font-weight: 600;
   color: #222;
 }
 
-.day-count {
-  color: #ff8c42;
+.journey-text {
+  font-size: 15px;
+  color: #777;
+}
+
+.accent {
+  color: #F76707;
   font-weight: 800;
 }
 
-.attendance-card {
-  background-color: white;
+/* ── 토스트 ── */
+.toast-container {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+.toast-message {
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 24px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* ── 공용 카드 ── */
+.card {
+  background: white;
   border-radius: 16px;
-  padding: 20px;
+  padding: 24px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-date {
+  font-size: 13px;
+  font-weight: 400;
+  color: #999;
+}
+
+/* ── 상단 그리드 ── */
+.top-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   width: 95%;
-  margin-left: auto;
-  margin-right: auto;
-  transition: all 0.3s ease;
+  margin: 0 auto 20px auto;
 }
 
-.attendance-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-}
-
+/* 출석 카드 */
 .attendance-row {
   display: flex;
   align-items: center;
@@ -326,18 +472,18 @@ const CircleProgress = {
 }
 
 .day-circle {
-  width: 100px;
-  height: 100px;
-  background-color: #ff8c42;
+  width: 90px;
+  height: 90px;
+  background-color: #F76707;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: white;
-  position: relative;
   padding: 10px;
-  box-shadow: 0 4px 8px rgba(255, 140, 66, 0.3);
+  box-shadow: 0 4px 8px rgba(247, 103, 7, 0.3);
+  flex-shrink: 0;
 }
 
 .day-number {
@@ -345,68 +491,61 @@ const CircleProgress = {
   height: 32px;
   border-radius: 50%;
   background-color: white;
-  color: #ff8c42;
+  color: #F76707;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   font-size: 18px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.day-texts {
-  text-align: center;
-}
+.day-texts { text-align: center; }
 
 .day-greeting {
-  font-size: 12px;
-  margin-bottom: 4px;
+  font-size: 11px;
+  margin-bottom: 2px;
   opacity: 0.9;
 }
 
 .day-status {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: bold;
 }
 
 .progress-container {
   flex: 1;
-  margin: 0 40px;
+  margin: 0 20px;
 }
 
 .progress-dots {
   display: flex;
   justify-content: space-between;
   margin-bottom: 10px;
-  position: relative;
-  top: 0px;
 }
 
 .dot {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #eeeeee;
-  font-size: 14px;
+  background-color: #eee;
+  font-size: 12px;
   color: #666;
-  z-index: 2;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
   margin-top: 5px;
+  z-index: 2;
 }
 
 .dot.completed {
-  background-color: #ff8c42;
+  background-color: #F76707;
   color: white;
-  box-shadow: 0 2px 6px rgba(255, 140, 66, 0.4);
-  border-radius: 50%;
-  overflow: hidden;
-  position: relative;
+  box-shadow: 0 2px 6px rgba(247, 103, 7, 0.4);
 }
 
 .check-icon {
@@ -414,453 +553,321 @@ const CircleProgress = {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
 }
 
 .progress-bar {
   height: 4px;
-  background-color: #eeeeee;
+  background-color: #eee;
   border-radius: 2px;
-  position: relative;
-  margin-top: -20px;
+  margin-top: -14px;
   z-index: 1;
-  top: -10px;
+  position: relative;
+  top: -8px;
 }
 
 .progress-filled {
   height: 100%;
-  width: 14.3%;
-  background-color: #ff8c42;
+  background-color: #F76707;
   border-radius: 2px;
   transition: width 0.5s ease;
 }
 
 .attendance-btn {
-  background-color: #ff8c42;
+  background-color: #F76707;
   color: white;
   border: none;
   border-radius: 12px;
-  padding: 12px 28px;
-  font-size: 16px;
+  padding: 10px 22px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 4px 8px rgba(255, 140, 66, 0.3);
+  box-shadow: 0 4px 8px rgba(247, 103, 7, 0.3);
   transition: all 0.2s ease;
-  min-width: 100px;
-  position: relative;
-  overflow: hidden;
+  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .attendance-btn:hover:not(:disabled) {
-  background-color: #ff7c32;
+  background-color: #e05e00;
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(255, 140, 66, 0.4);
+  box-shadow: 0 6px 12px rgba(247, 103, 7, 0.4);
 }
 
-.attendance-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 2px 4px rgba(255, 140, 66, 0.3);
-}
-
-.attendance-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.8;
-}
+.attendance-btn:disabled { cursor: not-allowed; opacity: 0.8; }
 
 .attendance-btn.completed {
-  background-color: #777777;
+  background-color: #777;
   box-shadow: 0 4px 8px rgba(119, 119, 119, 0.3);
 }
 
-.attendance-btn.completed:hover {
-  background-color: #666666;
-  box-shadow: 0 6px 12px rgba(119, 119, 119, 0.4);
-}
+/* 오늘 할 일 */
+.today-tasks-card { display: flex; flex-direction: column; }
 
-.user-info {
-  display: flex;
-  background-color: #FFF5F0;
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 20px;
-  width: 95%;
-  margin-left: auto;
-  margin-right: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-}
-
-.info-item {
-  flex: 1;
-  text-align: center;
-  padding: 0 10px;
-  position: relative;
-}
-
-.border-x {
-  border-left: 1px solid rgba(255, 140, 66, 0.2);
-  border-right: 1px solid rgba(255, 140, 66, 0.2);
-}
-
-.info-label {
-  font-size: 14px;
-  color: #ff8c42;
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-.info-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-}
-
-.menu-section {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  width: 95%;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.menu-card {
-  flex: 1;
-  background-color: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.menu-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
-}
-
-.menu-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-.menu-icon {
-  font-size: 22px;
-  margin-right: 12px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-}
-
-.study-icon {
-  background-color: rgba(255, 193, 7, 0.15);
-  color: #ffc107;
-}
-
-.team-icon {
-  background-color: rgba(33, 150, 243, 0.15);
-  color: #2196f3;
-}
-
-.menu-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-.menu-links {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.menu-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-decoration: none;
-  color: #555;
-  font-size: 14px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-  transition: all 0.2s ease;
-  cursor: pointer; /* 클릭 가능한 커서 스타일 추가 */
-}
-
-.menu-link:last-child {
-  border-bottom: none;
-}
-
-.menu-link:hover {
-  color: #ff8c42;
-}
-
-.arrow {
-  font-size: 20px;
-  color: #999;
-  transition: transform 0.2s ease;
-}
-
-.menu-link:hover .arrow {
-  transform: translateX(3px);
-  color: #ff8c42;
-}
-
-.stats-section {
-  display: flex;
-  background-color: #FFF5F0;
-  border-radius: 16px;
-  padding: 24px;
-  gap: 20px;
-  width: 95%;
-  margin-left: auto;
-  margin-right: auto;
-  margin-bottom: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-}
-
-.stat-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px;
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-3px);
-}
-
-.stat-chart {
-  position: relative;
-  width: 110px;
-  height: 110px;
-  margin-bottom: 15px;
-}
-
-.circle-progress {
-  width: 100%;
-  height: 100%;
-}
-
-.stat-percentage {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 18px;
-  font-weight: 700;
-  color: #333;
-}
-
-.stat-label {
+.empty-state {
+  color: #aaa;
   font-size: 14px;
   text-align: center;
-  color: #555;
-  font-weight: 500;
+  padding: 20px 0;
+  line-height: 1.8;
 }
 
-.achievement-section {
-  width: 95%;
-  margin: 0 auto 20px auto;
-  background-color: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 16px 0;
-  color: #333;
-}
-
-.achievements {
-  display: flex;
-  gap: 20px;
-}
-
-.achievement-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background-color: #f9f9f9;
-  padding: 20px;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.achievement-card:hover {
-  background-color: #f0f0f0;
-  transform: translateY(-3px);
-}
-
-.achievement-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 30px;
-}
-
-.book-icon {
-  background-color: rgba(255, 193, 7, 0.15);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23FFC107' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 19.5A2.5 2.5 0 0 1 6.5 17H20'%3E%3C/path%3E%3Cpath d='M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z'%3E%3C/path%3E%3C/svg%3E");
-}
-
-.chat-icon {
-  background-color: rgba(33, 150, 243, 0.15);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232196F3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E");
-}
-
-.doc-icon {
-  background-color: rgba(76, 175, 80, 0.15);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%234CAF50' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3Cpolyline points='10 9 9 9 8 9'%3E%3C/polyline%3E%3C/svg%3E");
-}
-
-.achievement-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #555;
-}
-
-.chart-section {
-  width: 95%;
-  margin: 0 auto 20px auto;
-  background-color: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.chart-controls {
-  display: flex;
-  align-items: center;
-}
-
-.dropdown {
-  display: flex;
-  align-items: center;
-  background-color: #f5f5f5;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 14px;
+.link-text {
+  color: #F76707;
   cursor: pointer;
-  margin-right: 10px;
-  transition: background-color 0.2s ease;
+  font-size: 13px;
 }
 
-.dropdown:hover {
-  background-color: #eeeeee;
+.link-text:hover { text-decoration: underline; }
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.dropdown-icon {
-  font-size: 10px;
-  margin-left: 5px;
-  color: #999;
-}
-
-.period {
-  font-size: 14px;
-  color: #ff8c42;
-}
-
-.chart-container {
-  height: 200px;
-}
-
-.placeholder-chart {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(to right, #f5f5f5 0%, #eeeeee 10%, #f5f5f5 20%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
+.task-item:hover { background: #f5f5f5; }
+
+.task-item.done .task-title {
+  text-decoration: line-through;
+  color: #aaa;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 20px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+.task-check {
+  color: #F76707;
+  font-size: 16px;
+  width: 18px;
+  flex-shrink: 0;
 }
 
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+.task-item.done .task-check { color: #ccc; }
+
+/* ── 바로가기 ── */
+.shortcuts-card {
+  width: 95%;
+  margin: 0 auto 20px auto;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.shortcut-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  border-radius: 12px;
+  background: #faf9f7;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #f0ede8;
+}
+
+.shortcut-item:hover {
+  background: #fff3eb;
+  border-color: #F76707;
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(247, 103, 7, 0.15);
+}
+
+.shortcut-icon { font-size: 28px; margin-bottom: 6px; }
+
+.shortcut-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.shortcut-count {
+  font-size: 12px;
+  color: #F76707;
+  font-weight: 500;
+}
+
+/* ── 하단 그리드 ── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 95%;
+  margin: 0 auto;
+}
+
+/* 최근 활동 */
+.activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 14px;
+}
+
+.activity-item:last-child { border-bottom: none; }
+
+.activity-icon { font-size: 20px; flex-shrink: 0; }
+
+.activity-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.activity-name {
+  display: block;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-type {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.activity-date {
+  font-size: 12px;
+  color: #bbb;
+  flex-shrink: 0;
+}
+
+/* 배지 */
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.badge-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 8px;
+  border-radius: 12px;
+  background: #fafafa;
+  transition: transform 0.2s;
+}
+
+.badge-item.earned { background: #fff8f3; }
+
+.badge-item.locked {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.badge-item.earned:hover { transform: translateY(-2px); }
+
+.badge-icon { font-size: 28px; margin-bottom: 6px; }
+
+.badge-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  text-align: center;
+}
+
+/* ── 플래니 진화 카드 ── */
+.evolution-inner {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.planny-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+}
+
+.planny-side :deep(svg) {
+  filter: drop-shadow(0 6px 16px rgba(247, 103, 7, 0.25));
+}
+
+.evo-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #F76707;
+  margin-top: 8px;
+}
+
+.evo-count {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 2px;
+}
+
+.evo-next {
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.evo-next.complete {
+  color: #F76707;
+  font-weight: 600;
+}
+
+.badges-side { flex: 1; }
+
+/* ── 반응형 ── */
+@media (max-width: 900px) {
+  .shortcuts-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 768px) {
-  .menu-section {
-    flex-direction: column;
-  }
-  
-  .stats-section {
-    flex-direction: column;
-  }
-  
-  .stat-card {
-    margin-bottom: 20px;
-  }
-  
-  .achievements {
-    flex-direction: column;
-  }
-  
-  .achievement-card {
-    margin-bottom: 10px;
-  }
-  
-  .progress-container {
-    margin: 0 15px;
-  }
-  
+  .top-grid,
+  .bottom-grid { grid-template-columns: 1fr; }
+
+  .shortcuts-grid { grid-template-columns: repeat(3, 1fr); }
+
   .attendance-row {
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
   }
-  
-  .day-circle {
-    margin-bottom: 20px;
+
+  .progress-container { margin: 0; width: 100%; }
+
+  .attendance-btn { width: 100%; }
+
+  .evolution-inner {
+    flex-direction: column;
+    align-items: center;
   }
-  
-  .attendance-btn {
-    width: 100%;
-  }
+
+  .badges-side { width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .shortcuts-grid { grid-template-columns: repeat(2, 1fr); }
+  .badges-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
