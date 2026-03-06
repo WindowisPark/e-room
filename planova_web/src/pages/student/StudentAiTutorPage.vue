@@ -20,16 +20,55 @@
 
       <div class="history-section">
         <div v-for="(chatGroup, timeGroup) in groupedChatHistory" :key="timeGroup" class="history-group">
-          <div class="section-title">{{ getTimeGroupLabel(timeGroup) }}</div>
+          <div v-if="chatGroup.length" class="section-title">{{ getTimeGroupLabel(timeGroup) }}</div>
           <div
             v-for="chat in chatGroup"
             :key="chat.id"
             class="menu-item"
-            :class="{ active: currentChatId === chat.id }"
+            :class="{ active: currentChatId === chat.id, 'menu-open': activeMenuId === chat.id }"
             @click="loadChat(chat.id)"
           >
-            <span class="item-text">{{ chat.title || '새 대화' }}</span>
-            <span class="more-options" @click.stop="deleteChat(chat.id)">• • •</span>
+            <!-- 이름 편집 중 -->
+            <input
+              v-if="renamingChatId === chat.id"
+              class="rename-input"
+              v-model="renameValue"
+              @click.stop
+              @keydown.enter.stop="confirmRename"
+              @keydown.esc.stop="cancelRename"
+              @blur="confirmRename"
+            />
+            <span v-else class="item-text">{{ chat.title || '새 대화' }}</span>
+
+            <!-- 더보기 버튼 -->
+            <button
+              v-if="renamingChatId !== chat.id"
+              class="menu-more-btn"
+              @click.stop="toggleMenu(chat.id)"
+              title="더보기"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+              </svg>
+            </button>
+
+            <!-- 드롭다운 메뉴 -->
+            <div v-if="activeMenuId === chat.id" class="context-menu" @click.stop>
+              <button @click.stop="startRename(chat)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                이름 변경
+              </button>
+              <button class="danger" @click.stop="deleteChat(chat.id)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+                  <path d="M9 6V4h6v2"/>
+                </svg>
+                삭제
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -101,12 +140,40 @@
               'ai-message': message.role === 'assistant'
             }"
           >
-            <span
-              v-if="message.role === 'assistant'"
-              class="msg-text markdown-body"
-              v-html="renderMarkdown(message.content)"
-            ></span>
-            <span v-else class="msg-text">{{ message.content }}</span>
+            <!-- 버블 -->
+            <div class="bubble">
+              <!-- 스트리밍 중: plain text / 완료 후: 마크다운 -->
+              <span
+                v-if="message.role === 'assistant' && !message.streaming"
+                class="msg-text markdown-body"
+                v-html="renderMarkdown(message.content)"
+              ></span>
+              <span
+                v-else-if="message.role === 'assistant' && message.streaming"
+                class="msg-text streaming-text"
+              >{{ message.content }}</span>
+              <span v-else class="msg-text">{{ message.content }}</span>
+            </div>
+
+            <!-- 액션 바 (버블 아래, hover 시 노출) -->
+            <div v-if="message.role === 'assistant' && !message.streaming" class="msg-actions">
+              <button class="msg-action-btn" @click="copyMessage(message.content)" title="복사">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <span class="btn-label">복사</span>
+              </button>
+            </div>
+            <div v-if="message.role === 'user'" class="msg-actions">
+              <button class="msg-action-btn" @click="resendMessage(message.content)" title="재질문">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.87L1 10"/>
+                </svg>
+                <span class="btn-label">재질문</span>
+              </button>
+            </div>
           </div>
           <div v-if="statusMessage" class="status-message">{{ statusMessage }}</div>
           <div v-if="isLoading" class="loading-indicator">
@@ -198,6 +265,12 @@
   </div>
 </template>
 
+<script>
+// 모듈 레벨 캐시 — 탭 이동 후 재마운트 시에도 유지
+const _cache = { sessions: [], lastFetch: 0, messages: {} }
+export default {}
+</script>
+
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
@@ -229,6 +302,11 @@ const questionTextarea = ref(null)
 const showDeleteConfirm = ref(false)
 const deleteChatId = ref(null)
 const showSidebar = ref(false)
+// 채팅 목록 컨텍스트 메뉴
+const activeMenuId = ref(null)
+// 이름 변경
+const renamingChatId = ref(null)
+const renameValue = ref('')
 
 // 퀵 액션
 const aiActions = [
@@ -311,7 +389,7 @@ function startNewChat() {
     createdAt: new Date().toISOString()
   }
   chatHistory.value.push(currentChat.value)
-  connectWebSocket()
+  // connectWebSocket() 제거 — WS는 sendQuestion() 호출 시 연결
 }
 
 function startQuickAction(action) {
@@ -323,25 +401,76 @@ function startQuickAction(action) {
 async function loadChat(chatId) {
   const chat = chatHistory.value.find(c => c.id === chatId)
   if (!chat) return
+
+  // 캐시 즉시 표시
+  if (_cache.messages[chatId]?.length > 0) {
+    chat.messages = _cache.messages[chatId]
+    currentChatId.value = chatId
+    currentChat.value = chat
+    scrollToBottom()
+    return
+  }
+
+  currentChatId.value = chatId
+  currentChat.value = chat
+
   if (chat.messages.length === 0) {
     try {
       const res = await apiClient.get(`/ws/chat/sessions/${chatId}/history`)
-      chat.messages = res.data.message_history.map(m => ({
+      const msgs = res.data.message_history.map(m => ({
         role: m.type === 'HumanMessage' ? 'user' : 'assistant',
         type: 'text',
         content: m.content,
         timestamp: m.timestamp
       }))
+      chat.messages = msgs
+      _cache.messages[chatId] = msgs  // 캐시 저장
     } catch {}
   }
-  currentChatId.value = chatId
-  currentChat.value = chat
   scrollToBottom()
+}
+
+// ── 컨텍스트 메뉴 ──────────────────────────────────────────────
+function toggleMenu(chatId) {
+  activeMenuId.value = activeMenuId.value === chatId ? null : chatId
+}
+
+function closeMenu() {
+  activeMenuId.value = null
+}
+
+function startRename(chat) {
+  renameValue.value = chat.title || ''
+  renamingChatId.value = chat.id
+  activeMenuId.value = null
+  nextTick(() => {
+    const input = document.querySelector('.rename-input')
+    input?.focus()
+    input?.select()
+  })
+}
+
+async function confirmRename() {
+  const chatId = renamingChatId.value
+  const newTitle = renameValue.value.trim()
+  renamingChatId.value = null
+  if (!chatId || !newTitle) return
+  const chat = chatHistory.value.find(c => c.id === chatId)
+  if (chat) chat.title = newTitle
+  // 캐시 동기화
+  const cached = _cache.sessions.find(s => s.id === chatId)
+  if (cached) cached.title = newTitle
+  try { await apiClient.patch(`/ws/chat/sessions/${chatId}/title`, { title: newTitle }) } catch {}
+}
+
+function cancelRename() {
+  renamingChatId.value = null
 }
 
 function deleteChat(chatId) {
   deleteChatId.value = chatId
   showDeleteConfirm.value = true
+  activeMenuId.value = null
 }
 
 async function confirmDeleteChat() {
@@ -350,6 +479,9 @@ async function confirmDeleteChat() {
   deleteChatId.value = null
   try { await apiClient.delete(`/ws/chat/sessions/${chatId}`) } catch {}
   chatHistory.value = chatHistory.value.filter(c => c.id !== chatId)
+  // 캐시 동기화
+  _cache.sessions = _cache.sessions.filter(s => s.id !== chatId)
+  delete _cache.messages[chatId]
   if (currentChatId.value === chatId) {
     currentChatId.value = null
     currentChat.value = null
@@ -371,29 +503,35 @@ async function sendQuestion() {
   if (ws.value?.readyState === WebSocket.OPEN) {
     ws.value.send(JSON.stringify({ type: 'user_message', data: { message: text } }))
   } else {
-    connectWebSocket()
+    // 기존 세션 ID 전달 — 재방문 후에도 기존 대화 이어가기
+    connectWebSocket(currentChatId.value)
     ws.value.onopen = () => {
+      clearInterval(pingInterval.value)
+      pingInterval.value = setInterval(() => {
+        if (ws.value?.readyState === WebSocket.OPEN) {
+          ws.value.send(JSON.stringify({ type: 'ping' }))
+        }
+      }, 30000)
       ws.value.send(JSON.stringify({ type: 'user_message', data: { message: text } }))
     }
   }
 }
 
-function connectWebSocket() {
+function connectWebSocket(resumeSessionId = null) {
+  // CONNECTING 상태면 중복 연결 방지
+  if (ws.value?.readyState === WebSocket.CONNECTING) return
+
   const token = authStore.token
   const userId = authStore.userId
   if (!token || !userId) return
 
   const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
   const wsBase = baseURL.replace(/^http/, 'ws')
-  ws.value = new WebSocket(`${wsBase}/api/v1/ws/chat/${userId}?token=${token}`)
+  const sessionParam = resumeSessionId?.startsWith('session:')
+    ? `&session_id=${encodeURIComponent(resumeSessionId)}`
+    : ''
+  ws.value = new WebSocket(`${wsBase}/api/v1/ws/chat/${userId}?token=${token}${sessionParam}`)
 
-  ws.value.onopen = () => {
-    pingInterval.value = setInterval(() => {
-      if (ws.value?.readyState === WebSocket.OPEN) {
-        ws.value.send(JSON.stringify({ type: 'ping' }))
-      }
-    }, 30000)
-  }
   ws.value.onmessage = (event) => handleWSMessage(JSON.parse(event.data))
   ws.value.onclose = () => { clearInterval(pingInterval.value); sessionId.value = null }
   ws.value.onerror = () => { isLoading.value = false; statusMessage.value = '' }
@@ -411,6 +549,7 @@ function handleWSMessage(msg) {
         currentChatId.value = msg.session_id
       }
       break
+
     case 'ai_response':
     case 'result':
       currentChat.value.messages.push({
@@ -423,14 +562,41 @@ function handleWSMessage(msg) {
       scrollToBottom()
       syncCurrentChatToHistory()
       break
+
+    case 'stream_start':
+      isLoading.value = false
+      currentChat.value.messages.push({
+        role: 'assistant', type: 'text', content: '', streaming: true,
+        timestamp: new Date().toISOString()
+      })
+      scrollToBottom()
+      break
+
+    case 'stream_chunk': {
+      const last = currentChat.value.messages.at(-1)
+      if (last?.streaming) { last.content += msg.data.chunk; scrollToBottom() }
+      break
+    }
+
+    case 'stream_end': {
+      const last = currentChat.value.messages.at(-1)
+      if (last?.streaming) { last.streaming = false; last.content = msg.data.message }
+      statusMessage.value = ''
+      scrollToBottom()
+      syncCurrentChatToHistory()
+      break
+    }
+
     case 'status_update':
       statusMessage.value = msg.data.message
       break
+
     case 'file_request':
       pendingFileRequest.value = msg.data
       showFileSelector.value = true
       isLoading.value = false
       break
+
     case 'error':
       currentChat.value.messages.push({
         role: 'assistant', type: 'error',
@@ -458,6 +624,18 @@ function submitFileSelection(selectedPaths, skip = false) {
 async function loadSessions() {
   const userId = authStore.userId
   if (!userId) return
+
+  // 1) 캐시된 데이터 즉시 표시
+  if (_cache.sessions.length > 0) {
+    chatHistory.value = _cache.sessions.map(s => ({
+      ...s,
+      messages: _cache.messages[s.id] || []
+    }))
+    // 30초 이내 갱신이면 API 생략
+    if (Date.now() - _cache.lastFetch < 30000) return
+  }
+
+  // 2) 백그라운드 API 갱신
   try {
     const res = await apiClient.get(`/ws/chat/sessions/${userId}`)
     const newSessions = res.data.sessions.map(s => ({
@@ -466,16 +644,16 @@ async function loadSessions() {
       messages: [],
       createdAt: s.created_at
     }))
+    _cache.sessions = newSessions
+    _cache.lastFetch = Date.now()
 
-    // 현재 활성 세션에 채팅 내역이 있으면 초기화하지 않고 보존
-    if (currentChatId.value && currentChat.value?.messages.length > 0) {
-      chatHistory.value = newSessions.map(s =>
-        s.id === currentChatId.value ? { ...s, messages: currentChat.value.messages } : s
-      )
-      return
-    }
-
-    chatHistory.value = newSessions
+    // 현재 활성 메시지 보존
+    chatHistory.value = newSessions.map(s => ({
+      ...s,
+      messages: (s.id === currentChatId.value && currentChat.value?.messages.length > 0)
+        ? currentChat.value.messages
+        : (_cache.messages[s.id] || [])
+    }))
 
     // 활성 세션이 없으면 오늘 세션 자동 선택
     if (!currentChatId.value && chatHistory.value.length > 0) {
@@ -497,6 +675,25 @@ function syncCurrentChatToHistory() {
     const firstUser = currentChat.value.messages.find(m => m.role === 'user')
     if (firstUser) currentChat.value.title = truncateText(firstUser.content, 20)
   }
+  // 메시지 캐시 업데이트
+  if (currentChatId.value) {
+    _cache.messages[currentChatId.value] = [...currentChat.value.messages]
+  }
+}
+
+async function copyMessage(content) {
+  try {
+    await navigator.clipboard.writeText(content)
+    statusMessage.value = '복사되었습니다.'
+    setTimeout(() => {
+      if (statusMessage.value === '복사되었습니다.') statusMessage.value = ''
+    }, 2000)
+  } catch {}
+}
+
+function resendMessage(content) {
+  userQuestion.value = content
+  sendQuestion()
 }
 
 function renderMarkdown(text) {
@@ -511,10 +708,14 @@ function scrollToBottom() {
   })
 }
 
-onMounted(() => { loadSessions() })
+onMounted(() => {
+  loadSessions()
+  document.addEventListener('click', closeMenu)
+})
 onBeforeUnmount(() => {
   clearInterval(pingInterval.value)
   ws.value?.close()
+  document.removeEventListener('click', closeMenu)
 })
 watch(currentChat, () => { scrollToBottom() })
 </script>
@@ -593,26 +794,98 @@ watch(currentChat, () => { scrollToBottom() })
 }
 
 .menu-item {
-  padding: 10px 12px;
+  position: relative;
+  padding: 9px 10px;
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 2px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  transition: background 0.2s;
+  gap: 6px;
+  transition: background 0.15s;
 }
 .menu-item:hover { background: #f5f5f7; }
 .menu-item.active { background: #fff1e6; color: #F76707; font-weight: 500; }
+.menu-item.menu-open { background: #f5f5f7; }
 
 .item-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
-.more-options { color: #999; font-size: 12px; padding: 0 5px; }
+/* 더보기 버튼 */
+.menu-more-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  color: #aaa;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.menu-item:hover .menu-more-btn,
+.menu-item.menu-open .menu-more-btn { opacity: 1; }
+.menu-more-btn:hover { background: #e8e8e8; color: #555; }
+.menu-item.active .menu-more-btn { color: #F76707; }
+.menu-item.active .menu-more-btn:hover { background: rgba(247,103,7,0.12); }
+
+/* 이름 변경 인라인 입력 */
+.rename-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: white;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 2px 6px;
+  box-shadow: 0 0 0 2px #F76707;
+  color: #333;
+  min-width: 0;
+}
+
+/* 드롭다운 메뉴 */
+.context-menu {
+  position: absolute;
+  right: 4px;
+  top: calc(100% + 2px);
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+  overflow: hidden;
+  z-index: 200;
+  min-width: 130px;
+  padding: 4px;
+}
+.context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.12s;
+}
+.context-menu button:hover { background: #f5f5f7; }
+.context-menu button.danger { color: #e53935; }
+.context-menu button.danger:hover { background: #fff5f5; }
 
 /* ── 메인 콘텐츠 ── */
 .main-content {
@@ -702,13 +975,60 @@ watch(currentChat, () => { scrollToBottom() })
 
 .chat-message {
   max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-message { align-self: flex-end; align-items: flex-end; }
+.ai-message  { align-self: flex-start; align-items: flex-start; }
+
+.bubble {
   padding: 12px 16px;
   border-radius: 18px;
   word-break: break-word;
 }
 
-.user-message { align-self: flex-end; background: #F76707; color: white; }
-.ai-message { align-self: flex-start; background: #f0f0f0; color: #333; }
+.user-message .bubble { background: #F76707; color: white; }
+.ai-message  .bubble  { background: #f0f0f0; color: #333; }
+
+/* ── 메시지 액션 바 ── */
+.msg-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  padding: 0 2px;
+}
+.chat-message:hover .msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.msg-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #999;
+  font-size: 12px;
+  font-family: inherit;
+  transition: color 0.15s, background 0.15s;
+}
+.msg-action-btn:hover {
+  color: #444;
+  background: #f0f0f0;
+}
+.msg-action-btn svg { flex-shrink: 0; }
+.btn-label { font-size: 12px; color: inherit; }
+
+.user-message .msg-action-btn { color: #aaa; }
+.user-message .msg-action-btn:hover { color: #555; background: #f0f0f0; }
 
 .loading-indicator { align-self: flex-start; margin-top: 10px; }
 
@@ -905,6 +1225,12 @@ watch(currentChat, () => { scrollToBottom() })
 
 /* ── 마크다운 렌더링 ── */
 .msg-text { display: block; }
+
+/* 스트리밍 중 raw text — 불완전한 마크다운 파싱 방지 */
+.streaming-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .markdown-body :deep(h1),
 .markdown-body :deep(h2),

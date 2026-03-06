@@ -9,7 +9,7 @@ from app.services.session_manager import SessionManager
 from app.services.pdf_agent.tools import get_initial_state
 from app.services.pdf_agent.graphs.main import intergrate_graph
 from app.services.pdf_agent.nodes.common import judge_the_purpose_of_the_input
-from app.services.pdf_agent.nodes.qa_system import start_point_of_qa_system
+from app.services.pdf_agent.nodes.qa_system import start_point_of_qa_system, build_qa_messages, finalize_qa_state, llm
 from app.api import deps
 from app.models.user import User
 from app.api.v1.websocket.handlers import TaskHandlers
@@ -31,10 +31,25 @@ class WebSocketManager:
         self.agent_graph = intergrate_graph()
         self.task_handlers = TaskHandlers(self)  # 작업 핸들러 추가
 
-    async def connect(self, websocket: WebSocket, user_id: str) -> str:
-        """WebSocket 연결 및 세션 생성"""
+    async def connect(self, websocket: WebSocket, user_id: str, resume_session_id: str = None) -> str:
+        """WebSocket 연결 — 기존 세션 재사용 또는 새 세션 생성"""
         await websocket.accept()
-        # QA 타입으로 기본 세션 생성
+
+        # 기존 유효 세션이면 재사용
+        if resume_session_id:
+            existing = self.session_manager.get_session(resume_session_id)
+            if existing and str(existing.get("user_id")) == str(user_id):
+                self.active_connections[resume_session_id] = websocket
+                self.session_manager.extend_session_ttl(resume_session_id)
+                await websocket.send_text(json.dumps({
+                    "type": "session_connected",
+                    "session_id": resume_session_id,
+                    "timestamp": self.get_timestamp()
+                }, ensure_ascii=False))
+                logger.info(f"기존 세션 재사용: user_id={user_id}, session_id={resume_session_id}")
+                return resume_session_id
+
+        # 새 세션 생성
         session_id = self.session_manager.create_session(user_id, task_type="qa")
         self.active_connections[session_id] = websocket
 
@@ -45,7 +60,7 @@ class WebSocketManager:
             "timestamp": self.get_timestamp()
         }, ensure_ascii=False))
 
-        logger.info(f"WebSocket 연결: user_id={user_id}, session_id={session_id}")
+        logger.info(f"WebSocket 연결(새 세션): user_id={user_id}, session_id={session_id}")
         return session_id
 
     async def disconnect(self, session_id: str):
@@ -179,51 +194,58 @@ class WebSocketManager:
             await self.send_error(session_id, "답변 생성 중 오류가 발생했습니다.")
 
     async def handle_qa_continue(self, session_id: str, message: str, session_data: dict):
-        """QA 대화 계속하기"""
+        """QA 대화 계속하기 — 스트리밍 응답"""
         try:
-            # 기존 대화 히스토리를 포함한 상태로 업데이트
             current_state = session_data["agent_state"]
-            
+
             # 메시지 히스토리를 LangGraph 메시지 형태로 변환
             message_history = session_data.get("message_history", [])
             langchain_messages = []
-            
             for msg in message_history:
                 if msg["type"] == "HumanMessage":
                     langchain_messages.append(HumanMessage(content=msg["content"]))
                 elif msg["type"] == "AIMessage":
                     langchain_messages.append(AIMessage(content=msg["content"]))
-            
-            # 현재 상태에 메시지 히스토리 포함
+
             current_state["messages"] = langchain_messages
             current_state["last_user_query"] = message
-            
-            await self.send_status(session_id, "processing", "답변을 생성하고 있습니다...")
 
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: start_point_of_qa_system(current_state)
-            )
-            messages = result.get("messages", [])
-            response_content = messages[-1].content if messages else "답변을 생성할 수 없습니다."
-            
-            # AI 응답을 히스토리에 추가
-            ai_message = AIMessage(content=response_content)
-            self.session_manager.add_message_to_history(session_id, ai_message)
-            
-            # 응답 전송
+            # 프롬프트 구성
+            qa_messages, user_input = build_qa_messages(current_state)
+
+            # 스트리밍 시작 알림
             await self.send_message(session_id, {
-                "type": "ai_response",
+                "type": "stream_start",
                 "session_id": session_id,
-                "data": {
-                    "message": response_content,
-                    "task_type": "qa",
-                    "is_final": False
-                },
                 "timestamp": self.get_timestamp()
             })
-            
-            # 에이전트 상태 업데이트
-            self.session_manager.update_session(session_id, {"agent_state": self._strip_messages(result)})
+
+            # 청크 단위 스트리밍
+            full_response = ""
+            async for chunk in llm.astream(qa_messages):
+                if chunk.content:
+                    full_response += chunk.content
+                    await self.send_message(session_id, {
+                        "type": "stream_chunk",
+                        "session_id": session_id,
+                        "data": {"chunk": chunk.content},
+                        "timestamp": self.get_timestamp()
+                    })
+
+            # 상태 확정
+            result_state = finalize_qa_state(qa_messages, user_input, full_response)
+
+            # AI 응답 히스토리 저장
+            self.session_manager.add_message_to_history(session_id, AIMessage(content=full_response))
+            self.session_manager.update_session(session_id, {"agent_state": self._strip_messages(result_state)})
+
+            # 스트리밍 완료 알림
+            await self.send_message(session_id, {
+                "type": "stream_end",
+                "session_id": session_id,
+                "data": {"message": full_response},
+                "timestamp": self.get_timestamp()
+            })
 
         except Exception as e:
             logger.error(f"QA 대화 계속 처리 오류: {str(e)}")
@@ -466,6 +488,7 @@ manager = WebSocketManager()
 @router.websocket("/chat/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     token = websocket.query_params.get("token")
+    resume_session_id = websocket.query_params.get("session_id")  # 기존 세션 재연결용
     if not token:
         await websocket.close(code=4001)
         return
@@ -480,7 +503,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         await websocket.close(code=4001)
         return
 
-    session_id = await manager.connect(websocket, user_id)
+    session_id = await manager.connect(websocket, user_id, resume_session_id=resume_session_id)
     
     try:
         while True:

@@ -18,11 +18,12 @@ llm = ChatGoogleGenerativeAI(
     max_output_tokens=2048,
 )
 
-def start_point_of_qa_system(state: AgentState):
+
+def build_qa_messages(state: AgentState):
+    """LLM에 전달할 messages 리스트와 user_input을 반환"""
     messages = list(state["messages"])
     user_input = state.get("last_user_query", "")
 
-    # check_reference LLM call 제거 → 파일/문서 여부로 직접 판단
     has_docs = bool(
         state.get("selected_files") or
         (state.get("document_id") and state.get("document_id") != 0)
@@ -43,8 +44,18 @@ def start_point_of_qa_system(state: AgentState):
         request = HumanMessage(content=QA_WITHOUT_MATERIAL_PROMPT.format(user_input=user_input))
 
     messages.append(request)
-    result = llm.invoke(messages).content
+    return messages, user_input
+
+
+def finalize_qa_state(messages: list, user_input: str, result: str) -> dict:
+    """스트리밍/invoke 완료 후 state 업데이트"""
     messages.pop()  # 재작성 prompt 제거 (너무 김)
-    messages.append(HumanMessage(content=f"{user_input}"))
+    messages.append(HumanMessage(content=user_input))
     messages.append(AIMessage(content=result))
     return {"messages": messages}
+
+
+def start_point_of_qa_system(state: AgentState):
+    messages, user_input = build_qa_messages(state)
+    result = llm.invoke(messages).content
+    return finalize_qa_state(messages, user_input, result)
