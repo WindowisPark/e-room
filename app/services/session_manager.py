@@ -84,7 +84,7 @@ class SessionManager:
             return key in self._memory
 
     def _get_ttl(self, task_type: str) -> int:
-        return self.QA_SESSION_TTL if task_type == "qa" else self.TASK_SESSION_TTL
+        return self.QA_SESSION_TTL if task_type in ("qa", "qa_system") else self.TASK_SESSION_TTL
 
     def create_session(self, user_id: str, task_type: str = None) -> str:
         """
@@ -241,7 +241,7 @@ class SessionManager:
         chat_sessions = []
         for session_id in session_ids:
             session_data = self.get_session(session_id)
-            if session_data and session_data.get("task_type") == "qa":
+            if session_data and session_data.get("task_type") in ("qa", "qa_system"):
                 chat_sessions.append({
                     "session_id": session_id,
                     "title": session_data.get("chat_title", "새 채팅"),

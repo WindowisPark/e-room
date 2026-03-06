@@ -100,7 +100,14 @@
               'user-message': message.role === 'user',
               'ai-message': message.role === 'assistant'
             }"
-          >{{ message.content }}</div>
+          >
+            <span
+              v-if="message.role === 'assistant'"
+              class="msg-text markdown-body"
+              v-html="renderMarkdown(message.content)"
+            ></span>
+            <span v-else class="msg-text">{{ message.content }}</span>
+          </div>
           <div v-if="statusMessage" class="status-message">{{ statusMessage }}</div>
           <div v-if="isLoading" class="loading-indicator">
             <div class="typing-indicator">
@@ -196,6 +203,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import apiClient from '@/api/index.js'
+import { marked } from 'marked'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -452,12 +460,34 @@ async function loadSessions() {
   if (!userId) return
   try {
     const res = await apiClient.get(`/ws/chat/sessions/${userId}`)
-    chatHistory.value = res.data.sessions.map(s => ({
+    const newSessions = res.data.sessions.map(s => ({
       id: s.session_id,
       title: s.title || '새 대화',
       messages: [],
       createdAt: s.created_at
     }))
+
+    // 현재 활성 세션에 채팅 내역이 있으면 초기화하지 않고 보존
+    if (currentChatId.value && currentChat.value?.messages.length > 0) {
+      chatHistory.value = newSessions.map(s =>
+        s.id === currentChatId.value ? { ...s, messages: currentChat.value.messages } : s
+      )
+      return
+    }
+
+    chatHistory.value = newSessions
+
+    // 활성 세션이 없으면 오늘 세션 자동 선택
+    if (!currentChatId.value && chatHistory.value.length > 0) {
+      const today = new Date()
+      const todaySession = chatHistory.value.find(s => {
+        const d = new Date(s.createdAt)
+        return d.getFullYear() === today.getFullYear() &&
+               d.getMonth() === today.getMonth() &&
+               d.getDate() === today.getDate()
+      })
+      if (todaySession) await loadChat(todaySession.id)
+    }
   } catch {}
 }
 
@@ -467,6 +497,11 @@ function syncCurrentChatToHistory() {
     const firstUser = currentChat.value.messages.find(m => m.role === 'user')
     if (firstUser) currentChat.value.title = truncateText(firstUser.content, 20)
   }
+}
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  return marked.parse(text)
 }
 
 function scrollToBottom() {
@@ -867,6 +902,59 @@ watch(currentChat, () => { scrollToBottom() })
   color: white;
 }
 .delete-confirm-modal .modal-actions button:first-child:hover { background: #c62828; }
+
+/* ── 마크다운 렌더링 ── */
+.msg-text { display: block; }
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+  font-weight: 700;
+  margin: 8px 0 4px;
+  line-height: 1.4;
+}
+.markdown-body :deep(h1) { font-size: 1.3em; }
+.markdown-body :deep(h2) { font-size: 1.15em; }
+.markdown-body :deep(h3) { font-size: 1.05em; }
+
+.markdown-body :deep(p) { margin: 4px 0; }
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+.markdown-body :deep(li) { margin: 2px 0; }
+
+.markdown-body :deep(code) {
+  background: rgba(0,0,0,0.07);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.markdown-body :deep(pre) {
+  background: rgba(0,0,0,0.07);
+  border-radius: 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.markdown-body :deep(pre) code { background: none; padding: 0; }
+
+.markdown-body :deep(strong) { font-weight: 700; }
+.markdown-body :deep(em) { font-style: italic; }
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid #ccc;
+  margin: 6px 0;
+  padding-left: 12px;
+  color: #555;
+}
 
 /* ── 스크롤바 ── */
 .history-section::-webkit-scrollbar,

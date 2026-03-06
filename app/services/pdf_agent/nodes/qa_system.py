@@ -20,8 +20,7 @@ llm = ChatGoogleGenerativeAI(
 
 def start_point_of_qa_system(state: AgentState):
     messages = list(state["messages"])
-    user_input = messages[-1].content
-    messages = messages[:-1]  # 마지막 user 메시지 제거 (재작성 prompt로 대체)
+    user_input = state.get("last_user_query", "")
 
     # check_reference LLM call 제거 → 파일/문서 여부로 직접 판단
     has_docs = bool(
@@ -44,7 +43,7 @@ def start_point_of_qa_system(state: AgentState):
         request = HumanMessage(content=QA_WITHOUT_MATERIAL_PROMPT.format(user_input=user_input))
 
     messages.append(request)
-    result = llm.invoke(f"{messages}").content
+    result = llm.invoke(messages).content
     messages.pop()  # 재작성 prompt 제거 (너무 김)
     messages.append(HumanMessage(content=f"{user_input}"))
     messages.append(AIMessage(content=result))
