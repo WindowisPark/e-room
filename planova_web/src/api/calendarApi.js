@@ -9,11 +9,17 @@ export default {
   createTask(title, taskDate) {
     return api.post(`${BASE}/tasks`, { title, task_date: taskDate });
   },
+  updateTask(id, title) {
+    return api.put(`${BASE}/tasks/${id}`, { title });
+  },
   toggleTask(id) {
     return api.patch(`${BASE}/tasks/${id}/toggle`);
   },
   deleteTask(id) {
     return api.delete(`${BASE}/tasks/${id}`);
+  },
+  getTaskDates(year, month) {
+    return api.get(`${BASE}/tasks/dates`, { params: { year, month } });
   },
 
   getGoals(year, month, week) {
@@ -21,6 +27,9 @@ export default {
   },
   createGoal(title, year, month, week) {
     return api.post(`${BASE}/goals`, { title, year, month, week });
+  },
+  updateGoal(id, title) {
+    return api.put(`${BASE}/goals/${id}`, { title });
   },
   toggleGoal(id) {
     return api.patch(`${BASE}/goals/${id}/toggle`);

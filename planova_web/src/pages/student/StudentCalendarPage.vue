@@ -5,9 +5,12 @@
       <div class="calendar-container">
         <div class="calendar-header">
           <h2>{{ currentYear }}년 {{ currentMonth }}월</h2>
-          <div class="navigation-buttons">
-            <button @click="previousMonth" class="nav-btn"><span>&lt;</span></button>
-            <button @click="nextMonth" class="nav-btn"><span>&gt;</span></button>
+          <div class="header-controls">
+            <button class="today-btn" @click="goToToday">오늘</button>
+            <div class="navigation-buttons">
+              <button @click="previousMonth" class="nav-btn"><span>&lt;</span></button>
+              <button @click="nextMonth" class="nav-btn"><span>&gt;</span></button>
+            </div>
           </div>
         </div>
 
@@ -44,8 +47,7 @@
     <div class="right-column">
       <div class="schedule-section" v-if="selectedDay">
         <div class="schedule-header">
-          <h3>오늘 일정</h3>
-          <div class="date">{{ formatSelectedDate }}</div>
+          <h3>{{ formatSelectedDate }} 일정</h3>
         </div>
         <div class="divider"></div>
 
@@ -54,39 +56,38 @@
         </div>
 
         <div class="schedule-list scrollable-tasks">
-          <div style="position: relative;">
-            <div v-for="task in selectedDayTasks" :key="task.id" class="task-item" @contextmenu.prevent="openTaskContextMenu($event, task.id)">
-              <div class="task-dot" :class="{ 'completed': task.is_completed }"></div>
-              <div class="task-content">{{ task.title }}</div>
-              <div class="task-status">
-                <div
-                  :class="['status-circle', { 'completed': task.is_completed }]"
-                  @click.stop="toggleTask(task)"
-                >
-                  <svg v-if="task.is_completed" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="white"/>
-                  </svg>
-                </div>
-              </div>
+          <div v-for="task in selectedDayTasks" :key="task.id" class="task-item">
+            <div class="task-content" v-if="editingTaskId !== task.id">{{ task.title }}</div>
+            <input
+              v-else
+              class="task-edit-input"
+              v-model="editingTaskTitle"
+              @keyup.enter="saveTaskEdit(task)"
+              @keyup.esc="editingTaskId = null"
+              @blur="saveTaskEdit(task)"
+              ref="taskEditInput"
+            />
+            <div class="task-actions">
+              <button class="action-btn" @click.stop="startEditTask(task)" title="편집">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+              </button>
+              <button class="action-btn delete" @click.stop="deleteTask(task.id)" title="삭제">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
             </div>
-
-            <div v-if="showTaskContextMenu" class="modal-overlay" @click.self="showTaskContextMenu = false">
-              <div class="task-context-modal">
-                <div class="context-menu-item" @click="editTask(contextTaskId)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                  </svg>
-                  <span>이름 변경</span>
-                </div>
-                <div class="context-menu-item delete" @click="deleteTask(contextTaskId)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                  <span>삭제</span>
-                </div>
-              </div>
+            <div
+              :class="['status-circle', { 'completed': task.is_completed }]"
+              @click.stop="toggleTask(task)"
+            >
+              <svg v-if="task.is_completed" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="white"/>
+              </svg>
             </div>
           </div>
         </div>
@@ -123,18 +124,37 @@
 
         <div class="goals-list">
           <div v-for="goal in weeklyGoals" :key="goal.id" class="goal-item">
-            <div class="goal-dot" :class="{ 'completed': goal.is_completed }"></div>
-            <div class="goal-content">{{ goal.title }}</div>
-            <div class="goal-status">
-              <div
-                :class="['status-circle', { 'completed': goal.is_completed }]"
-                @click="toggleGoal(goal)"
-              >
-                <svg v-if="goal.is_completed" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="white"/>
+            <div class="goal-content" v-if="editingGoalId !== goal.id">{{ goal.title }}</div>
+            <input
+              v-else
+              class="task-edit-input"
+              v-model="editingGoalTitle"
+              @keyup.enter="saveGoalEdit(goal)"
+              @keyup.esc="editingGoalId = null"
+              @blur="saveGoalEdit(goal)"
+              ref="goalEditInput"
+            />
+            <div class="task-actions">
+              <button class="action-btn" @click.stop="startEditGoal(goal)" title="편집">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
                 </svg>
-              </div>
-              <button class="delete-goal-btn" @click="deleteGoal(goal.id)">삭제</button>
+              </button>
+              <button class="action-btn delete" @click.stop="deleteGoal(goal.id)" title="삭제">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+            <div
+              :class="['status-circle', { 'completed': goal.is_completed }]"
+              @click="toggleGoal(goal)"
+            >
+              <svg v-if="goal.is_completed" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="white"/>
+              </svg>
             </div>
           </div>
         </div>
@@ -162,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import calendarApi from '@/api/calendarApi';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
@@ -170,7 +190,6 @@ const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 const currentDate = ref(new Date());
 const selectedDate = ref(new Date());
 
-// 날짜 문자열 헬퍼 (YYYY-MM-DD)
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -184,20 +203,24 @@ const currentWeek = computed(() => {
   return Math.ceil((d.getDate() + firstDayWeekday) / 7);
 });
 
-// Tasks (API-backed)
-const allTaskDates = ref(new Set()); // 이벤트 점 표시용 (현재 월의 task 날짜)
+// Tasks
+const allTaskDates = ref(new Set());
 const selectedDayTasks = ref([]);
 const showTaskForm = ref(false);
 const newTaskText = ref('');
 const taskInput = ref(null);
-const showTaskContextMenu = ref(false);
-const contextTaskId = ref(null);
+const taskEditInput = ref(null);
+const editingTaskId = ref(null);
+const editingTaskTitle = ref('');
 
-// Goals (API-backed)
+// Goals
 const weeklyGoals = ref([]);
 const showGoalForm = ref(false);
 const newGoalText = ref('');
 const goalInput = ref(null);
+const goalEditInput = ref(null);
+const editingGoalId = ref(null);
+const editingGoalTitle = ref('');
 
 // ── 캘린더 계산 ──────────────────────────────────────
 
@@ -264,11 +287,20 @@ function nextMonth() {
   currentDate.value = new Date(d.getFullYear(), d.getMonth() + 1, 1);
 }
 
+function goToToday() {
+  const today = new Date();
+  currentDate.value = new Date(today.getFullYear(), today.getMonth(), 1);
+  selectedDate.value = today;
+  loadTasks();
+  loadGoals();
+}
+
 // ── 날짜 선택 & Task 로드 ─────────────────────────────
 
 async function selectDay(day) {
   selectedDate.value = new Date(day.date);
   showTaskForm.value = false;
+  editingTaskId.value = null;
   await loadTasks();
 }
 
@@ -278,6 +310,15 @@ async function loadTasks() {
     selectedDayTasks.value = data;
   } catch {
     selectedDayTasks.value = [];
+  }
+}
+
+async function loadTaskDates() {
+  try {
+    const { data } = await calendarApi.getTaskDates(currentYear.value, currentMonth.value);
+    allTaskDates.value = new Set(data);
+  } catch {
+    allTaskDates.value = new Set();
   }
 }
 
@@ -312,10 +353,10 @@ async function addTask() {
   try {
     await calendarApi.createTask(newTaskText.value.trim(), toDateStr(selectedDate.value));
     newTaskText.value = '';
-    showTaskForm.value = false;
     await loadTasks();
-    // 해당 날짜를 이벤트 표시에 추가
-    allTaskDates.value.add(toDateStr(selectedDate.value));
+    // Set 반응성을 위해 새 Set으로 교체
+    allTaskDates.value = new Set([...allTaskDates.value, toDateStr(selectedDate.value)]);
+    nextTick(() => taskInput.value?.focus());
   } catch { /* 무시 */ }
 }
 
@@ -332,26 +373,33 @@ async function deleteTask(taskId) {
     await calendarApi.deleteTask(taskId);
     selectedDayTasks.value = selectedDayTasks.value.filter(t => t.id !== taskId);
     if (selectedDayTasks.value.length === 0) {
-      allTaskDates.value.delete(toDateStr(selectedDate.value));
+      const newSet = new Set(allTaskDates.value);
+      newSet.delete(toDateStr(selectedDate.value));
+      allTaskDates.value = newSet;
     }
   } catch { /* 무시 */ }
-  showTaskContextMenu.value = false;
 }
 
-function openTaskContextMenu(event, taskId) {
-  contextTaskId.value = taskId;
-  showTaskContextMenu.value = true;
+function startEditTask(task) {
+  editingTaskId.value = task.id;
+  editingTaskTitle.value = task.title;
+  nextTick(() => {
+    const el = Array.isArray(taskEditInput.value) ? taskEditInput.value[0] : taskEditInput.value;
+    el?.focus();
+  });
 }
 
-async function editTask(taskId) {
-  const task = selectedDayTasks.value.find(t => t.id === taskId);
-  if (task) {
-    await deleteTask(taskId);
-    newTaskText.value = task.title;
-    showTaskForm.value = true;
-    nextTick(() => taskInput.value?.focus());
+async function saveTaskEdit(task) {
+  if (!editingTaskTitle.value.trim() || editingTaskTitle.value.trim() === task.title) {
+    editingTaskId.value = null;
+    return;
   }
-  showTaskContextMenu.value = false;
+  try {
+    const { data } = await calendarApi.updateTask(task.id, editingTaskTitle.value.trim());
+    const idx = selectedDayTasks.value.findIndex(t => t.id === task.id);
+    if (idx !== -1) selectedDayTasks.value[idx] = data;
+  } catch { /* 무시 */ }
+  editingTaskId.value = null;
 }
 
 // ── Goal CRUD ─────────────────────────────────────────
@@ -395,13 +443,40 @@ async function deleteGoal(goalId) {
   } catch { /* 무시 */ }
 }
 
+function startEditGoal(goal) {
+  editingGoalId.value = goal.id;
+  editingGoalTitle.value = goal.title;
+  nextTick(() => {
+    const el = Array.isArray(goalEditInput.value) ? goalEditInput.value[0] : goalEditInput.value;
+    el?.focus();
+  });
+}
+
+async function saveGoalEdit(goal) {
+  if (!editingGoalTitle.value.trim() || editingGoalTitle.value.trim() === goal.title) {
+    editingGoalId.value = null;
+    return;
+  }
+  try {
+    const { data } = await calendarApi.updateGoal(goal.id, editingGoalTitle.value.trim());
+    const idx = weeklyGoals.value.findIndex(g => g.id === goal.id);
+    if (idx !== -1) weeklyGoals.value[idx] = data;
+  } catch { /* 무시 */ }
+  editingGoalId.value = null;
+}
+
 // ── 초기 로드 ──────────────────────────────────────────
 
 onMounted(async () => {
-  await Promise.all([loadTasks(), loadGoals()]);
-  // 클릭 외부 감지로 컨텍스트 메뉴 닫기
-  window.addEventListener('click', () => { showTaskContextMenu.value = false; });
+  await Promise.all([loadTasks(), loadGoals(), loadTaskDates()]);
 });
+
+onBeforeUnmount(() => {
+  // 전역 이벤트 리스너 없음 — 클린업 불필요
+});
+
+// 월 변경 시 이벤트 점 재로드
+watch([currentYear, currentMonth], loadTaskDates);
 
 // selectedDate 변경 시 goals 재로드 (주차 변경 감지)
 watch(currentWeek, loadGoals);
@@ -433,6 +508,28 @@ watch(currentWeek, loadGoals);
   font-size: 24px;
   font-weight: 600;
   color: #333;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.today-btn {
+  padding: 6px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.today-btn:hover {
+  border-color: #F76707;
+  color: #F76707;
 }
 
 .navigation-buttons {
@@ -480,6 +577,8 @@ watch(currentWeek, loadGoals);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
 .calendar-grid {
@@ -542,15 +641,22 @@ watch(currentWeek, loadGoals);
 }
 
 .day.today .day-number {
-  background-color: #0000;
-  color: black;
+  border: 2px solid #333;
+  background-color: transparent;
+  color: #333;
   border-radius: 50%;
   width: 28px;
   height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.day.today.selected .day-number {
+  background-color: #F76707;
+  border-color: #F76707;
+  color: white;
 }
 
 .day.weekend:not(.other-month) .day-number {
@@ -562,12 +668,12 @@ watch(currentWeek, loadGoals);
 }
 
 .day.selected {
-  background-color: rgba(245, 135, 54, 0.1);
-  border: 1px solid #f58736;
+  background-color: rgba(247, 103, 7, 0.1);
+  border: 1px solid #F76707;
 }
 
 .day.selected .day-number {
-  background-color: #f58736;
+  background-color: #F76707;
   color: white;
   border-radius: 50%;
   width: 28px;
@@ -581,7 +687,7 @@ watch(currentWeek, loadGoals);
 .event-indicator {
   width: 5px;
   height: 5px;
-  background-color: #f58736;
+  background-color: #F76707;
   border-radius: 50%;
   margin-top: 2px;
 }
@@ -595,7 +701,6 @@ watch(currentWeek, loadGoals);
 }
 
 .schedule-section {
-  max-height: 400px;
   display: flex;
   flex-direction: column;
 }
@@ -612,7 +717,7 @@ watch(currentWeek, loadGoals);
   color: #333;
 }
 
-.date, .week-indicator {
+.week-indicator {
   color: #666;
   font-size: 14px;
   background-color: #f5f5f7;
@@ -639,22 +744,56 @@ watch(currentWeek, loadGoals);
   background-color: #f8f8fa;
 }
 
-.task-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #f58736;
-  margin-right: 16px;
-  flex-shrink: 0;
-}
-
-.task-dot.completed {
-  background-color: #ccc;
-}
-
 .task-content, .goal-content {
   flex: 1;
   font-size: 15px;
+}
+
+.task-edit-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #F76707;
+  border-radius: 4px;
+  font-size: 15px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(247, 103, 7, 0.2);
+}
+
+.task-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-right: 8px;
+}
+
+.task-item:hover .task-actions,
+.goal-item:hover .task-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  background: #f0f0f0;
+  color: #555;
+}
+
+.action-btn.delete:hover {
+  background: #ffeaea;
+  color: #e53935;
 }
 
 .status-circle {
@@ -723,12 +862,13 @@ watch(currentWeek, loadGoals);
   border-radius: 8px;
   font-size: 14px;
   margin-bottom: 12px;
+  box-sizing: border-box;
 }
 
 .add-task-form input:focus, .add-goal-form input:focus {
   outline: none;
-  border-color: #f58736;
-  box-shadow: 0 0 0 2px rgba(245, 135, 54, 0.2);
+  border-color: #F76707;
+  box-shadow: 0 0 0 2px rgba(247, 103, 7, 0.2);
 }
 
 .form-buttons {
@@ -756,13 +896,13 @@ watch(currentWeek, loadGoals);
 }
 
 .add-btn {
-  background-color: #f58736;
+  background-color: #F76707;
   border: none;
   color: white;
 }
 
 .add-btn:hover {
-  background-color: #e57826;
+  background-color: #e05a00;
 }
 
 .add-btn:disabled {
@@ -770,94 +910,13 @@ watch(currentWeek, loadGoals);
   cursor: not-allowed;
 }
 
-.goal-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #f58736;
-  margin-right: 16px;
-  flex-shrink: 0;
-}
-
-.goal-dot.completed {
-  background-color: #ccc;
-}
-
-.goal-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.delete-goal-btn {
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.delete-goal-btn:hover {
-  color: #e53935;
-}
-
-.goals-list {
-  max-height: 240px;
-  overflow-y: auto;
-}
-
 .scrollable-tasks {
-  max-height: 120px;
   overflow-y: auto;
   margin-bottom: 12px;
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.task-context-modal {
-  background: white;
-  border-radius: 12px;
-  padding: 20px 0;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-  width: 240px;
-}
-
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 20px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.context-menu-item:hover {
-  background-color: #f5f5f5;
-}
-
-.context-menu-item svg {
-  color: #666;
-}
-
-.context-menu-item.delete {
-  color: #e53935;
-}
-
-.context-menu-item.delete svg {
-  color: #e53935;
+.goals-list {
+  overflow-y: auto;
 }
 
 @media (max-width: 768px) {
@@ -867,6 +926,11 @@ watch(currentWeek, loadGoals);
 
   .two-column-layout {
     flex-direction: column;
+  }
+
+  .right-column {
+    height: auto;
+    overflow-y: visible;
   }
 
   .calendar-container, .schedule-section, .monthly-summary {
