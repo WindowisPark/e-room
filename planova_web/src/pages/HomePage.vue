@@ -172,9 +172,6 @@ onBeforeUnmount(() => {
     <section class="hero">
       <div class="bg-blobs" aria-hidden="true">
         <div class="bg-blob b1"></div>
-        <div class="bg-blob b2"></div>
-        <div class="bg-blob b3"></div>
-        <div class="bg-blob b4"></div>
       </div>
 
       <div class="hero-body">
@@ -254,91 +251,12 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="bento-grid">
-          <!-- AI 학습 플랜 — big -->
-          <div class="bento-card bento-big study-card">
-            <div class="mock-window">
-              <div class="mock-bar">
-                <div class="mock-dots">
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                </div>
-                <span class="mock-bar-label">수능_국어_독서.pdf</span>
-              </div>
-              <div class="mock-body">
-                <div class="mock-section-hd">AI 요약</div>
-                <div class="mock-line"></div>
-                <div class="mock-line short"></div>
-                <div class="mock-line"></div>
-                <div class="mock-section-hd" style="margin-top: 14px;">생성된 문제</div>
-                <div class="mock-q-item">
-                  <span class="mock-q-circle"></span>
-                  다음 중 글쓴이의 주장과 일치하는 것은?
-                </div>
-                <div class="mock-q-item">
-                  <span class="mock-q-circle"></span>
-                  밑줄 친 ⓐ의 의미로 가장 적절한 것은?
-                </div>
-              </div>
-            </div>
-            <div class="card-footer">
-              <div class="card-ft-title">AI 학습 플랜</div>
-              <div class="card-ft-desc">PDF 업로드 → 요약·문제 자동 생성</div>
-            </div>
-          </div>
+          <!-- 컬럼 레이블 -->
+          <div class="bento-col-label learning-label">📚 학습</div>
+          <div class="bento-col-label career-label">💼 커리어</div>
 
-          <!-- 이력서 — small -->
-          <div class="bento-card bento-small resume-card">
-            <div class="mock-window">
-              <div class="mock-bar">
-                <div class="mock-dots">
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                </div>
-                <span class="mock-bar-label">이력서.pdf</span>
-              </div>
-              <div class="mock-body">
-                <div class="mock-name-row">김플래노 · 프론트엔드 개발자</div>
-                <div class="mock-chips">
-                  <span class="mock-chip">Vue.js</span>
-                  <span class="mock-chip">React</span>
-                  <span class="mock-chip">TypeScript</span>
-                </div>
-              </div>
-            </div>
-            <div class="card-footer">
-              <div class="card-ft-title">이력서</div>
-              <div class="card-ft-desc">AI가 함께 다듬는 나만의 이력서</div>
-            </div>
-          </div>
-
-          <!-- 자소서 — small -->
-          <div class="bento-card bento-small cover-card">
-            <div class="mock-window">
-              <div class="mock-bar">
-                <div class="mock-dots">
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                  <span class="mock-dot"></span>
-                </div>
-                <span class="mock-bar-label">자기소개서 · 지원동기</span>
-              </div>
-              <div class="mock-body">
-                <div class="mock-line"></div>
-                <div class="mock-line short"></div>
-                <div class="mock-line"></div>
-                <span class="mock-ai-badge">AI 다듬기 ✓</span>
-              </div>
-            </div>
-            <div class="card-footer">
-              <div class="card-ft-title">자기소개서</div>
-              <div class="card-ft-desc">AI 초안으로 빠르게 시작</div>
-            </div>
-          </div>
-
-          <!-- AI 튜터 — wide -->
-          <div class="bento-card bento-wide tutor-card">
+          <!-- AI 튜터 (1×1) -->
+          <div class="bento-card tutor-card">
             <div class="mock-window">
               <div class="mock-bar">
                 <div class="mock-dots">
@@ -349,15 +267,110 @@ onBeforeUnmount(() => {
                 <span class="mock-bar-label">AI 튜터 채팅</span>
               </div>
               <div class="mock-body mock-chat-body">
-                <div class="mock-chat-r">미적분 극한값 구하는 방법을 모르겠어요 😅</div>
-                <div class="mock-chat-l">극한은 x가 특정 값에 가까워질 때의 함수값이에요. 예시로 보여드릴게요!</div>
-                <div class="mock-chat-r">lim(x→0) sinx/x 는 얼마예요?</div>
-                <div class="mock-chat-l">그 값은 1이에요. 로피탈 정리를 쓰면 바로 구할 수 있어요 ✨</div>
+                <div class="mock-chat-r">미적분 극한값 구하는 방법이 뭔가요?</div>
+                <div class="mock-chat-l">극한은 x가 특정 값에 가까워질 때의 함수값이에요!</div>
+                <div class="mock-chat-r">lim(x→0) sinx/x 는요?</div>
+                <div class="mock-chat-l">그 값은 1이에요. 로피탈 정리로 구할 수 있어요 ✨</div>
+                <div class="mock-input-bar">
+                  <div class="mock-input-text">궁금한 개념 질문하기...</div>
+                  <div class="mock-send-btn">↑</div>
+                </div>
               </div>
             </div>
             <div class="card-footer">
               <div class="card-ft-title">AI 튜터</div>
               <div class="card-ft-desc">모르는 개념을 즉시 질문, 무제한 응답</div>
+            </div>
+          </div>
+
+          <!-- 이력서 (1×1) -->
+          <div class="bento-card resume-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">이력서 · 취업용</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-name-row">김플래노 · 프론트엔드 개발자</div>
+                <div class="mock-section-hd">경력</div>
+                <div class="mock-exp-row">카카오 · FE 개발자 · 2022–현재</div>
+                <div class="mock-exp-row mock-exp-muted">네이버 · 인턴 · 2021</div>
+                <div class="mock-section-hd" style="margin-top: 8px;">기술</div>
+                <div class="mock-chips">
+                  <span class="mock-chip">Vue.js</span>
+                  <span class="mock-chip">TypeScript</span>
+                  <span class="mock-chip">FastAPI</span>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="card-ft-title">이력서</div>
+              <div class="card-ft-desc">AI가 함께 다듬는 나만의 이력서</div>
+            </div>
+          </div>
+
+          <!-- PDF 학습 (1×1) -->
+          <div class="bento-card study-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">수능_국어_독서.pdf</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-section-hd">목차</div>
+                <div class="mock-toc-item"><span class="mock-toc-num">1.</span> 독서 - 인문 지문 이해</div>
+                <div class="mock-toc-item"><span class="mock-toc-num">2.</span> 문학 - 현대시 분석</div>
+                <div class="mock-toc-item"><span class="mock-toc-num">3.</span> 언어와 매체 유형</div>
+                <div class="mock-section-hd" style="margin-top: 8px;">AI 문제</div>
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  밑줄 친 ⓐ의 의미로 가장 적절한 것은?
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="card-ft-title">PDF 학습</div>
+              <div class="card-ft-desc">PDF 업로드 → 요약·문제 자동 생성</div>
+            </div>
+          </div>
+
+          <!-- 자소서 (1×1) -->
+          <div class="bento-card cover-card">
+            <div class="mock-window">
+              <div class="mock-bar">
+                <div class="mock-dots">
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                  <span class="mock-dot"></span>
+                </div>
+                <span class="mock-bar-label">자기소개서 · 지원동기</span>
+              </div>
+              <div class="mock-body">
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  지원동기를 작성해주세요.
+                </div>
+                <div class="mock-line" style="margin-top: 6px;"></div>
+                <div class="mock-line short"></div>
+                <div class="mock-line"></div>
+                <div class="mock-progress-bg">
+                  <div class="mock-progress-fill"></div>
+                </div>
+                <div class="mock-progress-label">730 / 1000자</div>
+                <span class="mock-ai-badge">AI 초안 ✓</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="card-ft-title">자기소개서</div>
+              <div class="card-ft-desc">AI 초안으로 빠르게 시작</div>
             </div>
           </div>
 
@@ -380,7 +393,14 @@ onBeforeUnmount(() => {
                   <span class="mock-chip">경력 3년+</span>
                 </div>
                 <div class="mock-section-hd" style="margin-top: 10px;">예상 면접 질문</div>
-                <div class="mock-line short"></div>
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  Vue.js와 React의 차이점을 설명해주세요.
+                </div>
+                <div class="mock-q-item">
+                  <span class="mock-q-circle"></span>
+                  최근 진행한 프로젝트에 대해 설명해주세요.
+                </div>
               </div>
             </div>
             <div class="card-footer">
@@ -555,13 +575,9 @@ body, html {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.35;
 }
 
-.b1 { width: 500px; height: 500px; background: #FFD4A8; top: -120px; left: -100px; animation: blobDrift 12s ease-in-out infinite; }
-.b2 { width: 380px; height: 380px; background: #FFA559; bottom: -80px; right: 5%; animation: blobDrift 15s ease-in-out infinite reverse; }
-.b3 { width: 280px; height: 280px; background: #FFE0C0; top: 40%; left: 30%; animation: blobDrift 10s ease-in-out infinite 3s; }
-.b4 { width: 200px; height: 200px; background: #F76707; top: 10%; right: 30%; animation: blobDrift 18s ease-in-out infinite 1s; opacity: 0.12; }
+.b1 { width: 400px; height: 400px; background: #FFD4A8; top: -100px; left: -80px; animation: blobDrift 12s ease-in-out infinite; opacity: 0.18; }
 
 @keyframes blobDrift {
   0%, 100% { transform: translate(0, 0) scale(1); }
@@ -792,8 +808,16 @@ body, html {
 .bento-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto auto;
-  gap: 20px;
+  gap: 16px 20px;
+}
+
+.bento-col-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #aaa;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 4px 4px;
 }
 
 .bento-card {
@@ -804,6 +828,7 @@ body, html {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 260px;
 }
 
 .bento-card:hover {
@@ -811,7 +836,6 @@ body, html {
   box-shadow: 0 12px 32px rgba(0,0,0,0.1);
 }
 
-.bento-big  { grid-row: span 2; }
 .bento-wide { grid-column: span 2; }
 
 /* Card accent backgrounds */
@@ -980,6 +1004,66 @@ body, html {
   border-radius: 12px 12px 12px 0;
   max-width: 82%;
   line-height: 1.45;
+}
+
+/* Resume experience rows */
+.mock-exp-row {
+  font-size: 0.72rem;
+  color: #555;
+  padding: 2px 0;
+}
+.mock-exp-muted { color: #aaa; }
+
+/* TOC */
+.mock-toc-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: #555;
+  padding: 2px 0;
+}
+.mock-toc-num { color: #F76707; font-weight: 700; font-size: 0.68rem; min-width: 14px; }
+
+/* Cover letter progress bar */
+.mock-progress-bg {
+  height: 4px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.mock-progress-fill {
+  height: 100%;
+  width: 73%;
+  background: #F76707;
+  border-radius: 2px;
+}
+.mock-progress-label {
+  font-size: 0.65rem;
+  color: #aaa;
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* AI Tutor input bar mock */
+.mock-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f5f5f7;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-top: 6px;
+}
+.mock-input-text { flex: 1; font-size: 0.68rem; color: #bbb; }
+.mock-send-btn {
+  width: 20px; height: 20px;
+  background: #F76707;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.68rem; color: white; font-weight: 700;
+  flex-shrink: 0;
 }
 
 /* Jobs */
@@ -1164,9 +1248,9 @@ body, html {
   .bento-grid {
     grid-template-columns: 1fr;
   }
-  .bento-big, .bento-wide {
+  .bento-col-label { display: none; }
+  .bento-wide {
     grid-column: span 1;
-    grid-row: span 1;
   }
 
   .steps-row {

@@ -107,35 +107,40 @@
 
       <!-- 항목 목록 -->
       <div class="items-section">
-        <div
-          v-for="(item, idx) in filteredItems"
-          :key="item.id"
-          class="resume-item-card"
+        <draggable
+          v-model="sortableItems"
+          item-key="id"
+          handle=".drag-handle"
+          ghost-class="sortable-ghost"
+          @end="onResumeDragEnd"
         >
-          <div class="item-header">
-            <div class="item-header-info">
-              <strong class="item-title">{{ item.title }}</strong>
-              <span v-if="item.organization && activeCat !== 'skill'" class="item-org"> | {{ item.organization }}</span>
-              <span v-if="item.start_date && activeCat !== 'skill'" class="item-period">
-                {{ item.start_date }}{{ activeCat !== 'cert' ? ` ~ ${item.end_date || '현재'}` : '' }}
-              </span>
-              <span v-if="activeCat === 'education' && getGraduation(item)" class="grad-badge">
-                {{ getGraduation(item) }}
-              </span>
+          <template #item="{ element: item }">
+            <div class="resume-item-card">
+              <div class="item-header">
+                <div class="item-header-info">
+                  <strong class="item-title">{{ item.title }}</strong>
+                  <span v-if="item.organization && activeCat !== 'skill'" class="item-org"> | {{ item.organization }}</span>
+                  <span v-if="item.start_date && activeCat !== 'skill'" class="item-period">
+                    {{ item.start_date }}{{ activeCat !== 'cert' ? ` ~ ${item.end_date || '현재'}` : '' }}
+                  </span>
+                  <span v-if="activeCat === 'education' && getGraduation(item)" class="grad-badge">
+                    {{ getGraduation(item) }}
+                  </span>
+                </div>
+                <div class="item-header-actions">
+                  <i class="fa-solid fa-grip-vertical drag-handle"></i>
+                  <button class="btn-text" @click="openEditItem(item)">편집</button>
+                  <button class="btn-text danger" @click="deleteItem(item.id)">삭제</button>
+                </div>
+              </div>
+              <div v-if="item.description && activeCat !== 'skill'" class="item-desc">{{ item.description }}</div>
+              <div v-if="item.tags?.length" class="item-tags">
+                <span v-for="tag in displayTags(item)" :key="tag" class="tag-chip">{{ tag }}</span>
+              </div>
             </div>
-            <div class="item-header-actions">
-              <button class="btn-icon order-btn" @click="moveItem(item, -1)" :disabled="idx === 0" title="위로">↑</button>
-              <button class="btn-icon order-btn" @click="moveItem(item, 1)" :disabled="idx === filteredItems.length - 1" title="아래로">↓</button>
-              <button class="btn-text" @click="openEditItem(item)">편집</button>
-              <button class="btn-text danger" @click="deleteItem(item.id)">삭제</button>
-            </div>
-          </div>
-          <div v-if="item.description && activeCat !== 'skill'" class="item-desc">{{ item.description }}</div>
-          <div v-if="item.tags?.length" class="item-tags">
-            <span v-for="tag in displayTags(item)" :key="tag" class="tag-chip">{{ tag }}</span>
-          </div>
-        </div>
-        <div v-if="filteredItems.length === 0" class="empty-items">항목이 없습니다.</div>
+          </template>
+        </draggable>
+        <div v-if="sortableItems.length === 0" class="empty-items">항목이 없습니다.</div>
         <button class="btn-add" @click="openAddItem">+ {{ currentCatLabel }} 추가</button>
       </div>
     </main>
@@ -263,8 +268,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import axios from '@/api/index.js';
+import draggable from 'vuedraggable';
 
 const API = '/resume';
 
@@ -329,6 +335,9 @@ const filteredItems = computed(() =>
     .filter(i => i.category === activeCat.value)
     .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
 );
+
+const sortableItems = ref([]);
+watch(filteredItems, (v) => { sortableItems.value = [...v]; }, { immediate: true });
 
 const currentCatLabel = computed(() =>
   categories.find(c => c.value === activeCat.value)?.label || ''
@@ -577,6 +586,15 @@ async function moveItem(item, direction) {
   ]);
 }
 
+async function onResumeDragEnd() {
+  sortableItems.value.forEach((item, idx) => { item.order_index = idx; });
+  await Promise.all(
+    sortableItems.value.map(item =>
+      axios.put(`${API}/items/${item.id}`, { order_index: item.order_index })
+    )
+  );
+}
+
 // ─── Export ──────────────────────────────────────────────────
 
 async function exportJson() {
@@ -733,6 +751,10 @@ onMounted(loadProfiles);
   border-radius: 10px; padding: 2px 8px; white-space: nowrap;
 }
 .item-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.drag-handle { cursor: grab; color: #ccc; padding: 0 6px; font-size: 14px; }
+.drag-handle:hover { color: #F76707; }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.4; background: #fff5ee; }
 .btn-icon {
   background: none; border: none; color: #ccc; cursor: pointer;
   font-size: 12px; padding: 2px 5px; border-radius: 4px;

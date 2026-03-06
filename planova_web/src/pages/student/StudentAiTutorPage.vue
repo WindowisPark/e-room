@@ -1,7 +1,10 @@
 <template>
   <div class="student-ai-tutor-container">
+    <!-- 모바일 사이드바 오버레이 -->
+    <div v-if="showSidebar" class="sidebar-overlay" @click="showSidebar = false"></div>
+
     <!-- 사이드바: 대화 목록 -->
-    <div class="sidebar">
+    <div class="sidebar" :class="{ open: showSidebar }">
       <div class="search-bar">
         <div class="search-input-wrapper">
           <i class="search-icon">🔍</i>
@@ -34,6 +37,14 @@
 
     <!-- 메인 콘텐츠 -->
     <div class="main-content">
+      <!-- 모바일 상단 바 -->
+      <div class="mobile-topbar">
+        <button class="hamburger-btn" @click="showSidebar = !showSidebar">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <span class="mobile-title">AI 튜터</span>
+      </div>
+
       <!-- 빈 화면: 로고 + 퀵 액션 -->
       <template v-if="!currentChat">
         <div class="main-background">
@@ -209,6 +220,7 @@ const chatMessagesContainer = ref(null)
 const questionTextarea = ref(null)
 const showDeleteConfirm = ref(false)
 const deleteChatId = ref(null)
+const showSidebar = ref(false)
 
 // 퀵 액션
 const aiActions = [
@@ -861,4 +873,67 @@ watch(currentChat, () => { scrollToBottom() })
 .chat-messages::-webkit-scrollbar { width: 4px; }
 .history-section::-webkit-scrollbar-thumb,
 .chat-messages::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+/* ── 모바일 ── */
+.mobile-topbar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    bottom: 0;
+    z-index: 200;
+    transition: left 0.3s;
+    width: 260px;
+    padding-top: 60px;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 199;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+    background: white;
+    flex-shrink: 0;
+  }
+
+  .hamburger-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #555;
+    padding: 4px;
+  }
+
+  .mobile-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .main-content {
+    padding: 0;
+  }
+
+  .main-content > .quick-section,
+  .main-content > .main-background {
+    padding: 16px;
+  }
+}
 </style>

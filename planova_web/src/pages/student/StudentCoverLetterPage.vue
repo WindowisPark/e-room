@@ -45,18 +45,23 @@
 
       <!-- 문항 목록 -->
       <div class="questions-section">
+        <draggable
+          v-model="clItems"
+          item-key="id"
+          handle=".drag-handle"
+          ghost-class="sortable-ghost"
+          @end="onClDragEnd"
+        >
+          <template #item="{ element: item, index: idx }">
         <div
-          v-for="(item, idx) in clItems"
-          :key="item.id"
           class="question-card"
           :class="{ expanded: expandedItem === item.id }"
         >
           <div class="question-header" @click="toggleExpand(item.id)">
+            <i class="fa-solid fa-grip-vertical drag-handle" @click.stop></i>
             <span class="q-num">Q{{ idx + 1 }}</span>
             <span class="q-text">{{ item.question }}</span>
             <span v-if="item.char_limit" class="char-limit-badge">{{ item.char_limit }}자</span>
-            <button class="btn-icon order-btn" @click.stop="moveItem(idx, -1)" :disabled="idx === 0" title="위로">↑</button>
-            <button class="btn-icon order-btn" @click.stop="moveItem(idx, 1)" :disabled="idx === clItems.length - 1" title="아래로">↓</button>
             <span class="expand-icon">{{ expandedItem === item.id ? '▲' : '▼' }}</span>
             <button class="btn-icon" @click.stop="deleteItem(item.id)">✕</button>
           </div>
@@ -81,6 +86,8 @@
             </div>
           </div>
         </div>
+          </template>
+        </draggable>
 
         <div v-if="clItems.length === 0" class="empty-questions">
           문항이 없습니다. 아래 버튼으로 추가해주세요.
@@ -174,6 +181,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import axios from '@/api/index.js';
+import draggable from 'vuedraggable';
 
 const CL_API = '/coverletter';
 const JOBS_API = '/jobs';
@@ -341,32 +349,13 @@ async function deleteItem(itemId) {
   clItems.value = clItems.value.filter(i => i.id !== itemId);
 }
 
-// ─── 순서 변경 ───────────────────────────────────────────────
-
-async function moveItem(idx, direction) {
-  const targetIdx = idx + direction;
-  if (targetIdx < 0 || targetIdx >= clItems.value.length) return;
-
-  const item = clItems.value[idx];
-  const other = clItems.value[targetIdx];
-
-  const tmpOrder = item.order_index ?? idx;
-  item.order_index = other.order_index ?? targetIdx;
-  other.order_index = tmpOrder;
-
-  if (item.order_index === other.order_index) {
-    item.order_index = idx * 10;
-    other.order_index = targetIdx * 10;
-  }
-
-  // Swap in array
-  clItems.value.splice(idx, 1, other);
-  clItems.value.splice(targetIdx, 1, item);
-
-  await Promise.all([
-    axios.put(`${CL_API}/items/${item.id}`, { order_index: item.order_index }).catch(() => {}),
-    axios.put(`${CL_API}/items/${other.id}`, { order_index: other.order_index }).catch(() => {}),
-  ]);
+async function onClDragEnd() {
+  clItems.value.forEach((item, idx) => { item.order_index = idx; });
+  await Promise.all(
+    clItems.value.map(item =>
+      axios.put(`${CL_API}/items/${item.id}`, { order_index: item.order_index }).catch(() => {})
+    )
+  );
 }
 
 async function generateDrafts() {
@@ -540,8 +529,10 @@ onMounted(loadAll);
 }
 .btn-icon:hover { color: #e53e3e; background: #fef2f2; }
 
-.order-btn:hover { color: #F76707; background: #fff5ee; }
-.order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.drag-handle { cursor: grab; color: #ccc; padding: 0 6px; font-size: 13px; }
+.drag-handle:hover { color: #F76707; }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.4; background: #fff5ee; }
 
 .answer-section {
   padding: 0 16px 16px;
