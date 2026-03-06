@@ -17,8 +17,71 @@ class SessionManager:
     QA_SESSION_TTL = 3600 * 24 * 30   # QA 채팅 이력 30일 보존
     TASK_SESSION_TTL = 3600 * 2        # summary/exam/schedule은 2시간 유지
 
-    def __init__(self, redis_url: str = settings.REDIS_URL):  # ✅ 수정된 부분
+    def __init__(self, redis_url: str = settings.REDIS_URL):
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        # Redis 불가 시 인메모리 폴백 (로컬 개발용 — 서버 재시작 시 소실)
+        self._memory: dict = {}
+        self._memory_user_sessions: dict = {}
+
+    # ── 내부 헬퍼: Redis 우선, 실패 시 인메모리 ────────────────────────────────
+
+    def _store(self, key: str, value: str) -> None:
+        try:
+            ttl = self.QA_SESSION_TTL
+            self.redis_client.setex(key, ttl, value)
+        except Exception:
+            self._memory[key] = value
+
+    def _fetch(self, key: str) -> str | None:
+        try:
+            return self.redis_client.get(key)
+        except Exception:
+            return self._memory.get(key)
+
+    def _remove(self, key: str) -> None:
+        try:
+            self.redis_client.delete(key)
+        except Exception:
+            self._memory.pop(key, None)
+
+    def _expire(self, key: str, ttl: int) -> None:
+        try:
+            self.redis_client.expire(key, ttl)
+        except Exception:
+            pass  # 인메모리는 TTL 불필요
+
+    def _lpush(self, key: str, value: str) -> None:
+        try:
+            self.redis_client.lpush(key, value)
+            self.redis_client.expire(key, self.QA_SESSION_TTL)
+        except Exception:
+            self._memory_user_sessions.setdefault(key, []).insert(0, value)
+
+    def _lrange(self, key: str, start: int, end: int) -> list:
+        try:
+            return self.redis_client.lrange(key, start, end)
+        except Exception:
+            items = self._memory_user_sessions.get(key, [])
+            return items[start: None if end == -1 else end + 1]
+
+    def _lrem(self, key: str, value: str) -> None:
+        try:
+            self.redis_client.lrem(key, 0, value)
+        except Exception:
+            lst = self._memory_user_sessions.get(key, [])
+            self._memory_user_sessions[key] = [v for v in lst if v != value]
+
+    def _llen(self, key: str) -> int:
+        try:
+            return self.redis_client.llen(key)
+        except Exception:
+            return len(self._memory_user_sessions.get(key, []))
+
+    def _exists(self, key: str) -> bool:
+        try:
+            return bool(self.redis_client.exists(key))
+        except Exception:
+            return key in self._memory
 
     def _get_ttl(self, task_type: str) -> int:
         return self.QA_SESSION_TTL if task_type == "qa" else self.TASK_SESSION_TTL
@@ -51,19 +114,9 @@ class SessionManager:
             "processing_status": "idle"
         }
 
-        try:
-            ttl = self._get_ttl(task_type)
-            self.redis_client.setex(
-                session_id,
-                ttl,
-                json.dumps(session_data, ensure_ascii=False)
-            )
-            if task_type == "qa":
-                user_sessions_key = f"user_sessions:{user_id}"
-                self.redis_client.lpush(user_sessions_key, session_id)
-                self.redis_client.expire(user_sessions_key, self.QA_SESSION_TTL)
-        except Exception as e:
-            logger.warning(f"Redis 저장 실패, 인메모리 세션만 사용: {e}")
+        self._store(session_id, json.dumps(session_data, ensure_ascii=False))
+        if task_type == "qa":
+            self._lpush(f"user_sessions:{user_id}", session_id)
 
         logger.info(f"새 세션 생성: {session_id}")
         return session_id
@@ -78,18 +131,13 @@ class SessionManager:
         Returns:
             세션 데이터 또는 None
         """
-        try:
-            data = self.redis_client.get(session_id)
-            if data:
-                session_data = json.loads(data)
-                # TTL 갱신
-                ttl = self._get_ttl(session_data.get("task_type", "qa"))
-                self.redis_client.expire(session_id, ttl)
-                return session_data
-            return None
-        except Exception as e:
-            logger.error(f"세션 조회 실패: {session_id}, {str(e)}")
-            return None
+        data = self._fetch(session_id)
+        if data:
+            session_data = json.loads(data)
+            ttl = self._get_ttl(session_data.get("task_type", "qa"))
+            self._expire(session_id, ttl)
+            return session_data
+        return None
     
     def update_session(self, session_id: str, data: Dict[str, Any]) -> bool:
         """
@@ -102,27 +150,13 @@ class SessionManager:
         Returns:
             성공 여부
         """
-        try:
-            current_data = self.get_session(session_id)
-            if not current_data:
-                return False
-            
-            # 기존 데이터와 병합
-            current_data.update(data)
-            current_data["last_activity"] = datetime.now().isoformat()
-            
-            # Redis에 저장
-            ttl = self._get_ttl(current_data.get("task_type", "qa"))
-            self.redis_client.setex(
-                session_id,
-                ttl,
-                json.dumps(current_data, ensure_ascii=False)
-            )
-
-            return True
-        except Exception as e:
-            logger.error(f"세션 업데이트 실패: {session_id}, {str(e)}")
+        current_data = self.get_session(session_id)
+        if not current_data:
             return False
+        current_data.update(data)
+        current_data["last_activity"] = datetime.now().isoformat()
+        self._store(session_id, json.dumps(current_data, ensure_ascii=False))
+        return True
     
     def add_message_to_history(self, session_id: str, message: BaseMessage) -> bool:
         """
@@ -201,31 +235,23 @@ class SessionManager:
         Returns:
             채팅 세션 목록
         """
-        try:
-            user_sessions_key = f"user_sessions:{user_id}"
-            session_ids = self.redis_client.lrange(user_sessions_key, 0, limit - 1)
-            
-            chat_sessions = []
-            for session_id in session_ids:
-                session_data = self.get_session(session_id)
-                if session_data and session_data.get("task_type") == "qa":
-                    # 채팅 목록용 요약 정보만 추출
-                    chat_info = {
-                        "session_id": session_id,
-                        "title": session_data.get("chat_title", "새 채팅"),
-                        "created_at": session_data.get("created_at"),
-                        "last_activity": session_data.get("last_activity"),
-                        "message_count": len(session_data.get("message_history", []))
-                    }
-                    chat_sessions.append(chat_info)
-            
-            # 최근 활동 순으로 정렬
-            chat_sessions.sort(key=lambda x: x["last_activity"], reverse=True)
-            return chat_sessions
-            
-        except Exception as e:
-            logger.error(f"사용자 채팅 세션 조회 실패: {user_id}, {str(e)}")
-            return []
+        user_sessions_key = f"user_sessions:{user_id}"
+        session_ids = self._lrange(user_sessions_key, 0, limit - 1)
+
+        chat_sessions = []
+        for session_id in session_ids:
+            session_data = self.get_session(session_id)
+            if session_data and session_data.get("task_type") == "qa":
+                chat_sessions.append({
+                    "session_id": session_id,
+                    "title": session_data.get("chat_title", "새 채팅"),
+                    "created_at": session_data.get("created_at"),
+                    "last_activity": session_data.get("last_activity"),
+                    "message_count": len(session_data.get("message_history", []))
+                })
+
+        chat_sessions.sort(key=lambda x: x["last_activity"], reverse=True)
+        return chat_sessions
     
     def get_chat_history(self, session_id: str) -> List[Dict[str, Any]]:
         """
@@ -256,25 +282,14 @@ class SessionManager:
         Returns:
             성공 여부
         """
-        try:
-            # 세션 데이터 조회
-            session_data = self.get_session(session_id)
-            if session_data:
-                user_id = session_data.get("user_id")
-                
-                # 사용자 세션 목록에서 제거
-                if user_id:
-                    user_sessions_key = f"user_sessions:{user_id}"
-                    self.redis_client.lrem(user_sessions_key, 0, session_id)
-            
-            # 세션 삭제
-            self.redis_client.delete(session_id)
-            logger.info(f"세션 정리 완료: {session_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"세션 정리 실패: {session_id}, {str(e)}")
-            return False
+        session_data = self.get_session(session_id)
+        if session_data:
+            user_id = session_data.get("user_id")
+            if user_id:
+                self._lrem(f"user_sessions:{user_id}", session_id)
+        self._remove(session_id)
+        logger.info(f"세션 정리 완료: {session_id}")
+        return True
     
     def extend_session_ttl(self, session_id: str) -> bool:
         """
@@ -286,15 +301,12 @@ class SessionManager:
         Returns:
             성공 여부
         """
-        try:
-            session_data = self.get_session(session_id)
-            if not session_data:
-                return False
-            ttl = self._get_ttl(session_data.get("task_type", "qa"))
-            return self.redis_client.expire(session_id, ttl)
-        except Exception as e:
-            logger.error(f"세션 TTL 연장 실패: {session_id}, {str(e)}")
+        session_data = self.get_session(session_id)
+        if not session_data:
             return False
+        ttl = self._get_ttl(session_data.get("task_type", "qa"))
+        self._expire(session_id, ttl)
+        return True
     
     def cleanup_expired_sessions(self):
         """
@@ -317,27 +329,12 @@ class SessionManager:
         Returns:
             세션 통계
         """
-        try:
-            user_sessions_key = f"user_sessions:{user_id}"
-            total_sessions = self.redis_client.llen(user_sessions_key)
-            
-            # 활성 세션 수 계산
-            active_sessions = 0
-            session_ids = self.redis_client.lrange(user_sessions_key, 0, -1)
-            for session_id in session_ids:
-                if self.redis_client.exists(session_id):
-                    active_sessions += 1
-            
-            return {
-                "total_sessions": total_sessions,
-                "active_sessions": active_sessions,
-                "user_id": user_id
-            }
-            
-        except Exception as e:
-            logger.error(f"세션 통계 조회 실패: {user_id}, {str(e)}")
-            return {
-                "total_sessions": 0,
-                "active_sessions": 0,
-                "user_id": user_id
-            }
+        user_sessions_key = f"user_sessions:{user_id}"
+        total_sessions = self._llen(user_sessions_key)
+        session_ids = self._lrange(user_sessions_key, 0, -1)
+        active_sessions = sum(1 for sid in session_ids if self._exists(sid))
+        return {
+            "total_sessions": total_sessions,
+            "active_sessions": active_sessions,
+            "user_id": user_id
+        }
