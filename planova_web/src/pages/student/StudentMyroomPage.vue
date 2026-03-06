@@ -148,6 +148,9 @@
         </div>
       </div>
     </div>
+
+    <!-- 하단 홍보 배너 -->
+    <PromoBannerCarousel />
   </div>
 </template>
 
@@ -157,6 +160,7 @@ import { useRouter } from 'vue-router';
 import api from '@/api';
 import calendarApi from '@/api/calendarApi';
 import PlannySvg from '@/components/PlannySvg.vue';
+import PromoBannerCarousel from '@/components/PromoBannerCarousel.vue';
 
 const router = useRouter();
 
@@ -181,7 +185,30 @@ const attendanceStatus = reactive({
   canCheckToday: true,
 });
 
+// daysSinceSignup 기준으로 출석 상태 초기화 (백엔드 값과 동기화)
+const initAttendanceFromBackend = (totalDays) => {
+  consecutiveDays.value = totalDays;
+  const dayInCycle = ((totalDays - 1) % 7) + 1; // 1~7 순환
+  currentDay.value = dayInCycle;
+  attendanceStatus.completedDays = Array.from({ length: dayInCycle }, (_, i) => i + 1);
+  progressFillWidth.value = `${(dayInCycle - 1) * 16.66}%`;
+
+  // 오늘 이미 방문 여부 → localStorage로만 체크
+  const lastCheck = localStorage.getItem('lastAttendanceDate');
+  if (lastCheck) {
+    const last = new Date(lastCheck);
+    const now = new Date();
+    const isNewDay =
+      last.getDate() !== now.getDate() ||
+      last.getMonth() !== now.getMonth() ||
+      last.getFullYear() !== now.getFullYear();
+    attendanceStatus.canCheckToday = isNewDay;
+  }
+};
+
 const loadAttendanceData = () => {
+  // 레거시 localStorage 데이터는 무시하고 백엔드 값으로 대체
+  // (initAttendanceFromBackend에서 처리)
   const savedData = localStorage.getItem('attendanceData');
   if (savedData) {
     const data = JSON.parse(savedData);
@@ -200,15 +227,6 @@ const loadAttendanceData = () => {
   }
 };
 
-const saveAttendanceData = () => {
-  localStorage.setItem('attendanceData', JSON.stringify({
-    currentDay: currentDay.value,
-    consecutiveDays: consecutiveDays.value,
-    completedDays: attendanceStatus.completedDays,
-    lastCheckDate: attendanceStatus.lastCheckDate,
-    canCheckToday: attendanceStatus.canCheckToday,
-  }));
-};
 
 const checkAttendance = async () => {
   if (!attendanceStatus.canCheckToday) {
@@ -217,16 +235,9 @@ const checkAttendance = async () => {
   }
   isLoading.value = true;
   try {
-    const nextDay = currentDay.value + 1;
-    if (nextDay <= 7) {
-      currentDay.value = nextDay;
-      consecutiveDays.value += 1;
-      attendanceStatus.completedDays.push(nextDay);
-      attendanceStatus.lastCheckDate = new Date().toISOString();
-      attendanceStatus.canCheckToday = false;
-      progressFillWidth.value = `${(nextDay - 1) * 16.66}%`;
-      saveAttendanceData();
-    }
+    attendanceStatus.lastCheckDate = new Date().toISOString();
+    attendanceStatus.canCheckToday = false;
+    localStorage.setItem('lastAttendanceDate', new Date().toISOString());
     showToast('출석체크 완료!');
   } finally {
     isLoading.value = false;
@@ -333,8 +344,6 @@ const evolutionInfo = computed(() => {
 
 // ── onMounted ─────────────────────────────────────
 onMounted(async () => {
-  loadAttendanceData();
-
   const [detailsRes, tasksRes, resumeRes, jobsRes, clRes] = await Promise.allSettled([
     api.get('/users/me/details'),
     calendarApi.getTasks(todayStr()),
@@ -345,10 +354,15 @@ onMounted(async () => {
 
   if (detailsRes.status === 'fulfilled') {
     const d = detailsRes.value.data;
-    const info = d.user_info ?? {};
+    const info = d.user_info ?? d.user ?? {};
     userName.value = info.full_name || info.username || info.email || '사용자';
-    daysSinceSignup.value = (d.signup_info?.days_since_signup ?? 0) + 1;
+    const totalDays = (d.signup_info?.days_since_signup ?? 0) + 1;
+    daysSinceSignup.value = totalDays;
     pdfCount.value = d.storage?.total_pdfs ?? 0;
+    // 출석 스트릭을 백엔드 가입일수와 동기화
+    initAttendanceFromBackend(totalDays);
+  } else {
+    loadAttendanceData(); // 백엔드 실패 시 로컬 폴백
   }
 
   tasksLoading.value = false;
@@ -370,13 +384,12 @@ onMounted(async () => {
 
 <style scoped>
 .dashboard {
-  font-family: 'Noto Sans KR', sans-serif;
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  padding: 24px;
-  background-color: #f5f5f5;
-  color: #333;
+  padding: var(--space-page);
+  background-color: var(--bg-page);
+  color: var(--text-primary);
   position: relative;
 }
 
@@ -384,10 +397,10 @@ onMounted(async () => {
 .profile-header {
   width: 95%;
   margin: 0 auto 20px auto;
-  background: white;
-  border-radius: 16px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   padding: 20px 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-card);
 }
 
 .profile-greeting {
@@ -433,10 +446,10 @@ onMounted(async () => {
 
 /* ── 공용 카드 ── */
 .card {
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-card);
+  box-shadow: var(--shadow-card);
 }
 
 .card-title {

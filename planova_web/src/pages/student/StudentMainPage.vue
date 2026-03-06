@@ -188,15 +188,12 @@ onMounted(() => {
 
 <style scoped>
 .membership-page {
-  font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
   max-width: 1200px;
   margin: 0 auto;
-  margin-top: 40px;
-  padding: 20px;
-  color: #333;
-  background-color: #f9f9f9;
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  padding: var(--space-page);
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  min-height: calc(100vh - 60px);
 }
 
 /* 인사 헤더 */

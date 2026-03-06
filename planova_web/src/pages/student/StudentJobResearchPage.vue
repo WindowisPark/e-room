@@ -495,15 +495,15 @@ onMounted(loadCompanies);
 .jobs-page {
   display: flex;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--bg-page);
 }
 
 /* 왼쪽 패널 */
 .company-panel {
-  width: 240px;
+  width: var(--panel-width);
   min-width: 200px;
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
@@ -674,13 +674,13 @@ onMounted(loadCompanies);
   gap: 16px;
 }
 :deep(.analysis-card) {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   padding: 16px;
   transition: box-shadow 0.15s;
 }
-:deep(.analysis-card:hover) { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+:deep(.analysis-card:hover) { box-shadow: var(--shadow-card); }
 :deep(.card-header) {
   display: flex;
   justify-content: space-between;

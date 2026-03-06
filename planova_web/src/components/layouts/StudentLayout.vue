@@ -74,8 +74,10 @@ const handleMenuClick = (menuName) => {
 .content {
   flex: 1;
   margin-left: 100px;
-  background-color: #f9f9f9;
+  background-color: var(--bg-page);
   overflow-y: auto;
   min-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
 }
 </style>

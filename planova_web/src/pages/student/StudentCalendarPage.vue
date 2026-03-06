@@ -484,15 +484,15 @@ watch(currentWeek, loadGoals);
 
 <style scoped>
 .student-calendar-page {
-  padding: 40px 40px;
-  background-color: #fafafa;
+  padding: var(--space-page);
+  background-color: var(--bg-page);
 }
 
 .calendar-container {
-  background-color: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 24px;
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-card);
   margin-bottom: 24px;
   height: 550px;
 }

@@ -603,15 +603,15 @@ onMounted(loadProfiles);
 .resume-page {
   display: flex;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--bg-page);
 }
 
 /* 왼쪽 패널 */
 .profile-panel {
-  width: 240px;
+  width: var(--panel-width);
   min-width: 200px;
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
@@ -786,8 +786,8 @@ onMounted(loadProfiles);
   z-index: 9999 !important;
 }
 .dialog-box {
-  background: #fff; border-radius: 12px; padding: 28px;
-  min-width: 320px; max-width: 480px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  background: var(--bg-surface); border-radius: var(--radius-lg); padding: 28px;
+  min-width: 320px; max-width: 480px; width: 100%; box-shadow: var(--shadow-float);
 }
 .dialog-large { max-width: 600px; }
 .dialog-box h3 { margin: 0 0 20px; font-size: 17px; color: #222; }

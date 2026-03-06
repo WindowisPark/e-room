@@ -390,15 +390,15 @@ onMounted(loadAll);
 .cl-page {
   display: flex;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--bg-page);
 }
 
 /* 왼쪽 패널 */
 .cl-panel {
-  width: 240px;
+  width: var(--panel-width);
   min-width: 200px;
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
@@ -442,7 +442,7 @@ onMounted(loadAll);
   margin-bottom: 24px;
   position: sticky;
   top: 0;
-  background: #f8f9fa;
+  background: var(--bg-page);
   z-index: 10;
   padding-bottom: 16px;
   border-bottom: 1px solid #eee;
@@ -480,14 +480,14 @@ onMounted(loadAll);
 .questions-section { padding-top: 16px; }
 
 .question-card {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   margin-bottom: 12px;
   overflow: hidden;
   transition: box-shadow 0.15s;
 }
-.question-card.expanded { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: #F76707; }
+.question-card.expanded { box-shadow: var(--shadow-card); border-color: var(--color-primary); }
 
 .question-header {
   display: flex;
@@ -663,13 +663,13 @@ onMounted(loadAll);
 }
 
 .dialog-box {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   padding: 28px;
   min-width: 360px;
   max-width: 480px;
   width: 100%;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-float);
 }
 
 .dialog-wide {
