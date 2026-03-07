@@ -252,8 +252,8 @@ onBeforeUnmount(() => {
 
         <div class="bento-grid">
           <!-- 컬럼 레이블 -->
-          <div class="bento-col-label learning-label">📚 학습</div>
-          <div class="bento-col-label career-label">💼 커리어</div>
+          <div class="bento-col-label learning-label"><i class="fa-solid fa-book-open"></i> 학습</div>
+          <div class="bento-col-label career-label"><i class="fa-solid fa-briefcase"></i> 커리어</div>
 
           <!-- AI 튜터 (1×1) -->
           <div class="bento-card tutor-card">

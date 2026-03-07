@@ -233,7 +233,7 @@ const AnalysisCards = defineComponent({
               class: 'card-edit-btn',
               onClick: () => emit('editSection', section),
               title: `${label} 편집`,
-            }, '✏️')
+            }, [h('i', { class: 'fa-regular fa-pen-to-square' })])
           : null;
 
       const card = (title, section, content) =>
@@ -252,12 +252,12 @@ const AnalysisCards = defineComponent({
         h('ul', { class: 'bullet-list' }, (items || []).map(i => h('li', i)));
 
       return h('div', { class: 'analysis-grid' }, [
-        a.overview && card('📋 회사 개요', 'overview', h('p', a.overview)),
-        a.tech_stack?.length && card('⚙️ 기술 스택', 'tech_stack', tagList(a.tech_stack)),
-        a.requirements?.length && card('✅ 자격 요건', 'requirements', bulletList(a.requirements)),
-        a.preferred?.length && card('⭐ 우대 사항', 'preferred', bulletList(a.preferred)),
-        a.culture && card('🌱 조직 문화', 'culture', h('p', a.culture)),
-        a.interview_questions?.length && card('💬 예상 면접 질문', 'interview_questions', bulletList(a.interview_questions)),
+        a.overview && card('회사 개요', 'overview', h('p', a.overview)),
+        a.tech_stack?.length && card('기술 스택', 'tech_stack', tagList(a.tech_stack)),
+        a.requirements?.length && card('자격 요건', 'requirements', bulletList(a.requirements)),
+        a.preferred?.length && card('우대 사항', 'preferred', bulletList(a.preferred)),
+        a.culture && card('조직 문화', 'culture', h('p', a.culture)),
+        a.interview_questions?.length && card('예상 면접 질문', 'interview_questions', bulletList(a.interview_questions)),
       ].filter(Boolean));
     };
   },

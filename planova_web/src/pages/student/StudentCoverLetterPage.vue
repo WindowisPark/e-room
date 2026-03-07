@@ -27,8 +27,8 @@
         <div>
           <h1 class="cl-name">{{ selectedCl.title }}</h1>
           <div class="cl-meta">
-            <span v-if="linkedCompany" class="meta-chip">🏢 {{ linkedCompany }}</span>
-            <span v-if="linkedResume" class="meta-chip">📄 {{ linkedResume }}</span>
+            <span v-if="linkedCompany" class="meta-chip"><i class="fa-solid fa-building"></i> {{ linkedCompany }}</span>
+            <span v-if="linkedResume" class="meta-chip"><i class="fa-solid fa-id-card"></i> {{ linkedResume }}</span>
           </div>
         </div>
         <div class="header-actions">
@@ -138,8 +138,8 @@
       <div class="dialog-box dialog-wide">
         <h3>문항 추가</h3>
         <div class="add-mode-tabs">
-          <button :class="{ active: addMode === 'preset' }" @click="addMode = 'preset'">📋 기본 문항 선택</button>
-          <button :class="{ active: addMode === 'manual' }" @click="addMode = 'manual'">✏️ 직접 입력</button>
+          <button :class="{ active: addMode === 'preset' }" @click="addMode = 'preset'"><i class="fa-solid fa-clipboard-list"></i> 기본 문항 선택</button>
+          <button :class="{ active: addMode === 'manual' }" @click="addMode = 'manual'"><i class="fa-regular fa-pen-to-square"></i> 직접 입력</button>
         </div>
 
         <!-- 프리셋 목록 -->

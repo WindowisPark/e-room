@@ -497,7 +497,7 @@ const goToLogin = () => {
           <div class="benefit-item">
             <div class="benefit-icon">
               <div class="icon-background">
-                <span>🎓</span>
+                <i class="fa-solid fa-graduation-cap"></i>
               </div>
             </div>
             <div class="benefit-text">맞춤형 학습 계획</div>
@@ -505,7 +505,7 @@ const goToLogin = () => {
           <div class="benefit-item">
             <div class="benefit-icon">
               <div class="icon-background">
-                <span>📊</span>
+                <i class="fa-solid fa-chart-column"></i>
               </div>
             </div>
             <div class="benefit-text">학습 통계 분석</div>
@@ -513,7 +513,7 @@ const goToLogin = () => {
           <div class="benefit-item">
             <div class="benefit-icon">
               <div class="icon-background">
-                <span>🤖</span>
+                <i class="fa-solid fa-robot"></i>
               </div>
             </div>
             <div class="benefit-text">AI 튜터 서비스</div>
@@ -978,7 +978,8 @@ const goToLogin = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 22px;
+  color: #F76707;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 

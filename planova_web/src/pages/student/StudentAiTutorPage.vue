@@ -7,7 +7,7 @@
     <div class="sidebar" :class="{ open: showSidebar }">
       <div class="search-bar">
         <div class="search-input-wrapper">
-          <i class="search-icon">🔍</i>
+          <i class="search-icon fa-solid fa-magnifying-glass"></i>
           <input
             type="text"
             placeholder="대화 검색하기"
@@ -15,7 +15,7 @@
             v-model="searchQuery"
           />
         </div>
-        <button class="new-chat-btn" @click="startNewChat" title="새 대화">✏️</button>
+        <button class="new-chat-btn" @click="startNewChat" title="새 대화"><i class="fa-regular fa-pen-to-square"></i></button>
       </div>
 
       <div class="history-section">
@@ -102,7 +102,7 @@
               class="quick-action-card"
               @click="startQuickAction(a)"
             >
-              <div class="action-icon">{{ a.icon }}</div>
+              <div class="action-icon"><i :class="a.icon"></i></div>
               <div class="action-text">{{ a.text }}</div>
             </div>
           </div>
@@ -118,7 +118,7 @@
               class="quick-action-card link-card"
               @click="router.push(a.link)"
             >
-              <div class="action-icon">{{ a.icon }}</div>
+              <div class="action-icon"><i :class="a.icon"></i></div>
               <div>
                 <div class="action-text">{{ a.text }}</div>
                 <div class="action-desc">{{ a.desc }}</div>
@@ -189,7 +189,7 @@
         <!-- 선택된 파일 미리보기 -->
         <div v-if="selectedFile" class="selected-file">
           <div class="file-preview">
-            <div class="file-icon">📄</div>
+            <div class="file-icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="file-details">
               <div class="file-name">{{ selectedFile.name }}</div>
               <div class="file-size">{{ formatFileSize(selectedFile.size) }}</div>
@@ -310,12 +310,12 @@ const renameValue = ref('')
 
 // 퀵 액션
 const aiActions = [
-  { icon: '📚', text: '요약하기', prompt: '이 PDF를 요약해주세요.' },
-  { icon: '📝', text: '시험 문제 생성', prompt: '이 내용으로 시험 문제를 만들어주세요.' },
+  { icon: 'fa-solid fa-book-open', text: '요약하기', prompt: '이 PDF를 요약해주세요.' },
+  { icon: 'fa-solid fa-file-pen', text: '시험 문제 생성', prompt: '이 내용으로 시험 문제를 만들어주세요.' },
 ]
 const linkActions = [
-  { icon: '📄', text: '이력서 작성', desc: '학업/취업 이력서 관리', link: '/student/resume' },
-  { icon: '✍️', text: '자소서 작성', desc: 'AI 초안 생성 및 편집', link: '/student/coverletter' },
+  { icon: 'fa-solid fa-id-card', text: '이력서 작성', desc: '학업/취업 이력서 관리', link: '/student/resume' },
+  { icon: 'fa-solid fa-pen-nib', text: '자소서 작성', desc: 'AI 초안 생성 및 편집', link: '/student/coverletter' },
 ]
 
 // 대화 그룹핑
@@ -951,7 +951,7 @@ watch(currentChat, () => { scrollToBottom() })
 .link-card { border: 1px solid #eee; }
 .link-card:hover { border-color: #F76707; }
 
-.action-icon { font-size: 28px; flex-shrink: 0; }
+.action-icon { font-size: 24px; flex-shrink: 0; color: #F76707; }
 .action-text { font-size: 15px; font-weight: 500; }
 .action-desc { font-size: 12px; color: #999; margin-top: 2px; }
 
@@ -1072,7 +1072,7 @@ watch(currentChat, () => { scrollToBottom() })
 }
 
 .file-preview { display: flex; align-items: center; gap: 10px; }
-.file-icon { font-size: 20px; }
+.file-icon { font-size: 18px; color: #F76707; }
 .file-name { font-size: 13px; font-weight: 500; }
 .file-size { font-size: 11px; color: #888; }
 

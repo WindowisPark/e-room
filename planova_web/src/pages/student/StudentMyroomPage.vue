@@ -72,27 +72,27 @@
       <h3 class="card-title">빠른 바로가기</h3>
       <div class="shortcuts-grid">
         <div class="shortcut-item" @click="router.push('/student/resume')">
-          <div class="shortcut-icon">📄</div>
+          <div class="shortcut-icon"><i class="fa-solid fa-id-card"></i></div>
           <div class="shortcut-label">이력서</div>
           <div class="shortcut-count">{{ resumeCount }}개</div>
         </div>
         <div class="shortcut-item" @click="router.push('/student/coverletter')">
-          <div class="shortcut-icon">✉️</div>
+          <div class="shortcut-icon"><i class="fa-solid fa-pen-nib"></i></div>
           <div class="shortcut-label">자소서</div>
           <div class="shortcut-count">{{ clCount }}개</div>
         </div>
         <div class="shortcut-item" @click="router.push('/student/jobs')">
-          <div class="shortcut-icon">🏢</div>
+          <div class="shortcut-icon"><i class="fa-solid fa-building"></i></div>
           <div class="shortcut-label">기업조사</div>
           <div class="shortcut-count">{{ jobsCount }}개</div>
         </div>
         <div class="shortcut-item" @click="router.push('/student/calendar')">
-          <div class="shortcut-icon">📅</div>
+          <div class="shortcut-icon"><i class="fa-solid fa-calendar-days"></i></div>
           <div class="shortcut-label">캘린더</div>
           <div class="shortcut-count">{{ todayTasks.length }}건</div>
         </div>
         <div class="shortcut-item" @click="router.push('/student/pdf')">
-          <div class="shortcut-icon">📚</div>
+          <div class="shortcut-icon"><i class="fa-solid fa-book-open"></i></div>
           <div class="shortcut-label">PDF</div>
           <div class="shortcut-count">{{ pdfCount }}개</div>
         </div>
@@ -107,7 +107,7 @@
         <div v-if="recentActivity.length === 0" class="empty-state">아직 활동 내역이 없습니다.</div>
         <ul v-else class="activity-list">
           <li v-for="item in recentActivity" :key="item.id + item.type" class="activity-item">
-            <span class="activity-icon">{{ item.icon }}</span>
+            <span class="activity-icon"><i :class="item.icon"></i></span>
             <div class="activity-info">
               <span class="activity-name">{{ item.name }}</span>
               <span class="activity-type">{{ item.typeLabel }}</span>
@@ -129,7 +129,7 @@
             <div class="evo-next" v-if="evolutionInfo.next">
               다음 진화까지 {{ evolutionInfo.next - earnedCount }}개
             </div>
-            <div class="evo-next complete" v-else>🎉 완전 진화!</div>
+            <div class="evo-next complete" v-else><i class="fa-solid fa-trophy"></i> 완전 진화!</div>
           </div>
           <!-- 오른쪽: 배지 그리드 -->
           <div class="badges-side">
@@ -140,7 +140,7 @@
                 :class="['badge-item', badge.earned ? 'earned' : 'locked']"
                 :title="badge.condition"
               >
-                <div class="badge-icon">{{ badge.icon }}</div>
+                <div class="badge-icon"><i :class="badge.icon"></i></div>
                 <div class="badge-name">{{ badge.name }}</div>
               </div>
             </div>
@@ -149,8 +149,6 @@
       </div>
     </div>
 
-    <!-- 하단 홍보 배너 -->
-    <PromoBannerCarousel />
   </div>
 </template>
 
@@ -160,7 +158,7 @@ import { useRouter } from 'vue-router';
 import api from '@/api';
 import calendarApi from '@/api/calendarApi';
 import PlannySvg from '@/components/PlannySvg.vue';
-import PromoBannerCarousel from '@/components/PromoBannerCarousel.vue';
+
 
 const router = useRouter();
 
@@ -305,9 +303,9 @@ const buildActivityFeed = (resumeData, jobsData, clData) => {
       relativeDate: relativeDate(item.updated_at || item.created_at),
     }));
 
-  items.push(...take2(resumeData, '📄', '이력서'));
-  items.push(...take2(jobsData, '🏢', '기업조사'));
-  items.push(...take2(clData, '✉️', '자소서'));
+  items.push(...take2(resumeData, 'fa-solid fa-id-card', '이력서'));
+  items.push(...take2(jobsData, 'fa-solid fa-building', '기업조사'));
+  items.push(...take2(clData, 'fa-solid fa-pen-nib', '자소서'));
 
   items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   recentActivity.value = items.slice(0, 5);
@@ -315,12 +313,12 @@ const buildActivityFeed = (resumeData, jobsData, clData) => {
 
 // ── 배지 & 진화 ───────────────────────────────────
 const badges = computed(() => [
-  { id: 'first',    icon: '🌱', name: '첫걸음',     condition: '플래노바 시작',       earned: true },
-  { id: 'resume',   icon: '📝', name: '이력서 작성자', condition: '이력서 1개 이상',    earned: resumeCount.value > 0 },
-  { id: 'jobs',     icon: '🔍', name: '기업탐정',    condition: '기업조사 3개 이상',   earned: jobsCount.value >= 3 },
-  { id: 'cl',       icon: '✉️', name: '스토리텔러',  condition: '자소서 1개 이상',     earned: clCount.value >= 1 },
-  { id: 'planner',  icon: '📅', name: '플래너',      condition: '오늘 할 일 등록',     earned: todayTasks.value.length > 0 },
-  { id: 'streak7',  icon: '🔥', name: '7일 전사',    condition: '7일 연속 출석',       earned: consecutiveDays.value >= 7 },
+  { id: 'first',    icon: 'fa-solid fa-seedling', name: '첫걸음',     condition: '플래노바 시작',       earned: true },
+  { id: 'resume',   icon: 'fa-solid fa-file-pen', name: '이력서 작성자', condition: '이력서 1개 이상',    earned: resumeCount.value > 0 },
+  { id: 'jobs',     icon: 'fa-solid fa-magnifying-glass', name: '기업탐정',    condition: '기업조사 3개 이상',   earned: jobsCount.value >= 3 },
+  { id: 'cl',       icon: 'fa-solid fa-pen-nib', name: '스토리텔러',  condition: '자소서 1개 이상',     earned: clCount.value >= 1 },
+  { id: 'planner',  icon: 'fa-solid fa-calendar-check', name: '플래너',      condition: '오늘 할 일 등록',     earned: todayTasks.value.length > 0 },
+  { id: 'streak7',  icon: 'fa-solid fa-fire', name: '7일 전사',    condition: '7일 연속 출석',       earned: consecutiveDays.value >= 7 },
 ]);
 
 const earnedCount = computed(() => badges.value.filter(b => b.earned).length);
@@ -709,7 +707,7 @@ onActivated(() => {
   box-shadow: 0 4px 12px rgba(247, 103, 7, 0.15);
 }
 
-.shortcut-icon { font-size: 28px; margin-bottom: 6px; }
+.shortcut-icon { font-size: 24px; margin-bottom: 6px; color: #F76707; }
 
 .shortcut-label {
   font-size: 13px;
@@ -754,7 +752,7 @@ onActivated(() => {
 
 .activity-item:last-child { border-bottom: none; }
 
-.activity-icon { font-size: 20px; flex-shrink: 0; }
+.activity-icon { font-size: 18px; flex-shrink: 0; color: #F76707; }
 
 .activity-info {
   flex: 1;
@@ -807,7 +805,7 @@ onActivated(() => {
 
 .badge-item.earned:hover { transform: translateY(-2px); }
 
-.badge-icon { font-size: 28px; margin-bottom: 6px; }
+.badge-icon { font-size: 22px; margin-bottom: 6px; color: #F76707; }
 
 .badge-name {
   font-size: 12px;

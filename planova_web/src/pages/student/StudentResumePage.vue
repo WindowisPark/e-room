@@ -40,7 +40,7 @@
             ref="titleInput"
           />
           <h1 v-else class="profile-name" @click="startEditTitle">
-            {{ selectedProfile.title }} <span class="edit-hint">✏️</span>
+            {{ selectedProfile.title }} <span class="edit-hint"><i class="fa-regular fa-pen-to-square"></i></span>
           </h1>
         </div>
         <div class="export-buttons">
@@ -52,7 +52,7 @@
 
       <!-- 기본정보 섹션 -->
       <div class="contact-section">
-        <h3 class="section-title">📋 기본정보</h3>
+        <h3 class="section-title"><i class="fa-solid fa-clipboard-list"></i> 기본정보</h3>
         <div class="contact-grid">
           <div class="contact-field">
             <label>이름</label>

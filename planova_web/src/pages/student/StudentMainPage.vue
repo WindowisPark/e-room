@@ -3,7 +3,7 @@
     <!-- 인사 헤더 -->
     <div class="greeting-header">
       <div>
-        <div class="greeting-name">안녕하세요, <span>{{ username }}</span>님 👋</div>
+        <div class="greeting-name">안녕하세요, <span>{{ username }}</span>님</div>
         <div class="greeting-date">{{ todayStr }}</div>
       </div>
     </div>
@@ -15,7 +15,7 @@
           <div class="menu-group-label">학습</div>
           <div class="career-cards">
             <router-link to="/student/pdf" class="career-card">
-              <span class="career-icon">📚</span>
+              <span class="career-icon"><i class="fa-solid fa-book-open"></i></span>
               <div class="career-info">
                 <div class="career-title">PDF 학습</div>
                 <div class="career-desc">AI가 요약·분석해주는 학습 도우미</div>
@@ -23,7 +23,7 @@
               <span class="career-arrow">→</span>
             </router-link>
             <router-link to="/student/ai-tutor" class="career-card">
-              <span class="career-icon">🤖</span>
+              <span class="career-icon"><i class="fa-solid fa-robot"></i></span>
               <div class="career-info">
                 <div class="career-title">AI 튜터</div>
                 <div class="career-desc">질문하면 바로 답해주는 AI 선생님</div>
@@ -31,7 +31,7 @@
               <span class="career-arrow">→</span>
             </router-link>
             <router-link to="/student/calendar" class="career-card">
-              <span class="career-icon">🗓️</span>
+              <span class="career-icon"><i class="fa-solid fa-calendar-days"></i></span>
               <div class="career-info">
                 <div class="career-title">캘린더</div>
                 <div class="career-desc">나의 학습·취업 일정 관리</div>
@@ -45,7 +45,7 @@
           <div class="menu-group-label">취업</div>
           <div class="career-cards">
             <router-link to="/student/resume" class="career-card">
-              <span class="career-icon">📄</span>
+              <span class="career-icon"><i class="fa-solid fa-id-card"></i></span>
               <div class="career-info">
                 <div class="career-title">이력서 · 포트폴리오</div>
                 <div class="career-desc">AI가 다듬어주는 나만의 이력서</div>
@@ -53,7 +53,7 @@
               <span class="career-arrow">→</span>
             </router-link>
             <router-link to="/student/coverletter" class="career-card">
-              <span class="career-icon">✍️</span>
+              <span class="career-icon"><i class="fa-solid fa-pen-nib"></i></span>
               <div class="career-info">
                 <div class="career-title">자기소개서</div>
                 <div class="career-desc">AI 초안으로 시작하는 자소서</div>
@@ -61,7 +61,7 @@
               <span class="career-arrow">→</span>
             </router-link>
             <router-link to="/student/jobs" class="career-card">
-              <span class="career-icon">🔍</span>
+              <span class="career-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
               <div class="career-info">
                 <div class="career-title">기업 조사</div>
                 <div class="career-desc">공고 분석 · 기업 정보 한눈에</div>
@@ -277,8 +277,11 @@ onMounted(() => {
 }
 
 .career-icon {
-  font-size: 1.6rem;
+  font-size: 1.4rem;
   flex-shrink: 0;
+  color: #F76707;
+  width: 36px;
+  text-align: center;
 }
 
 .career-info {

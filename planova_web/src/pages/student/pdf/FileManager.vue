@@ -3,7 +3,7 @@
   <div>
     <!-- 페이지 헤더 -->
     <div class="pdf-page-header">
-      <div class="pdf-page-title">📚 내 PDF 파일</div>
+      <div class="pdf-page-title"><i class="fa-solid fa-book-open"></i> 내 PDF 파일</div>
       <div class="pdf-page-desc">학습 자료를 업로드하고 AI로 분석하세요</div>
     </div>
 
