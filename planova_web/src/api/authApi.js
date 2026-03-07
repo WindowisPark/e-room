@@ -57,6 +57,18 @@ export default {
     return data;
   },
 
+  async refreshToken(refreshToken) {
+    const { data } = await api.post(`${BASE_URL}/refresh-token`, JSON.stringify(refreshToken), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return data;
+  },
+
+  async logout() {
+    const { data } = await api.post(`${BASE_URL}/logout`);
+    return data;
+  },
+
   async changePassword(formData) {
     const { data } = await api.put(`${BASE_URL}/${formData.id}/changepassword`, formData);
     return data;

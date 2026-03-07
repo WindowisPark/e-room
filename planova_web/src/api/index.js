@@ -1,6 +1,5 @@
-// src/api/index.jsi
+// src/api/index.js
 import axios from 'axios';
-import { useAuthStore } from '@/stores/auth';
 import router from '@/router';
 import qs from "qs";
 
@@ -16,7 +15,6 @@ const instance = axios.create({
 // 요청 인터셉터
 instance.interceptors.request.use(
   (config) => {
-    // JWT 추출 - Pinia 스토어를 직접 사용하는 대신 함수로 분리하거나 로컬 스토리지에서 직접 가져올 수 있습니다
     try {
       const auth = localStorage.getItem('auth');
       const token = auth ? JSON.parse(auth).access_token : null;
@@ -33,10 +31,28 @@ instance.interceptors.request.use(
   }
 );
 
+// 토큰 갱신 동시 요청 방지
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function onRefreshed(newToken) {
+  refreshSubscribers.forEach(cb => cb(newToken));
+  refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function clearAuthAndRedirect() {
+  localStorage.removeItem('auth');
+  window.dispatchEvent(new CustomEvent('logout'));
+  router.push('/auth/login?error=login_required');
+}
+
 // 응답 인터셉터
 instance.interceptors.response.use(
   (response) => {
-    // 성공 상태 코드 확장 (200, 201, 204 등)
     if (response.status >= 200 && response.status < 300) {
       return response;
     }
@@ -46,17 +62,59 @@ instance.interceptors.response.use(
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
-      try {
-        // 로그아웃 처리를 직접 호출하는 대신 로컬 스토리지에서 토큰을 제거
-        localStorage.removeItem('auth');
-        // 또는 이벤트를 통해 로그아웃 처리
-        window.dispatchEvent(new CustomEvent('logout'));
-      } catch (e) {
-        console.error('로그아웃 처리 오류:', e);
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // refresh-token 요청 자체가 401이면 즉시 로그아웃
+      if (originalRequest.url?.includes('/auth/refresh-token')) {
+        clearAuthAndRedirect();
+        return Promise.reject({ error: '로그인이 필요한 서비스입니다.' });
       }
-      router.push('/auth/login?error=login_required');
-      return Promise.reject({ error: '로그인이 필요한 서비스입니다.' });
+
+      originalRequest._retry = true;
+
+      try {
+        const auth = localStorage.getItem('auth');
+        const refreshToken = auth ? JSON.parse(auth).refresh_token : null;
+
+        if (!refreshToken) {
+          clearAuthAndRedirect();
+          return Promise.reject({ error: '로그인이 필요한 서비스입니다.' });
+        }
+
+        if (isRefreshing) {
+          // 이미 갱신 중이면 대기 큐에 추가
+          return new Promise((resolve) => {
+            addRefreshSubscriber((newToken) => {
+              originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+              resolve(instance(originalRequest));
+            });
+          });
+        }
+
+        isRefreshing = true;
+
+        const { data } = await instance.post('/auth/refresh-token', JSON.stringify(refreshToken), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        // localStorage 업데이트
+        const authData = JSON.parse(localStorage.getItem('auth'));
+        authData.access_token = data.access_token;
+        localStorage.setItem('auth', JSON.stringify(authData));
+
+        isRefreshing = false;
+        onRefreshed(data.access_token);
+
+        // 원래 요청 재시도
+        originalRequest.headers['Authorization'] = `Bearer ${data.access_token}`;
+        return instance(originalRequest);
+      } catch (refreshError) {
+        isRefreshing = false;
+        refreshSubscribers = [];
+        clearAuthAndRedirect();
+        return Promise.reject({ error: '로그인이 필요한 서비스입니다.' });
+      }
     } else if (error.response?.status === 403) {
       return Promise.reject({ error: '권한이 부족합니다.' });
     }

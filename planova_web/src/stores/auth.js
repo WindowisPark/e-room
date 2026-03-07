@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
+import api from '@/api';
 
 const STORAGE_KEY = 'auth';
 
@@ -43,7 +44,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.value));
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      // 백엔드 호출 실패해도 로컬 상태는 반드시 클리어
+    }
     state.value = { ...initState };
     localStorage.removeItem(STORAGE_KEY);
   };

@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import httpx
@@ -17,6 +17,9 @@ from app.core.config import settings
 from app.core.exceptions import ErrorMessage
 from app.models.user import User
 from app.core.redis_helper import redis_client
+from app.core.rate_limiter import (
+    login_limiter, register_limiter, forgot_password_limiter, get_client_ip,
+)
 import urllib.parse
 
 # 🔐 비밀번호 재설정 관련 import 추가
@@ -361,16 +364,18 @@ async def logout(current_user: schemas.User = Depends(deps.get_current_user)):
 
 @router.post("/register", response_model=RegisterResponse)
 async def register_user(
+    request: Request,
     user_in: LocalUserCreate,
     db: Session = Depends(deps.get_db)
 ):
+    register_limiter.check(get_client_ip(request))
     existing_user = crud.user.get_by_email(db, email=user_in.email)
-    if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ErrorMessage.EMAIL_ALREADY_EXISTS)
-
     existing_username = db.query(User).filter(User.username == user_in.username).first()
-    if existing_username:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ErrorMessage.USERNAME_ALREADY_EXISTS)
+    if existing_user or existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 사용 중인 이메일 또는 사용자명입니다",
+        )
 
     user_schema = schemas.UserCreate(
         email=user_in.email,
@@ -397,9 +402,11 @@ async def register_user(
 
 @router.post("/login", response_model=Token)
 async def login_user(
+    request: Request,
     login_data: LocalUserLogin,
     db: Session = Depends(deps.get_db)
 ):
+    login_limiter.check(get_client_ip(request))
     user = crud.user.authenticate(
         db, email=login_data.email, password=login_data.password
     )
@@ -448,21 +455,23 @@ async def login_for_access_token(
              summary="비밀번호 찾기 요청",
              description="이메일로 비밀번호 재설정 링크를 발송합니다.")
 async def forgot_password(
-    request: PasswordResetRequest,
+    request: Request,
+    reset_request: PasswordResetRequest,
     db: Session = Depends(deps.get_db)
 ):
     """
     📧 비밀번호 찾기 요청
-    
+
     - 등록된 이메일로 재설정 링크 발송
     - OAuth 사용자는 해당 서비스 안내
     - 보안상 존재하지 않는 이메일도 성공 메시지 반환
     - 토큰 유효시간: 30분
     """
     try:
+        forgot_password_limiter.check(get_client_ip(request))
         result = await password_reset_service.request_password_reset(
-            db=db, 
-            email=request.email
+            db=db,
+            email=reset_request.email
         )
         
         # OAuth 사용자인 경우 별도 응답

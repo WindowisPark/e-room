@@ -15,10 +15,12 @@ const password = ref('');
 const rememberMe = ref(false);
 const emailLoginError = ref('');
 
-// 환경변수에서 카카오 키 읽기 (Vite 방식과 Vue 방식 모두 시도)
-const KAKAO_KEY = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY || 
-                  import.meta.env.VUE_APP_KAKAO_JAVASCRIPT_KEY || 
-                  'f4c7f7a5fe0b155d15b0fc65f67f94ec'; // 백업용 키
+// 환경변수에서 카카오 키 읽기
+const KAKAO_KEY = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY ||
+                  import.meta.env.VUE_APP_KAKAO_JAVASCRIPT_KEY || '';
+if (!KAKAO_KEY) {
+  console.warn('카카오 JavaScript 키가 설정되지 않았습니다. 환경변수 VITE_KAKAO_JAVASCRIPT_KEY를 확인하세요.');
+}
 
 
 // 디버그용 변수
@@ -35,7 +37,7 @@ const isEmailValid = computed(() => {
 });
 
 const isPasswordValid = computed(() => {
-  return password.value.length >= 6;
+  return password.value.length >= 8;
 });
 
 const isFormValid = computed(() => {
@@ -253,7 +255,7 @@ onMounted(() => {
                 required
               />
               <small v-if="password && !isPasswordValid" class="error-text">
-                비밀번호는 최소 6자 이상이어야 합니다.
+                비밀번호는 최소 8자 이상이어야 합니다.
               </small>
             </div>
             

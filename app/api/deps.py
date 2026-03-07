@@ -9,6 +9,9 @@ from jwt.exceptions import PyJWTError as JWTError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+import logging
+from redis.exceptions import RedisError
+
 from app import crud, schemas
 from app.core.config import settings
 from app.core.exceptions import ErrorMessage
@@ -16,6 +19,8 @@ from app.db.session import SessionLocal
 from app.core.redis_helper import redis_client
 from app.core.security import ACCESS_SECRET_KEY
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 # OAuth2 스키마 수정 (카카오 콜백 후 토큰이 반환되므로 여기서는 별도 엔드포인트 필요 없음)
 oauth2_scheme = OAuth2PasswordBearer(
@@ -41,11 +46,18 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if redis_client is not None and redis_client.exists(token):  # redis_client가 None이 아닐 때만 체크
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorMessage.TOKEN_REVOKED,
-        )
+    if redis_client is not None:
+        try:
+            if redis_client.exists(token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=ErrorMessage.TOKEN_REVOKED,
+                )
+        except HTTPException:
+            raise
+        except RedisError as e:
+            logger.warning(f"Redis 블랙리스트 확인 실패 (fail-open): {e}")
+            # fail-open: Redis 장애 시 JWT exp로 보호
 
     try:
         payload = jwt.decode(token, ACCESS_SECRET_KEY, algorithms=["HS256"])
